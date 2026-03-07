@@ -1,0 +1,21 @@
+# 量子传感仿真平台Web演示 - 依赖包
+# 安装命令: pip install -r requirements_demo.txt
+
+# 核心科学计算库
+numpy>=1.21.0
+scipy>=1.7.0
+
+# 量子仿真库
+qutip>=4.7.0
+
+# 数据可视化
+matplotlib>=3.5.0
+
+# Web界面
+gradio>=4.0.0
+
+# 可选: 用于更快的计算（如果需要）
+# numba>=0.56.0
+
+# 注意: 原项目可能有额外的需求，参见requirements.txt
+# 本文件仅包含运行Web演示所需的最小依赖集
