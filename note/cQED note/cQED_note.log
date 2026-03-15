@@ -1,4 +1,4 @@
-This is XeTeX, Version 3.141592653-2.6-0.999995 (TeX Live 2023) (preloaded format=xelatex 2024.1.23)  26 FEB 2026 22:43
+This is XeTeX, Version 3.141592653-2.6-0.999995 (TeX Live 2023) (preloaded format=xelatex 2024.1.23)  12 MAR 2026 19:19
 entering extended mode
  restricted \write18 enabled.
  file:line:error style messages enabled.
@@ -865,11 +865,16 @@ LaTeX Font Info:    Font shape `TU/latinmodern-math.otf(3)/m/n' will be
 (Font)              scaled to size 5.99936pt on input line 1.
  [1
 
-] [2])
+]
+Underfull \hbox (badness 1092) in paragraph at lines 270--270
+ [][] [][]\TU/lmr/m/n/12 C. Beyond strong coupling: ultrastrong coupling 
+ []
+
+)
 \tf@toc=\write4
 \openout4 = `cQED_note.toc'.
 
- [3] [1
+ [2] [1
 
 ] [2] [3]
 File: img/cpw.png Graphic file (type bmp)
@@ -899,253 +904,180 @@ Underfull \hbox (badness 10000) in paragraph at lines 1255--1257
 
  []
 
-[27] [28]
-Underfull \hbox (badness 10000) in paragraph at lines 1335--1337
+[27]
+File: img/LC coupler.png Graphic file (type bmp)
+<img/LC coupler.png>
+ [28] [29]
+Underfull \hbox (badness 10000) in paragraph at lines 1341--1343
 
  []
 
-[29]
-Missing character: There is no ↔ (U+2194) in font [lmroman12-regular]:mapping=tex-text;!
 [30]
-Underfull \hbox (badness 10000) in paragraph at lines 1415--1417
+Missing character: There is no ↔ (U+2194) in font [lmroman12-regular]:mapping=tex-text;!
+[31]
+Underfull \hbox (badness 10000) in paragraph at lines 1421--1423
 
  []
 
 
-Underfull \hbox (badness 10000) in paragraph at lines 1435--1437
+Underfull \hbox (badness 10000) in paragraph at lines 1441--1443
 
  []
 
-[31] [32]
-Underfull \hbox (badness 10000) in paragraph at lines 1530--1532
+[32] [33]
+Underfull \hbox (badness 10000) in paragraph at lines 1536--1538
 
  []
 
 
-Underfull \hbox (badness 10000) in paragraph at lines 1532--1534
+Underfull \hbox (badness 10000) in paragraph at lines 1538--1540
 
  []
 
-[33]
-Underfull \hbox (badness 10000) in paragraph at lines 1585--1586
-
- []
-
+File: img/JC spectrum.png Graphic file (type bmp)
+<img/JC spectrum.png>
 [34] [35]
-Underfull \hbox (badness 10000) in paragraph at lines 1682--1684
+Underfull \hbox (badness 10000) in paragraph at lines 1595--1596
 
  []
 
 [36]
-
-LaTeX Font Warning: Font shape `TU/SimSun(0)/b/it' undefined
-(Font)              using `TU/SimSun(0)/b/n' instead on input line 1744.
-
-[37] [38] [39]
-Underfull \hbox (badness 10000) in paragraph at lines 1863--1864
+Underfull \hbox (badness 10000) in paragraph at lines 1692--1694
 
  []
 
-[40] [41] [42] [43] [44] [45] [46] [47]
-Overfull \hbox (46.60695pt too wide) detected at line 3267
+[37] [38]
+
+LaTeX Font Warning: Font shape `TU/SimSun(0)/b/it' undefined
+(Font)              using `TU/SimSun(0)/b/n' instead on input line 1754.
+
+[39] [40]
+Underfull \hbox (badness 10000) in paragraph at lines 1873--1874
+
+ []
+
+[41] [42] [43] [44] [45] [46] [47] [48] [49]
+File: img/LC coupled to TL.png Graphic file (type bmp)
+<img/LC coupled to TL.png>
+ [50] [51] [52] [53] [54] [55] [56] [57]
+File: img/dissipation in coupled system.png Graphic file (type bmp)
+<img/dissipation in coupled system.png>
+ [58] [59] [60] [61] [62] [63] [64] [65] [66] [67] [68] [69] [70]
+File: img/microwave measurement.png Graphic file (type bmp)
+<img/microwave measurement.png>
+
+Overfull \hbox (46.60695pt too wide) detected at line 2994
 [][][][] [] [][] [] [][][][][] [] [][] [][] [][][] [] [][][][][][] [] [][] [][] [][][] [] [][][][][][][][] [] [][][][][][]
  []
 
-[48]
-Overfull \hbox (86.06526pt too wide) detected at line 3350
+[71]
+Overfull \hbox (86.06526pt too wide) detected at line 3077
 [][] [] [] [] [] [] [] [] [] [] [][]
  []
 
-[49] [50]
-Overfull \hbox (162.09973pt too wide) detected at line 3483
-[][][][][] [] [][][][][][][][][][][] [] [][][][][][][] [][][] [] [][][][][]
+[72] [73]
+File: img/quantum efficiency.png Graphic file (type bmp)
+<img/quantum efficiency.png>
+ [74]
+Overfull \hbox (69.68112pt too wide) detected at line 3217
+[][]
  []
 
-[51] [52] [53] [54] [55] [56] [57]
-Overfull \hbox (61.62459pt too wide) detected at line 3920
+File: img/IQ mixer.png Graphic file (type bmp)
+<img/IQ mixer.png>
+[75] [76] [77] [78] [79] [80]
+File: img/trajectory in phase space.png Graphic file (type bmp)
+<img/trajectory in phase space.png>
+ [81]
+File: img/coupler shift.png Graphic file (type bmp)
+<img/coupler shift.png>
+ [82]
+Overfull \hbox (61.62459pt too wide) detected at line 3629
 [][][][][] [] [][] [][] [][][][][][][][][][][][][] [] [][][][][] [] [][][][][][][][][][][][] [] [][][][][][][]
  []
 
-[58] [59]
-Underfull \hbox (badness 10000) in paragraph at lines 3980--3981
+[83]
+Underfull \hbox (badness 10000) in paragraph at lines 3689--3690
 
  []
 
-[60] [61] [62] [63]
-Underfull \hbox (badness 1242) in paragraph at lines 4220--4220
-[]\TU/lmr/bx/n/14.4 A.1 Jaynes–Cummings \TU/SimSun(0)/b/n/14.4 模 型 在 共 振 时 的 低 能 本 征 态
- []
+[84] [85] [86] [87] [88] [89] [90]
 
-[64] [65]
+LaTeX Warning: Reference `124' on page 91 undefined on input line 3996.
 
-LaTeX Warning: Reference `124' on page 66 undefined on input line 4287.
+[91] [92] [93] [94]
 
-[66] [67] [68] [69]
+LaTeX Warning: Reference `124' on page 95 undefined on input line 4107.
 
-LaTeX Warning: Reference `124' on page 70 undefined on input line 4398.
+[95] [96]
 
-[70] [71] [72]
+LaTeX Warning: Reference `124' on page 97 undefined on input line 4166.
 
-LaTeX Warning: Reference `124' on page 73 undefined on input line 4457.
+[97]
 
-[73]
+LaTeX Warning: Reference `126' on page 98 undefined on input line 4204.
 
-LaTeX Warning: Reference `126' on page 74 undefined on input line 4495.
+[98]
 
-[74]
+LaTeX Warning: Reference `127' on page 99 undefined on input line 4248.
 
-LaTeX Warning: Reference `127' on page 75 undefined on input line 4539.
+[99]
 
+LaTeX Warning: Reference `126' on page 100 undefined on input line 4268.
 
-LaTeX Warning: Reference `126' on page 75 undefined on input line 4559.
+[100]
 
-[75]
-Overfull \hbox (5.81888pt too wide) in paragraph at lines 4571--4571
-[]\TU/lmr/bx/n/12 B.3.2 \TU/SimSun(0)/b/n/12 光 子 数 涨 落 导 致 测 量 退 相 干：| \TU/lmr/bx/n/12 photon shot noise / measurement-
- []
+LaTeX Warning: Reference `126' on page 101 undefined on input line 4325.
 
-[76]
-
-LaTeX Warning: Reference `126' on page 77 undefined on input line 4616.
-
-[77] [78] [79] [80] [81]
+[101] [102] [103] [104]
 
 Package hyperref Warning: Token not allowed in a PDF string (Unicode):
 (hyperref)                \hskip 12.0pt
-(hyperref)                replaced by space on input line 4728.
+(hyperref)                replaced by space on input line 4438.
 
-[82]
-
-Package hyperref Warning: Token not allowed in a PDF string (Unicode):
-(hyperref)                \hskip 12.0pt
-(hyperref)                replaced by space on input line 4742.
-
-[83] [84]
-
-Package hyperref Warning: Token not allowed in a PDF string (Unicode):
-(hyperref)                removing `math shift' on input line 4813.
-
-
-Package hyperref Warning: Token not allowed in a PDF string (Unicode):
-(hyperref)                removing `math shift' on input line 4813.
-
-
-Package hyperref Warning: Token not allowed in a PDF string (Unicode):
-(hyperref)                removing `math shift' on input line 4813.
-
-
-Package hyperref Warning: Token not allowed in a PDF string (Unicode):
-(hyperref)                removing `math shift' on input line 4813.
-
-
-Package hyperref Warning: Token not allowed in a PDF string (Unicode):
-(hyperref)                removing `math shift' on input line 4813.
-
-
-Package hyperref Warning: Token not allowed in a PDF string (Unicode):
-(hyperref)                removing `math shift' on input line 4813.
-
-[85]
+[105]
 
 Package hyperref Warning: Token not allowed in a PDF string (Unicode):
 (hyperref)                \hskip 12.0pt
-(hyperref)                replaced by space on input line 4836.
+(hyperref)                replaced by space on input line 4455.
 
-
-Package hyperref Warning: Token not allowed in a PDF string (Unicode):
-(hyperref)                \hskip 12.0pt
-(hyperref)                replaced by space on input line 4851.
-
-[86]
-
-Package hyperref Warning: Token not allowed in a PDF string (Unicode):
-(hyperref)                removing `math shift' on input line 4868.
-
-
-Package hyperref Warning: Token not allowed in a PDF string (Unicode):
-(hyperref)                removing `\@ifnextchar' on input line 4868.
-
-
-Package hyperref Warning: Token not allowed in a PDF string (Unicode):
-(hyperref)                removing `\mathrm' on input line 4868.
-
-
-Package hyperref Warning: Token not allowed in a PDF string (Unicode):
-(hyperref)                removing `math shift' on input line 4868.
-
-[87]
-Underfull \hbox (badness 4872) in paragraph at lines 4891--4891
-[]\TU/lmr/bx/n/17.28 B.1 (b) \TU/SimSun(0)/b/n/17.28 谐 振 腔 介 导 耦 合  |（\TU/lmr/bx/n/17.28 Resonator-
- []
-
+[106] [107] [108] [109]
 
 Package hyperref Warning: Token not allowed in a PDF string (Unicode):
 (hyperref)                \hskip 12.0pt
-(hyperref)                replaced by space on input line 4891.
+(hyperref)                replaced by space on input line 4587.
 
-[88] [89] [90]
-
-Package hyperref Warning: Token not allowed in a PDF string (Unicode):
-(hyperref)                \hskip 12.0pt
-(hyperref)                replaced by space on input line 4966.
-
-
-Package hyperref Warning: Token not allowed in a PDF string (Unicode):
-(hyperref)                removing `math shift' on input line 4966.
-
-
-Package hyperref Warning: Token not allowed in a PDF string (Unicode):
-(hyperref)                removing `\rangle' on input line 4966.
-
-
-Package hyperref Warning: Token not allowed in a PDF string (Unicode):
-(hyperref)                removing `math shift' on input line 4966.
-
-
-Package hyperref Warning: Token not allowed in a PDF string (Unicode):
-(hyperref)                removing `math shift' on input line 4966.
-
-
-Package hyperref Warning: Token not allowed in a PDF string (Unicode):
-(hyperref)                removing `\rangle' on input line 4966.
-
-
-Package hyperref Warning: Token not allowed in a PDF string (Unicode):
-(hyperref)                removing `math shift' on input line 4966.
-
-[91]
-
-Package hyperref Warning: Token not allowed in a PDF string (Unicode):
-(hyperref)                \hskip 12.0pt
-(hyperref)                replaced by space on input line 5019.
-
-[92]
-Overfull \hbox (14.70105pt too wide) detected at line 5058
+[110]
+File: img/two qubit gate.png Graphic file (type bmp)
+<img/two qubit gate.png>
+ [111] [112] [113] [114]
+File: img/spectrum of two qubit.png Graphic file (type bmp)
+<img/spectrum of two qubit.png>
+ [115] [116] [117] [118] [119]
+Overfull \hbox (14.70105pt too wide) detected at line 4861
 []
  []
 
-[93]
-Overfull \hbox (30.68889pt too wide) detected at line 5098
+[120]
+Overfull \hbox (30.68889pt too wide) detected at line 4906
 []
  []
 
-[94] [95]
-
-Package hyperref Warning: Token not allowed in a PDF string (Unicode):
-(hyperref)                \hskip 12.0pt
-(hyperref)                replaced by space on input line 5151.
-
-[96]
-Overfull \hbox (43.6116pt too wide) detected at line 5216
+[121] [122]
+Overfull \hbox (43.6116pt too wide) detected at line 5031
 []
  []
 
+[123]
 
 Package hyperref Warning: Token not allowed in a PDF string (Unicode):
 (hyperref)                \hskip 12.0pt
-(hyperref)                replaced by space on input line 5234.
+(hyperref)                replaced by space on input line 5050.
 
-[97] [98] [99] [100] [101] [102] [103] (./cQED_note.aux)
+[124] [125] [126] [127]
+File: img/cat code.png Graphic file (type bmp)
+<img/cat code.png>
+ [128] [129] [130] (./cQED_note.aux)
  ***********
 LaTeX2e <2023-11-01> patch level 1
 L3 programming layer <2022/07/14>
@@ -1158,15 +1090,15 @@ LaTeX Font Warning: Some font shapes were not available, defaults substituted.
 LaTeX Warning: There were undefined references.
 
 Package rerunfilecheck Info: File `cQED_note.out' has not changed.
-(rerunfilecheck)             Checksum: 18C6F6CE7CFD309CBD9764A90156767B;14524.
+(rerunfilecheck)             Checksum: B617D9695E68C4DA79B0E0529028CCDF;9417.
  ) 
 Here is how much of TeX's memory you used:
- 22901 strings out of 474823
- 499034 string characters out of 5763090
- 1962191 words of memory out of 5000000
- 44670 multiletter control sequences out of 15000+600000
- 566356 words of font info for 116 fonts, out of 8000000 for 9000
+ 22941 strings out of 474823
+ 498445 string characters out of 5763090
+ 1967191 words of memory out of 5000000
+ 44704 multiletter control sequences out of 15000+600000
+ 566332 words of font info for 113 fonts, out of 8000000 for 9000
  1348 hyphenation exceptions out of 8191
  93i,12n,120p,1002b,545s stack positions out of 10000i,1000n,20000p,200000b,200000s
 
-Output written on cQED_note.pdf (107 pages).
+Output written on cQED_note.pdf (133 pages).

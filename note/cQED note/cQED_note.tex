@@ -968,7 +968,7 @@ dispersion）随 \(E_J/E_C\) \textbf{指数级降低}（图中给出
 
 其中： \[\hbar\omega_q \approx \sqrt{8E_CE_J} - E_C\]
 
-\textbf{旋转波近似有效的条件}：\(\hbar\omega_q \gg E_C\)，这在 transmon
+\textbf{旋转波近似有效的条件（旋转参考系频率为$\omega_q$）}：\(\hbar\omega_q \gg E_C\)，这在 transmon
 区（\(E_J/E_C \gg 1\)）很容易满足。
 
 \subparagraph{7.5 三个必须记住的物理量（transmon
@@ -1258,6 +1258,12 @@ quantization''）}}{A3. 单模近似与等效电路解释（Fig.7 与``black-box
     都可以用\textbf{等效集总元件电路}表示：transmon 电容耦合到
     LC（Fig.7(b)）。
   \end{itemize}
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.6\linewidth]{img/LC coupler.png}
+  \caption{transmon 与 LC 谐振器的等效电路}
+\end{figure}
+
 \item
   这种把复杂几何结构``等效成集总元件''的形式化量子化思路，称为
   \textbf{black-box quantization}（Nigg et al., 2012），文中指出会在
@@ -1444,7 +1450,7 @@ states）与``总激发数''守恒结构}}{B2. 裸态（bare states）与``总�
 幺正变换对角化（Eq.
 35--37）}}{B3. 用 Bogoliubov-like 幺正变换对角化（Eq. 35--37）}}\label{b3.-ux7528-bogoliubov-like-ux5e7aux6b63ux53d8ux6362ux5bf9ux89d2ux5316eq.-3537}
 
-文中给出 dressed 态可由幺正变换从裸态获得： \[
+g不为零时，qubit与光子相互作用开启，文中给出 dressed 态可由幺正变换从裸态获得： \[
 |\overline{\sigma,n}\rangle=\hat U^\dagger|\sigma,n\rangle,
 \] 其中变换取（Boissonneault et al., 2009; Carbonaro et al., 1979）： \[
 \hat U=\exp\!\Big[\Lambda(\hat N_T)\big(\hat a^\dagger\hat\sigma_- - \hat a\hat\sigma_+\big)\Big],
@@ -1466,7 +1472,7 @@ states）与``总激发数''守恒结构}}{B2. 裸态（bare states）与``总�
 -\frac{\hbar\Delta}{2}\Big(1-\sqrt{1+4\lambda^2\hat N_T}\Big)\hat\sigma_z.
 \tag{37}
 \]
-
+即，修饰态下，哈密顿量对角化。
 \subsubsection{\texorpdfstring{\textbf{B4. JC
 能谱的``双态（doublets）''结构与本征能量（Eq.
 38）}}{B4. JC 能谱的``双态（doublets）''结构与本征能量（Eq. 38）}}\label{b4.-jc-ux80fdux8c31ux7684ux53ccux6001doubletsux7ed3ux6784ux4e0eux672cux5f81ux80fdux91cfeq.-38}
@@ -1540,7 +1546,11 @@ E_{g,0}=-\frac{\hbar\omega_q}{2}.
     2008）------这是``必须考虑 transmon 多能级性''的直接提示。
   \end{itemize}
 \end{itemize}
-
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.6\linewidth]{img/JC spectrum.png}
+  \caption{JC 模型能谱示意（文中 Fig.8）}
+\end{figure}
 
 \textbf{\textbf{整体逻辑总结}}{整体逻辑总结} \\
 \textbf{III.A 部分} 从物理图像和形式推导两个层面，建立了 transmon
@@ -2138,1058 +2148,770 @@ Lamb shift 和 cavity pull 表达式，为处理任意多能级系统提供了�
 
 整体而言，第三章从最简单的交换相互作用开始，逐步深入到色散区、多模环境、多能级系统以及替代耦合方案，构建了电路
 QED 中光-物质相互作用的完整理论体系。
-\iffalse
-\section{IV. 与外界耦合：环境的作用（Coupling to the outside world: the
-role of the
-environment）}\label{iv.-ux4e0eux5916ux754cux8026ux5408ux73afux5883ux7684ux4f5cux7528coupling-to-the-outside-world-the-role-of-the-environment}
+
+
+% ======================================================================
+\section{与外界耦合：环境的作用（Coupling to the outside world: the role of the environment）}
+% ======================================================================
 
 到目前为止讨论的是\textbf{孤立量子系统}。但对量子电路的完整描述必须包含系统如何与环境耦合（测量装置、控制线路等）。环境在量子技术中具有双重角色：
-~
-
 \begin{itemize}
-\item
-  \textbf{不可避免性}：完全隔离不现实，因为总会存在非期望的环境自由度耦合。
-  ~
-\item
-  \textbf{必要性}：完全隔离也``没用''，因为我们将无法控制、驱动或测量系统。
-  ~
+  \item \textbf{不可避免性}：完全隔离不现实，因为总会存在非期望的环境自由度耦合。
+  \item \textbf{必要性}：完全隔离也"没用"，因为我们将无法控制、驱动或测量系统。
 \end{itemize}
 
-因此本节考虑：量子系统与\textbf{外部传输线}耦合，并引入对电路QED读出至关重要的\textbf{输入-输出理论（input-output
-theory）}。
+因此本节考虑：量子系统与\textbf{外部传输线}耦合，并引入对电路QED读出至关重要的\textbf{输入--输出理论（input-output theory）}。
 
+\bigskip\hrule\bigskip
 
-\subsection{A. 用传输线连接量子系统（Wiring up quantum systems with
-transmission
-lines）}\label{a.-ux7528ux4f20ux8f93ux7ebfux8fdeux63a5ux91cfux5b50ux7cfbux7edfwiring-up-quantum-systems-with-transmission-lines}
+% ======================================================================
+\subsection{用传输线连接量子系统（Wiring up quantum systems with transmission lines）}
+% ======================================================================
 
-\subsubsection{A.1
-传输线作为环境：连续谱极限}\label{a.1-ux4f20ux8f93ux7ebfux4f5cux4e3aux73afux5883ux8fdeux7eedux8c31ux6781ux9650}
+% --------------------------------------------------
+\subsubsection{传输线作为环境：连续谱极限}
+% --------------------------------------------------
 
 考虑单个量子系统（示例：LC振子）通过电容耦合到一根\textbf{半无限}传输线（如共面波导，CPW）。
-~
-
 \begin{itemize}
-\item
-  传输线长度 \(d\to \infty\)
-  时，模频率变得\textbf{极其稠密}，需视为\textbf{连续谱（continuum）}。
-\item
-  传输线哈密顿量写为连续模积分形式：
+  \item 传输线长度 $d\to \infty$ 时，模频率变得\textbf{极其稠密}，需视为\textbf{连续谱（continuum）}。
+  \item 传输线哈密顿量写为连续模积分形式：
 \end{itemize}
 
-\$\$
-
-\hat H\_\{\mathrm{tml}\}=\int\emph{0\textsuperscript{\infty d\omega,\hbar\omega,\hat b\_\omega}\dagger \hat b}\omega .
-
+\begin{equation}
+\hat H_{\mathrm{tml}}=\int_0^\infty d\omega\,\hbar\omega\,\hat b_\omega^\dagger \hat b_\omega .
 \tag{64}
+\end{equation}
 
-\$\$
+其中 $\hat b_\omega$ 为频率为 $\omega$ 的传输线模湮灭算符，并满足连续模对易关系（文中随后用到）
+\begin{equation}
+[\hat b_\omega,\hat b_{\omega'}^\dagger]=\delta(\omega-\omega') .
+\end{equation}
 
-其中 \(\hat b_\omega\) 为频率为 \(\omega\)
-的传输线模湮灭算符，并满足连续模对易关系（文中随后用到）
+% --------------------------------------------------
+\subsubsection{传输线的场变量（通量与电荷）的连续模展开}
+% --------------------------------------------------
 
-\$\$
+传输线在位置 $x$ 处的通量与电荷算符（与离散模展开类似，在连续极限下）为：
 
-{[}\hat b\_\omega,\hat b\_\{\omega'\}\^{}\dagger{]}=\delta(\omega-\omega')
-.
-
-\$\$
-
-
-\subsubsection{A.2
-传输线的场变量（通量与电荷）的连续模展开}\label{a.2-ux4f20ux8f93ux7ebfux7684ux573aux53d8ux91cfux901aux91cfux4e0eux7535ux8377ux7684ux8fdeux7eedux6a21ux5c55ux5f00}
-
-传输线在位置 \(x\)
-处的通量与电荷算符（与离散模展开类似，在连续极限下）为：
-
-\$\$
-
-\hat\Phi\_\{\mathrm{tml}\}(x)=\int\_0\^{}\infty d\omega,
-
-\sqrt{\frac{\hbar}{\pi\omega c v}},
-
-\cos!\left(\frac{\omega x}{v}\right),(\hat b\_\omega\^{}\dagger+\hat b\_\omega),
-
+\begin{equation}
+\hat\Phi_{\mathrm{tml}}(x)=\int_0^\infty d\omega\,
+\sqrt{\frac{\hbar}{\pi\omega c v}}\,
+\cos\!\left(\frac{\omega x}{v}\right)\,(\hat b_\omega^\dagger+\hat b_\omega),
 \tag{65a}
+\end{equation}
 
-\$\$
-
-\$\$
-
-\hat Q\_\{\mathrm{tml}\}(x)= i\int\_0\^{}\infty d\omega,
-
-\sqrt{\frac{\hbar\omega c}{\pi v}},
-
-\cos!\left(\frac{\omega x}{v}\right),(\hat b\_\omega\^{}\dagger-\hat b\_\omega).
-
+\begin{equation}
+\hat Q_{\mathrm{tml}}(x)= i\int_0^\infty d\omega\,
+\sqrt{\frac{\hbar\omega c}{\pi v}}\,
+\cos\!\left(\frac{\omega x}{v}\right)\,(\hat b_\omega^\dagger-\hat b_\omega).
 \tag{65b}
-
-\$\$
+\end{equation}
 
 \begin{itemize}
-\item
-  这里 \(v=1/\sqrt{lc}\) 为传输线相速度；\(l,c\)
-  分别是单位长度电感、电容（注意与后文的耦合电容符号区分）。 ~
-\item
-  在海森堡绘景下，\(\hat\Phi_{\mathrm{tml}}(x,t)=e^{i\hat H_{\mathrm{tml}}t/\hbar}\hat\Phi_{\mathrm{tml}}(x)e^{-i\hat H_{\mathrm{tml}}t/\hbar}\)（\(\hat Q\)
-  同理）。
+  \item 这里 $v=1/\sqrt{lc}$ 为传输线相速度；$l,c$ 分别是单位长度电感、电容（注意与后文的耦合电容符号区分）。
+  \item 在海森堡绘景下，$\hat\Phi_{\mathrm{tml}}(x,t)=e^{i\hat H_{\mathrm{tml}}t/\hbar}\hat\Phi_{\mathrm{tml}}(x)e^{-i\hat H_{\mathrm{tml}}t/\hbar}$（$\hat Q$ 同理）。
 \end{itemize}
 
+% --------------------------------------------------
+\subsubsection{通过电容将传输线耦合到谐振子（LC）}
+% --------------------------------------------------
 
-\subsubsection{A.3
-通过电容将传输线耦合到谐振子（LC）}\label{a.3-ux901aux8fc7ux7535ux5bb9ux5c06ux4f20ux8f93ux7ebfux8026ux5408ux5230ux8c10ux632fux5b50lc}
-
-考虑 LC 振子（系统）在 \(x=0\) 端与传输线通过耦合电容 \(C_k\)
-相连（图11）。系统哈密顿量为
-
-\$\$
-
-\hat H\_S=\hbar\omega\_r \hat a\^{}\dagger \hat a ,
-
-\$\$
-
-其中 \(\hat a\) 为谐振子湮灭算符，\(\omega_r\) 为共振频率。
+考虑 LC 振子（系统）在 $x=0$ 端与传输线通过耦合电容 $C_k$ 相连（图11）。系统哈密顿量为
+\begin{equation}
+\hat H_S=\hbar\omega_r \hat a^\dagger \hat a ,
+\end{equation}
+其中 $\hat a$ 为谐振子湮灭算符，$\omega_r$ 为共振频率。
 
 在小耦合近似下，耦合后的总哈密顿量为（系统 + 传输线 + 相互作用）：
 
-\$\$
-
-\hat H=\hat H\_S+\hat H\_\{\mathrm{tml}\}
-
--\hbar\int\emph{0\textsuperscript{\infty d\omega,\lambda(\omega),(\hat b\_\omega}\dagger-\hat b}\omega)(\hat a\^{}\dagger-\hat a).
-
+\begin{equation}
+\hat H=\hat H_S+\hat H_{\mathrm{tml}}
+-\hbar\int_0^\infty d\omega\,\lambda(\omega)\,(\hat b_\omega^\dagger-\hat b_\omega)(\hat a^\dagger-\hat a).
 \tag{66}
-
-\$\$
-
+\end{equation}
+式中，\begin{itemize}
+  \item $d\omega$的积分表示外部环境（传输线）的模连续遍历所有频率，
+  \item $\lambda$为耦合强度分布，通常在系统频率$\omega_r$附近占主导。
+  \item 最后一项：系统与传输线的耦合，$\lambda(\omega)$ 是频率依赖的耦合强度。
+  \end{itemize}
 耦合强度的频率依赖形式为
-
-\$\$
-
+\begin{equation}
 \lambda(\omega)=\left(\frac{C_k}{\sqrt{C_r C_t}}\right)\sqrt{\frac{\omega_r}{2\pi}\,\omega},
-
-\$\$
-
+\end{equation}
 其中：
-
 \begin{itemize}
-\item
-  \(C_r\) 为谐振子电容；
-\item
-  \(C_t\) 为传输线等效电容（文中以``归一化/有效电容''方式出现）；
-\item
-  这些表达式可视作因耦合导致的电容小重整化（附录A讨论）。
+  \item $C_r$ 为谐振子电容；
+  \item $C_t$ 为传输线等效电容（文中以"归一化/有效电容"方式出现）；
+  \item 这些表达式可视作因耦合导致的电容小重整化（附录A讨论）。
 \end{itemize}
 
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.8\textwidth]{img/LC coupled to TL.png}
+\caption{LC 振子通过电容 $C_k$ 与半无限传输线耦合的示意图。}
+\end{figure}
+% --------------------------------------------------
+\subsubsection{窄带/高Q与旋转波近似：得到标准系统--浴耦合形式}
+% --------------------------------------------------
 
-\subsubsection{A.4
-窄带/高Q与旋转波近似：得到标准系统-浴耦合形式}\label{a.4-ux7a84ux5e26ux9ad8qux4e0eux65cbux8f6cux6ce2ux8fd1ux4f3cux5f97ux5230ux6807ux51c6ux7cfbux7edf-ux6d74ux8026ux5408ux5f62ux5f0f}
+假设 $\lambda(\omega)$ 在 $\omega_r$ 附近变化缓慢且相对小，可当作微扰；系统 $Q$ 因子大，主要只响应 $\omega\approx\omega_r$ 的窄带频率。于是取近似 $\lambda(\omega)\simeq \lambda(\omega_r)$ 并丢弃快速振荡项，得到（Gardiner \& Zoller 1999）：
 
-假设 \(\lambda(\omega)\) 在 \(\omega_r\)
-附近变化缓慢且相对小，可当作微扰；系统 \(Q\) 因子大，主要只响应
-\(\omega\approx\omega_r\) 的窄带频率。于是取近似
-\(\lambda(\omega)\simeq \lambda(\omega_r)\)
-并丢弃快速振荡项，得到（Gardiner \& Zoller 1999）：
-
-\$\$
-
-\hat H \approx \hat H\_S+\hat H\_\{\mathrm{tml}\}
-
-+\hbar\int\emph{0\textsuperscript{\infty d\omega,\lambda(\omega\emph{r),(\hat a\hat b}\omega}\dagger-\hat a\^{}\dagger\hat b}\omega).
-
+\begin{equation}
+\hat H \approx \hat H_S+\hat H_{\mathrm{tml}}
++\hbar\int_0^\infty d\omega\,\lambda(\omega_r)\,(\hat a\hat b_\omega^\dagger-\hat a^\dagger\hat b_\omega).
 \tag{67}
+\end{equation}
 
-\$\$
+这就是典型的"能量守恒型"（RWA）耦合：系统放光到浴 / 从浴吸收。
 
-这就是典型的``能量守恒型''（RWA）耦合：系统放光到浴 / 从浴吸收。
+% --------------------------------------------------
+\subsubsection{Born--Markov 近似：Lindblad 主方程（谐振子衰减与热激发）}
+% --------------------------------------------------
 
+在标准 Born--Markov 近似下，由式(67)可得系统密度矩阵 $\rho$ 的 Markovian 主方程（Lindblad 形式）：
 
-\subsubsection{A.5 Born--Markov 近似：Lindblad
-主方程（谐振子衰减与热激发）}\label{a.5-bornmarkov-ux8fd1ux4f3clindblad-ux4e3bux65b9ux7a0bux8c10ux632fux5b50ux8870ux51cfux4e0eux70edux6fc0ux53d1}
-
-在标准 Born--Markov 近似下，由式(67)可得系统密度矩阵 \(\rho\) 的
-Markovian 主方程（Lindblad 形式）：
-
-\$\$
-
-\dot\rho=-i{[}\hat H\_S,\rho{]}+\kappa(\bar n\_\kappa+1)\mathcal D{[}\hat a{]}\rho
-
-+\kappa\bar n\_\kappa,\mathcal D{[}\hat a\^{}\dagger{]}\rho.
-
+\begin{equation}
+\dot\rho=-i[\hat H_S,\rho]+\kappa(\bar n_\kappa+1)\mathcal D[\hat a]\rho
++\kappa\bar n_\kappa\,\mathcal D[\hat a^\dagger]\rho.
 \tag{68}
-
-\$\$
-
-\begin{itemize}
-\tightlist
-\item
-  \(\kappa\)：谐振子的能量衰减率（线宽）。文中给出
-\end{itemize}
-
-\$\$
-
-\kappa=2\pi\lambda(\omega\_r)\^{}2
-
-= Z\_\{\mathrm{tml}\}\omega\_r\^{}2\frac{C_k^2}{C_r},
-
-\$\$
-
-其中 \(Z_{\mathrm{tml}}\) 为传输线特性阻抗。 ~
+\end{equation}
 
 \begin{itemize}
-\tightlist
-\item
-  \(\bar n_\kappa=\bar n_\kappa(\omega_r)\)：传输线在频率 \(\omega_r\)
-  处的热光子数（Bose--Einstein 分布给出），并满足浴相关函数
+  \item $\kappa$：谐振子的能量衰减率（线宽）。文中给出
+  \begin{equation}
+  \kappa=2\pi\lambda(\omega_r)^2
+  = Z_{\mathrm{tml}}\omega_r^2\frac{C_k^2}{C_r},
+  \end{equation}
+  其中 $Z_{\mathrm{tml}}$ 为传输线特性阻抗。
+  \item $\bar n_\kappa=\bar n_\kappa(\omega_r)$：传输线在频率 $\omega_r$ 处的热光子数（Bose--Einstein 分布给出），并满足浴相关函数
+  \begin{equation}
+  \langle \hat b_\omega^\dagger \hat b_{\omega'}\rangle=\bar n_\kappa(\omega)\delta(\omega-\omega').
+  \end{equation}
 \end{itemize}
-
-\$\$
-
-\langle \hat b\_\omega\^{}\dagger \hat b\_\{\omega`\}\rangle=\bar n\_\kappa(\omega)\delta(\omega-\omega').
-
-\$\$
 
 耗散超算符定义为
 
-\$\$
-
-\mathcal D{[}\hat O{]}\rho=\hat O\rho\hat O\textsuperscript{\dagger-\frac12\{\hat O}\dagger\hat O,\rho\},
-
+\begin{equation}
+\mathcal D[\hat O]\rho=\hat O\rho\hat O^\dagger-\frac12\{\hat O^\dagger\hat O,\rho\},
 \tag{69}
+\end{equation}
 
-\$\$
-
-其中 \(\{\cdot,\cdot\}\) 为反对易子。
+其中 $\{\cdot,\cdot\}$ 为反对易子。
 
 \textbf{物理解释（对应式(68)两项耗散）：}
-
 \begin{itemize}
-\item
-  \(\mathcal D[\hat a]\) 项：对应\textbf{光子损失}（衰减）。当作用在数态
-  \(\lvert n\rangle\)
-  上，\(\hat a\lvert n\rangle=\sqrt n\lvert n-1\rangle\)，体现
-  \(n\to n-1\) 的跃迁。
-\item
-  \(\mathcal D[\hat a^\dagger]\)
-  项：对应从热浴\textbf{吸收光子}导致的激发。
-\item
-  \(T\to 0\)（稀释制冷极低温）常取
-  \(\bar n_\kappa\to 0\)，但实际可能因室温线缆热辐射等导致残余热占据，需要工程抑制（吸收器、滤波、隔离等）。
+  \item $\mathcal D[\hat a]$ 项：对应\textbf{光子损失}（衰减）。当作用在数态 $\lvert n\rangle$ 上，$\hat a\lvert n\rangle=\sqrt n\lvert n-1\rangle$，体现 $n\to n-1$ 的跃迁。
+  \item $\mathcal D[\hat a^\dagger]$ 项：对应从热浴\textbf{吸收光子}导致的激发。
+  \item $T\to 0$（稀释制冷极低温）常取 $\bar n_\kappa\to 0$，但实际可能因室温线缆热辐射等导致残余热占据，需要工程抑制（吸收器、滤波、隔离等）。
 \end{itemize}
 
+\bigskip\hrule\bigskip
 
-\subsection{B. 电网络中的输入-输出理论（Input-output theory in
-electrical
-networks）}\label{b.-ux7535ux7f51ux7edcux4e2dux7684ux8f93ux5165-ux8f93ux51faux7406ux8bbainput-output-theory-in-electrical-networks}
+% ======================================================================
+\subsection{电网络中的输入--输出理论（Input-output theory in electrical networks）}
+% ======================================================================
 
-\subsubsection{B.1
-为什么需要输入-输出理论}\label{b.1-ux4e3aux4ec0ux4e48ux9700ux8981ux8f93ux5165-ux8f93ux51faux7406ux8bba}
+% --------------------------------------------------
+\subsubsection{为什么需要输入--输出理论}
+% --------------------------------------------------
 
-主方程（如式(68)）描述系统的阻尼动力学，但\textbf{不直接给出系统向外辐射的场}。实验中可测量的正是这些辐射/反射信号，因此需要输入-输出理论来连接：
-
+主方程（如式(68)）描述系统的阻尼动力学，但\textbf{不直接给出系统向外辐射的场}。实验中可测量的正是这些辐射/反射信号，因此需要输入--输出理论来连接：
 \begin{itemize}
-\item
-  传输线上的输入场（噪声/驱动）
-\item
-  系统动力学
-\item
-  输出场（可测读出的信号）
+  \item 传输线上的输入场（噪声/驱动）
+  \item 系统动力学
+  \item 输出场（可测读出的信号）
 \end{itemize}
 
-本节介绍一种常用推导路线：将传输线模分解为\textbf{左行（输入）}与\textbf{右行（输出）}辐射场，并用
-\(x=0\) 处边界条件联系二者。
+本节介绍一种常用推导路线：将传输线模分解为\textbf{左行（输入）}与\textbf{右行（输出）}辐射场，并用 $x=0$ 处边界条件联系二者。
 
+% --------------------------------------------------
+\subsubsection{左/右行场与端口电压算符}
+% --------------------------------------------------
 
-\subsubsection{B.2
-左/右行场与端口电压算符}\label{b.2-ux5de6ux53f3ux884cux573aux4e0eux7aefux53e3ux7535ux538bux7b97ux7b26}
+在 $x=0$（系统端口位置）处，将电压分为输入与输出贡献：
+\begin{equation}
+\hat V(x=0,t)=\hat V_{\mathrm{in}}(t)+\hat V_{\mathrm{out}}(t).
+\end{equation}
 
-在 \(x=0\)（系统端口位置）处，将电压分为输入与输出贡献：
+文中给出端口输入/输出电压的模展开（用左右行模算符 $\hat b_{L/R,\omega}$ 表示）：
 
-\$\$
-
-\hat V(x=0,t)=\hat V\_\{\mathrm{in}\}(t)+\hat V\_\{\mathrm{out}\}(t).
-
-\$\$
-
-文中给出端口输入/输出电压的模展开（用左右行模算符
-\(\hat b_{L/R,\omega}\) 表示）：
-
-\$\$
-
-\hat V\_\{\mathrm{in/out}\}(t)=
-
-i\int\_0\^{}\infty d\omega,
-
-\sqrt{\frac{\hbar\omega}{4\pi c v}},
-
-e\^{}\{-i\omega t\},\hat b\_\{L/R,\omega\}+ \mathrm{H.c.}
-
+\begin{equation}
+\hat V_{\mathrm{in/out}}(t)=
+i\int_0^\infty d\omega\,
+\sqrt{\frac{\hbar\omega}{4\pi c v}}\,
+e^{-i\omega t}\,\hat b_{L/R,\omega}+ \mathrm{H.c.}
 \tag{70}
+\end{equation}
 
-\$\$
-
-
-\subsubsection{B.3 边界条件（Kirchhoff
-定律）与端口电流}\label{b.3-ux8fb9ux754cux6761ux4ef6kirchhoff-ux5b9aux5f8bux4e0eux7aefux53e3ux7535ux6d41}
+% --------------------------------------------------
+\subsubsection{边界条件（Kirchhoff 定律）与端口电流}
+% --------------------------------------------------
 
 端口处满足 Kirchhoff 电流定律给出的边界条件：
 
-\$\$
-
+\begin{equation}
 \hat I(t)=\frac{\hat V_{\mathrm{out}}(t)-\hat V_{\mathrm{in}}(t)}{Z_{\mathrm{tml}}},
-
 \tag{71}
+\end{equation}
 
-\$\$
+其中左侧 $\hat I(t)$ 是由样品注入传输线的电流。文中说明该电流可写为
+\begin{equation}
+\hat I(t)=\left(\frac{C_r}{C_k}\right)\dot{\hat Q}_r(t),
+\end{equation}
+$\hat Q_r$ 为谐振子电荷（细节见附录C的推导）。
 
-其中左侧 \(\hat I(t)\) 是由样品注入传输线的电流。文中说明该电流可写为
+% --------------------------------------------------
+\subsubsection{标准输入--输出关系与输入/输出场定义}
+% --------------------------------------------------
 
-\$\$
+通过对相关算符做模展开并采用前述近似（系统仅响应 $\omega\approx\omega_r$，忽略快速旋转项，可将积分范围扩展到 $(-\infty,\infty)$），得到\textbf{标准输入--输出关系}：
 
-\hat I(t)=\left(\frac{C_r}{C_k}\right)\dot{\hat Q}\_r(t),
-
-\$\$
-
-\(\hat Q_r\) 为谐振子电荷（细节见附录C的推导）。
-
-
-\subsubsection{B.4
-标准输入-输出关系与输入/输出场定义}\label{b.4-ux6807ux51c6ux8f93ux5165-ux8f93ux51faux5173ux7cfbux4e0eux8f93ux5165ux8f93ux51faux573aux5b9aux4e49}
-
-通过对相关算符做模展开并采用前述近似（系统仅响应
-\(\omega\approx\omega_r\)，忽略快速旋转项，可将积分范围扩展到
-\((-\infty,\infty)\)），得到\textbf{标准输入-输出关系}：
-
-\$\$
-
-\hat b\_\{\mathrm{out}\}(t)-\hat b\_\{\mathrm{in}\}(t)=\sqrt{\kappa},\hat a(t).
-
+\begin{equation}
+\hat b_{\mathrm{out}}(t)-\hat b_{\mathrm{in}}(t)=\sqrt{\kappa}\,\hat a(t).
 \tag{72}
-
-\$\$
+\end{equation}
 
 输入/输出场算符定义为（以频率相对系统频率的失谐表示）：
 
-\$\$
-
-\hat b\_\{\mathrm{in}\}(t)=
-
-\frac{-i}{\sqrt{2\pi}}\int\emph{\{-\infty\}\^{}\{\infty\}
-d\omega,\hat b}\{L,\omega\},e\^{}\{-i(\omega-\omega\_r)t\},
-
+\begin{equation}
+\hat b_{\mathrm{in}}(t)=
+\frac{-i}{\sqrt{2\pi}}\int_{-\infty}^{\infty} d\omega\,\hat b_{L,\omega}\,e^{-i(\omega-\omega_r)t},
 \tag{73}
+\end{equation}
 
-\$\$
-
-\$\$
-
-\hat b\_\{\mathrm{out}\}(t)=
-
-\frac{-i}{\sqrt{2\pi}}\int\emph{\{-\infty\}\^{}\{\infty\}
-d\omega,\hat b}\{R,\omega\},e\^{}\{-i(\omega-\omega\_r)t\},
-
+\begin{equation}
+\hat b_{\mathrm{out}}(t)=
+\frac{-i}{\sqrt{2\pi}}\int_{-\infty}^{\infty} d\omega\,\hat b_{R,\omega}\,e^{-i(\omega-\omega_r)t},
 \tag{74}
-
-\$\$
+\end{equation}
 
 并满足白噪声型对易关系
-
-\$\$
-
-{[}\hat b\_\{\mathrm{in}\}(t),\hat b\_\{\mathrm{in}\}\^{}\dagger(t'){]}=
-
-{[}\hat b\_\{\mathrm{out}\}(t),\hat b\_\{\mathrm{out}\}\^{}\dagger(t'){]}=\delta(t-t').
-
-\$\$
+\begin{equation}
+[\hat b_{\mathrm{in}}(t),\hat b_{\mathrm{in}}^\dagger(t')]=
+[\hat b_{\mathrm{out}}(t),\hat b_{\mathrm{out}}^\dagger(t')]=\delta(t-t').
+\end{equation}
 
 \begin{quote}
-关键近似：丢弃 \(\pm\omega_r\)
-的快速旋转项（RWA/窄带），并假设相关频率都靠近 \(\omega_r\)，从而得到
-Markov 极限的 \(\delta(t-t')\) 关联。
+\textbf{关键近似}：丢弃 $\pm\omega_r$ 的快速旋转项（RWA/窄带），并假设相关频率都靠近 $\omega_r$，从而得到 Markov 极限的 $\delta(t-t')$ 关联。
 \end{quote}
 
-
-\subsubsection{\texorpdfstring{B.5
-海森堡-朗之万方程：谐振子由输入场驱动并以 \(\kappa\)
-衰减}{B.5 海森堡-朗之万方程：谐振子由输入场驱动并以 \textbackslash{}kappa 衰减}}\label{b.5-ux6d77ux68eeux5821-ux6717ux4e4bux4e07ux65b9ux7a0bux8c10ux632fux5b50ux7531ux8f93ux5165ux573aux9a71ux52a8ux5e76ux4ee5-kappa-ux8870ux51cf}
+% --------------------------------------------------
+\subsubsection{海森堡--朗之万方程：谐振子由输入场驱动并以 $\kappa$ 衰减}
+% --------------------------------------------------
 
 使用同样的近似，可得到谐振子场算符的运动方程（海森堡绘景）：
 
-\$\$
-
-\dot{\hat a}(t)=i{[}\hat H\_S,\hat a(t){]}-\frac{\kappa}{2}\hat a(t)+\sqrt{\kappa},\hat b\_\{\mathrm{in}\}(t).
-
+\begin{equation}
+\dot{\hat a}(t)=i[\hat H_S,\hat a(t)]-\frac{\kappa}{2}\hat a(t)+\sqrt{\kappa}\,\hat b_{\mathrm{in}}(t).
 \tag{75}
-
-\$\$
+\end{equation}
 
 含义：
-
 \begin{itemize}
-\item
-  \(-\kappa\hat a/2\)：辐射阻尼（能量泄露到线中）
-\item
-  \(\sqrt{\kappa}\hat b_{\mathrm{in}}\)：输入场（噪声/外加驱动）对系统的驱动
-\item
-  结合(72)可由输入与系统动力学预测输出，从而与实验可测信号建立联系。
+  \item $-\kappa\hat a/2$：辐射阻尼（能量泄露到线中）
+  \item $\sqrt{\kappa}\hat b_{\mathrm{in}}$：输入场（噪声/外加驱动）对系统的驱动
+  \item 结合(72)可由输入与系统动力学预测输出，从而与实验可测信号建立联系。
 \end{itemize}
 
+% --------------------------------------------------
+\subsubsection{传输线中某位置的电压（可测信号表达式）}
+% --------------------------------------------------
 
-\subsubsection{B.6
-传输线中某位置的电压（可测信号表达式）}\label{b.6-ux4f20ux8f93ux7ebfux4e2dux67d0ux4f4dux7f6eux7684ux7535ux538bux53efux6d4bux4fe1ux53f7ux8868ux8fbeux5f0f}
+文中指出：可在 $x>0$ 处测量电压以探测输出场。在上述近似下，电压算符可写为
 
-文中指出：可在 \(x>0\)
-处测量电压以探测输出场。在上述近似下，电压算符可写为
-
-\$\$
-
+\begin{equation}
 \hat V(x,t)\simeq
-
 \sqrt{\frac{\hbar\omega_r Z_{\mathrm{tml}}}{2}}
-
 \Big[
-
 e^{i\omega_r x/v-i\omega_r t}\hat b_{\mathrm{out}}(t)
-
 +
-
 e^{-i\omega_r x/v-i\omega_r t}\hat b_{\mathrm{in}}(t)
-
 +\mathrm{H.c.}
-
 \Big].
-
 \tag{76}
+\end{equation}
 
-\$\$
+并强调：该表达式假设相关频率都在 $\omega_r$ 附近，同时忽略非Markov时间延迟效应。
 
-并强调：该表达式假设相关频率都在 \(\omega_r\)
-附近，同时忽略非Markov时间延迟效应。
-
-
-\subsubsection{B.7
-扩展性：从单端口到量子网络}\label{b.7-ux6269ux5c55ux6027ux4eceux5355ux7aefux53e3ux5230ux91cfux5b50ux7f51ux7edc}
+% --------------------------------------------------
+\subsubsection{扩展性：从单端口到量子网络}
+% --------------------------------------------------
 
 本节主要讨论单个系统连接半无限传输线端点的简单情形。更一般地：
-
 \begin{itemize}
-\item
-  多个系统可耦合到同一条线形成网络；
-\item
-  多条线可作为多个端口。
+  \item 多个系统可耦合到同一条线形成网络；
+  \item 多条线可作为多个端口。
 \end{itemize}
+这些更复杂结构可用 \textbf{SLH 形式化}系统化处理（文中提及 Combes、Gough \& James 等）。
 
-这些更复杂结构可用 \textbf{SLH 形式化}系统化处理（文中提及 Combes、Gough
-\& James 等）。
+\bigskip\hrule\bigskip
 
+% ======================================================================
+\subsection{量子比特的弛豫与退相干（Qubit relaxation and dephasing）}
+% ======================================================================
 
-\subsection{C. 量子比特的弛豫与退相干（Qubit relaxation and
-dephasing）}\label{c.-ux91cfux5b50ux6bd4ux7279ux7684ux5f1bux8c6bux4e0eux9000ux76f8ux5e72qubit-relaxation-and-dephasing}
+% --------------------------------------------------
+\subsubsection{从谐振子到一般量子系统：主方程的普适性}
+% --------------------------------------------------
 
-\subsubsection{C.1
-从谐振子到一般量子系统：主方程的普适性}\label{c.1-ux4eceux8c10ux632fux5b50ux5230ux4e00ux822cux91cfux5b50ux7cfbux7edfux4e3bux65b9ux7a0bux7684ux666eux9002ux6027}
+式(68)虽由"谐振子--传输线"模型推得，但式(66)本质是非常通用的系统--浴哈密顿量，可用来描述多种噪声源导致的耗散（如 Caldeira--Leggett 思路）。
+对任意量子系统，只需将式(66)中的 $\hat a$ 替换为与浴耦合的系统算符即可。
 
-式(68)虽由``谐振子-传输线''模型推得，但式(66)本质是非常通用的系统-浴哈密顿量，可用来描述多种噪声源导致的耗散（如
-Caldeira--Leggett 思路）。 ~
+% --------------------------------------------------
+\subsubsection{Transmon 的能量弛豫（连接传输线导致的衰减）}
+% --------------------------------------------------
 
-对任意量子系统，只需将式(66)中的 \(\hat a\)
-替换为与浴耦合的系统算符即可。
-
-
-\subsubsection{C.2 Transmon
-的能量弛豫（连接传输线导致的衰减）}\label{c.2-transmon-ux7684ux80fdux91cfux5f1bux8c6bux8fdeux63a5ux4f20ux8f93ux7ebfux5bfcux81f4ux7684ux8870ux51cf}
-
-对 transmon（图12）： ~
-
+对 transmon（图12）：
 \begin{itemize}
-\item
-  将式(68)中 \(\hat H_S\) 替换为 transmon 哈密顿量
-  \(\hat H_q\)（文中指向前面 Eq.(25)）。 ~
-\item
-  并将耗散算符替换为 transmon 的跃迁算符：
+  \item 将式(68)中 $\hat H_S$ 替换为 transmon 哈密顿量 $\hat H_q$（文中指向前面 Eq.(25)）。
+  \item 并将耗散算符替换为 transmon 的跃迁算符：
+  \begin{itemize}
+    \item $\mathcal D[\hat a]\to \mathcal D[\hat b]$
+    \item $\mathcal D[\hat a^\dagger]\to \mathcal D[\hat b^\dagger]$
+  \end{itemize}
+  \item 同时将 $\kappa\to\gamma$，其中
+  \begin{equation}
+  \gamma=2\pi\lambda(\omega_q)^2
+  \end{equation}
+  为在量子比特频率 $\omega_q$ 处评估的弛豫率（与耦合强度相关）。
 \end{itemize}
-
-~ - \(\mathcal D[\hat a]\to \mathcal D[\hat b]\)
-
-~ - \(\mathcal D[\hat a^\dagger]\to \mathcal D[\hat b^\dagger]\)
-
-\begin{itemize}
-\tightlist
-\item
-  同时将 \(\kappa\to\gamma\)，其中
-\end{itemize}
-
-\$\$
-
-\gamma=2\pi\lambda(\omega\_q)\^{}2
-
-\$\$
-
-为在量子比特频率 \(\omega_q\) 处评估的弛豫率（与耦合强度相关）。
 
 得到量子比特（与环境交换能量）主方程：
 
-\$\$
-
-\dot\rho=-i{[}\hat H\_q,\rho{]}+\gamma(\bar n\_\gamma+1)\mathcal D{[}\hat b{]}\rho
-
-+\gamma\bar n\_\gamma,\mathcal D{[}\hat b\^{}\dagger{]}\rho,
-
+\begin{equation}
+\dot\rho=-i[\hat H_q,\rho]+\gamma(\bar n_\gamma+1)\mathcal D[\hat b]\rho
++\gamma\bar n_\gamma\,\mathcal D[\hat b^\dagger]\rho,
 \tag{77}
-
-\$\$
+\end{equation}
 
 其中：
-
 \begin{itemize}
-\item
-  \(\rho\) 现在是 transmon 的密度矩阵；
-\item
-  \(\bar n_\gamma\) 是量子比特环境在 \(\omega_q\) 处的热占据数。常取
-  \(\bar n_\gamma\to 0\)，但实验上也常观察到残余热激发。
+  \item $\rho$ 现在是 transmon 的密度矩阵；
+  \item $\bar n_\gamma$ 是量子比特环境在 $\omega_q$ 处的热占据数。常取 $\bar n_\gamma\to 0$，但实验上也常观察到残余热激发。
 \end{itemize}
 
+% --------------------------------------------------
+\subsubsection{纯退相干（pure dephasing）的表型模型}
+% --------------------------------------------------
 
-\subsubsection{C.3 纯退相干（pure
-dephasing）的表型模型}\label{c.3-ux7eafux9000ux76f8ux5e72pure-dephasingux7684ux8868ux578bux6a21ux578b}
+超导量子电路除了能量弛豫，还会因参数涨落（如通量噪声、色散耦合导致的频率抖动等）产生退相干。对 transmon，可在主方程中加入表型纯退相干项：
 
-超导量子电路除了能量弛豫，还会因参数涨落（如通量噪声、色散耦合导致的频率抖动等）产生退相干。对
-transmon，可在主方程中加入表型纯退相干项：
-
-\$\$
-
-2\gamma\_\phi,\mathcal D{[}\hat b\^{}\dagger \hat b{]}\rho,
-
+\begin{equation}
+2\gamma_\phi\,\mathcal D[\hat b^\dagger \hat b]\rho,
 \tag{78}
+\end{equation}
 
-\$\$
-
-其中 \(\gamma_\phi\) 为纯退相干率。文中讨论要点：
-
+其中 $\gamma_\phi$ 为纯退相干率。文中讨论要点：
 \begin{itemize}
-\item
-  对 0--1 跃迁的 transmon，因其对电荷噪声不敏感，\(\gamma_\phi\)
-  往往较小；但高能级因电荷色散随能级数增长而变得更明显，可能出现更强退相干。
-\item
-  另一个退相干来源：与读出谐振子色散耦合时，谐振子中残余热光子数的涨落会引起量子比特频率抖动（``光子数涨落退相干''）。在这种情况下，也可在谐振子主方程中加入类似式(78)但以
-  \(\hat a^\dagger \hat a\) 替代的项；通常该贡献较小而常被忽略。
-\item
-  还存在材料/界面双能级系统（TLS）、准粒子、红外与电离辐射等引起的弛豫与退相干来源。
+  \item 对 0--1 跃迁的 transmon，因其对电荷噪声不敏感，$\gamma_\phi$ 往往较小；但高能级因电荷色散随能级数增长而变得更明显，可能出现更强退相干。
+  \item 另一个退相干来源：与读出谐振子色散耦合时，谐振子中残余热光子数的涨落会引起量子比特频率抖动（"光子数涨落退相干"）。在这种情况下，也可在谐振子主方程中加入类似式(78)但以 $\hat a^\dagger \hat a$ 替代的项；通常该贡献较小而常被忽略。
+  \item 还存在材料/界面双能级系统（TLS）、准粒子、红外与电离辐射等引起的弛豫与退相干来源。
 \end{itemize}
 
-
-\subsubsection{\texorpdfstring{C.4 合并后（取 \(\bar n_\gamma\to 0\)）的
-transmon
-主方程}{C.4 合并后（取 \textbackslash{}bar n\_\textbackslash{}gamma\textbackslash{}to 0）的 transmon 主方程}}\label{c.4-ux5408ux5e76ux540eux53d6-bar-n_gammato-0ux7684-transmon-ux4e3bux65b9ux7a0b}
+% --------------------------------------------------
+\subsubsection{合并后（取 $\bar n_\gamma\to 0$）的 transmon 主方程}
+% --------------------------------------------------
 
 将能量弛豫（零温极限）与纯退相干合并：
 
-\$\$
-
-\dot\rho=-i{[}\hat H\_q,\rho{]}+\gamma\mathcal D{[}\hat b{]}\rho
-
-+2\gamma\_\phi,\mathcal D{[}\hat b\^{}\dagger \hat b{]}\rho.
-
+\begin{equation}
+\dot\rho=-i[\hat H_q,\rho]+\gamma\mathcal D[\hat b]\rho
++2\gamma_\phi\,\mathcal D[\hat b^\dagger \hat b]\rho.
 \tag{79}
-
-\$\$
+\end{equation}
 
 常将其化为两能级近似形式：令
+\begin{equation}
+\hat H_q \to \hbar\omega_q\frac{\hat\sigma_z}{2},\quad
+\hat b^\dagger \to \hat\sigma_+,\quad
+\hat b \to \hat\sigma_-.
+\end{equation}
 
-\$\$
-
-\hat H\_q \to \hbar\omega\_q\frac{\hat\sigma_z}{2},\quad
-
-\hat b\^{}\dagger \to \hat\sigma\_+,\quad
-
-\hat b \to \hat\sigma\_-.
-
-\$\$
-
-
-\subsubsection{\texorpdfstring{C.5 \(T_1\) 与
-\(T_2\)：弛豫与相干时间}{C.5 T\_1 与 T\_2：弛豫与相干时间}}\label{c.5-t_1-ux4e0e-t_2ux5f1bux8c6bux4e0eux76f8ux5e72ux65f6ux95f4}
+% --------------------------------------------------
+\subsubsection{$T_1$ 与 $T_2$：弛豫与相干时间}
+% --------------------------------------------------
 
 文中给出与实验常用指标的关系：
-
 \begin{itemize}
-\tightlist
-\item
-  纵向弛豫时间（能量弛豫）：
+  \item 纵向弛豫时间（能量弛豫）：
+  \begin{equation}
+  T_1=\frac{1}{\gamma_1}=\frac{1}{\gamma_\downarrow+\gamma_\uparrow}\simeq \frac{1}{\gamma},
+  \tag{80a}
+  \end{equation}
+  $T_1$为qubit从激发态弛豫到基态的特征时间。其中在有限温度时 $\gamma_\downarrow=(\bar n_\gamma+1)\gamma$、$\gamma_\uparrow=\bar n_\gamma\gamma$；零温近似下 $T_1\simeq 1/\gamma$。
+  \item 横向退相干时间（相干寿命）：
+  \begin{equation}
+  T_2=\frac{1}{\gamma_2}=\left(\frac{\gamma_1}{2}+\gamma_\phi\right)^{-1}.
+  \tag{80b}
+  \end{equation}
+  $T_2$表示qubit相干态的寿命
 \end{itemize}
-
-\$\$
-
-T\_1=\frac{1}{\gamma_1}=\frac{1}{\gamma_\downarrow+\gamma_\uparrow}\simeq \frac{1}{\gamma},
-
-\tag{80a}
-
-\$\$
-
-其中在有限温度时
-\(\gamma_\downarrow=(\bar n_\gamma+1)\gamma\)、\(\gamma_\uparrow=\bar n_\gamma\gamma\)；零温近似下
-\(T_1\simeq 1/\gamma\)。
-
-\begin{itemize}
-\tightlist
-\item
-  横向退相干时间（相干寿命）：
-\end{itemize}
-
-\$\$
-
-T\_2=\frac{1}{\gamma_2}=\left(\frac{\gamma_1}{2}+\gamma\_\phi\right)\^{}\{-1\}.
-
-\tag{80b}
-
-\$\$
 
 并进一步指出实验典型量级与材料体系相关（文中列举了多种器件的大致范围），同时强调：
-
 \begin{itemize}
-\item
-  \textbf{能量弛豫}过程往往可较好地用 Markov 主方程描述；
-\item
-  \textbf{退相干}（尤其由低频噪声导致）常具有显著非Markov特征，Markov
-  处理对退相干只是某种``粗略近似''，但在预测稳态响应等场景仍常有效。
+  \item \textbf{能量弛豫}过程往往可较好地用 Markov 主方程描述；
+  \item \textbf{退相干}（尤其由低频噪声导致）常具有显著非Markov特征，Markov 处理对退相干只是某种"粗略近似"，但在预测稳态响应等场景仍常有效。
 \end{itemize}
 
 
-\subsection{D. 色散区的耗散（Dissipation in the dispersive
-regime）}\label{d.-ux8272ux6563ux533aux7684ux8017ux6563dissipation-in-the-dispersive-regime}
+% ======================================================================
+\subsection{色散区的耗散（Dissipation in the dispersive regime）}
+% ======================================================================
 
-本节讨论 \textbf{transmon--谐振子} 在色散耦合区（dispersive
-regime）下的耗散描述。关键点：在色散区里，系统的本征态是\textbf{穿衣态（dressed
-states）}，比特与腔并非真正独立；因此即使耗散通道看似``分别作用在比特/腔''，穿衣结构也会导致\textbf{交叉耗散效应}（例如
-Purcell 衰减、dressed dephasing）。
+本节讨论 \textbf{transmon--谐振子} 在色散耦合区（dispersive regime）下的耗散描述。关键点：在色散区里，系统的本征态是\textbf{修饰态（dressed states）}，比特与腔并非真正独立；因此即使耗散通道看似"分别作用在比特/腔"，修饰结构也会导致\textbf{交叉耗散效应}（例如 Purcell 衰减、dressed dephasing）。
 
-\subsubsection{D.1 ``独立浴''近似下的复合系统主方程（bare basis
-的直觉式）}\label{d.1-ux72ecux7acbux6d74ux8fd1ux4f3cux4e0bux7684ux590dux5408ux7cfbux7edfux4e3bux65b9ux7a0bbare-basis-ux7684ux76f4ux89c9ux5f0f}
+% --------------------------------------------------
+\subsubsection{"独立浴"近似下的复合系统主方程（bare basis 的直觉式）}
+% --------------------------------------------------
 
-假设 transmon 与谐振子分别耦合到独立环境（图13示意），并取
-\(\bar n\to 0\)（为简化），可写复合系统（比特+谐振子）的主方程为
+假设 transmon 与谐振子分别耦合到独立环境（图13示意），并取 $\bar n\to 0$（为简化），可写复合系统（比特+谐振子）的主方程为
 
-\$\$
-
-\dot\rho = -i{[}\hat H,\rho{]} + \kappa\mathcal D{[}\hat a{]}\rho +
-\gamma \mathcal D{[}\hat b{]}\rho +
-2\gamma\_\phi \mathcal D{[}\hat b\^{}\dagger \hat b{]}\rho .
-
+\begin{equation}
+\dot\rho = -i[\hat H,\rho] + \kappa\mathcal D[\hat a]\rho + \gamma \mathcal D[\hat b]\rho + 2\gamma_\phi \mathcal D[\hat b^\dagger \hat b]\rho .
 \tag{81}
-
-\$\$
+\end{equation}
 
 \begin{itemize}
-\item
-  \(\rho\)：\textbf{总系统}密度矩阵 ~
-\item
-  \(\hat H\)：耦合的 transmon--谐振子哈密顿量（文中指向前面 Eq.(32)） ~
-\item
-  \(\kappa\)：腔衰减率（光子泄露） ~
-\item
-  \(\gamma\)：比特能量弛豫率 ~
-\item
-  \(\gamma_\phi\)：比特纯退相干率 ~
-\item
-  \(\hat a\)：谐振子湮灭算符；\(\hat b\)：transmon
-  的跃迁/降低算符（在弱非简谐下近似类振子）
+  \item $\rho$：\textbf{总系统}密度矩阵
+  \item $\hat H$：耦合的 transmon--谐振子哈密顿量（文中指向前面 Eq.(32)）
+  \item $\kappa$：腔衰减率（光子泄露）
+  \item $\gamma$：比特能量弛豫率
+  \item $\gamma_\phi$：比特纯退相干率
+  \item $\hat a$：谐振子湮灭算符；$\hat b$：transmon 的跃迁/降低算符（在弱非简谐下近似类振子）
 \end{itemize}
 
-\textbf{重要限制/提醒}：式(81)只对 \(\omega_q/\omega_r\)
-的小值区间有效。更本质的原因是：真实能量衰减发生在\textbf{系统本征态之间}的跃迁；而式(81)的耗散子更像是在未耦合的``裸态''（bare
-states）之间写跃迁，因而不是在任意耦合强度/任意频率比下都可靠。（文中提到一般推导可见
-Beaudoin et al.~2011）
+\textbf{重要限制/提醒}：式(81)只对 $\omega_q/\omega_r$ 的小值区间有效。更本质的原因是：真实能量衰减发生在\textbf{系统本征态之间}的跃迁；而式(81)的耗散子更像是在未耦合的"裸态"（bare states）之间写跃迁，因而不是在任意耦合强度/任意频率比下都可靠。（文中提到一般推导可见 Beaudoin et al.\ 2011）
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.8\textwidth]{img/dissipation in coupled system.png}
+\caption{transmon 与谐振子耦合后与环境耦合示意图}
+\end{figure}
+\bigskip\hrule\bigskip
 
+% --------------------------------------------------
+\subsubsection{修饰态导致的交叉耗散：色散变换后的主方程}
+% --------------------------------------------------
 
-\subsubsection{D.2
-穿衣态导致的交叉耗散：色散变换后的主方程}\label{d.2-ux7a7fux8863ux6001ux5bfcux81f4ux7684ux4ea4ux53c9ux8017ux6563ux8272ux6563ux53d8ux6362ux540eux7684ux4e3bux65b9ux7a0b}
+乍看式(81)似乎表示腔耗散与比特耗散彼此独立。但在色散区，由于修饰态将 $|e,0\rangle$ 与 $|g,1\rangle$ 混合（图13），腔的阻尼可能诱导比特跃迁，反之亦然。
 
-乍看式(81)似乎表示腔耗散与比特耗散彼此独立。但在色散区，由于穿衣态将
-\(|e,0\rangle\) 与 \(|g,1\rangle\)
-混合（图13），腔的阻尼可能诱导比特跃迁，反之亦然。
+对系统做色散区的幺正变换（文中指向 Eq.(47) 的色散变换），不仅哈密顿量变换，主方程也会变换。忽略快振荡项并保留到 $\lambda$ 的二阶修正（其中 $\lambda\sim g/\Delta$，并与 $\kappa,\gamma,\gamma_\phi$ 同阶，即 $\kappa,\gamma,\gamma_\phi = O(E_C g^2/\Delta^2)$ 的量级一致），得到色散表象下主方程（Boissonneault et al.\ 2009）：
 
-对系统做色散区的幺正变换（文中指向 Eq.(47)
-的色散变换），不仅哈密顿量变换，主方程也会变换。忽略快振荡项并保留到
-\(\lambda\) 的二阶修正（其中 \(\lambda\sim g/\Delta\)，并与
-\(\kappa,\gamma,\gamma_\phi\) 同阶，即
-\(\kappa,\gamma,\gamma_\phi = O(E_C g^2/\Delta^2)\)
-的量级一致），得到色散表象下主方程（Boissonneault et al.~2009）：
-
-\$\$\$\$
-
-\dot\rho\_\{\mathrm{disp}\}
-
-= -i{[}\hat H\_\{\mathrm{disp}\},\rho\_\{\mathrm{disp}\}{]}
-
-+(\kappa+\kappa\emph{\gamma)\mathcal D{[}\hat a{]}\rho}\{\mathrm{disp}\}
-
-+(\gamma+\gamma\emph{\kappa)\mathcal D{[}\hat b{]}\rho}\{\mathrm{disp}\}
-
-+2\gamma\emph{\phi \mathcal D{[}\hat b\^{}\dagger\hat b{]}\rho}\{\mathrm{disp}\}
-
-+\gamma\emph{\Delta \mathcal D{[}\hat a\^{}\dagger\hat a,\hat b{]}\rho}\{\mathrm{disp}\}
-
-+\gamma\emph{\Delta \mathcal D{[}\hat a\textsuperscript{\dagger\hat a,\hat b}\dagger{]}\rho}\{\mathrm{disp}\}
-.
-
-\$\$\$\$
-
-\$\$
-
+\begin{align}
+\dot\rho_{\mathrm{disp}}
+&= -i[\hat H_{\mathrm{disp}},\rho_{\mathrm{disp}}]
++(\kappa+\kappa_\gamma)\mathcal D[\hat a]\rho_{\mathrm{disp}}
++(\gamma+\gamma_\kappa)\mathcal D[\hat b]\rho_{\mathrm{disp}} \notag\\
+&\quad +2\gamma_\phi \mathcal D[\hat b^\dagger\hat b]\rho_{\mathrm{disp}}
++\gamma_\Delta \mathcal D[\hat a^\dagger\hat a\,\hat b]\rho_{\mathrm{disp}}
++\gamma_\Delta \mathcal D[\hat a^\dagger\hat a\,\hat b^\dagger]\rho_{\mathrm{disp}} .
 \tag{82}
+\end{align}
 
-\$\$
+其中 $\rho_{\mathrm{disp}} = \hat U_{\mathrm{disp}}^\dagger\,\rho\,\hat U_{\mathrm{disp}}$。
 
-其中
-\(\rho_{\mathrm{disp}} = \hat U_{\mathrm{disp}}^\dagger\,\rho\,\hat U_{\mathrm{disp}}\)。
+\paragraph{新出现的三类修正速率（Purcell/反向Purcell/测量诱导跃迁）}
 
-\paragraph{D.2.1
-新出现的三类修正速率（Purcell/反向Purcell/测量诱导跃迁）}\label{d.2.1-ux65b0ux51faux73b0ux7684ux4e09ux7c7bux4feeux6b63ux901fux7387purcellux53cdux5411purcellux6d4bux91cfux8bf1ux5bfcux8dc3ux8fc1}
+式(82)中出现三种"交叉"速率（文中首先给出白噪声近似下的简单形式）：
 
-式(82)中出现三种``交叉''速率（文中首先给出白噪声近似下的简单形式）：
-
-\$\$
-
-\kappa\_\gamma=\left(\frac{g}{\Delta}\right)\^{}2\kappa,\qquad
-
-\gamma\_\kappa=\left(\frac{g}{\Delta}\right)\^{}2\gamma,\qquad
-
-\gamma\emph{\Delta=2\left(\frac{g}{\Delta}\right)\^{}2\gamma}\phi .
-
+\begin{equation}
+\gamma_\kappa=\left(\frac{g}{\Delta}\right)^2\kappa,\qquad
+\kappa_\gamma=\left(\frac{g}{\Delta}\right)^2\gamma,\qquad
+\gamma_\Delta=2\left(\frac{g}{\Delta}\right)^2\gamma_\phi .
 \tag{83}
+\end{equation}
 
-\$\$
-
-并且文中强调式(82)``有三个新速率''，其中第一个是 \textbf{Purcell
-衰减率}：
+并且文中强调式(82)"有三个新速率"，其中第一个是 \textbf{Purcell 衰减率}：
 
 \begin{itemize}
-\tightlist
-\item
-  \textbf{Purcell 衰减率 \(\gamma_\kappa\)}：腔的损耗 \(\kappa\)
-  通过穿衣态混合导致比特弛豫。直觉图像：穿衣激发态近似为
+  \item \textbf{Purcell 衰减率 $\gamma_\kappa$}：腔的损耗 $\kappa$ 通过修饰态混合导致比特弛豫。直觉图像：修饰激发态近似为
+  \begin{equation}
+  |e,0\rangle \ \to\ |e,0\rangle + \left(\frac{g}{\Delta}\right)|g,1\rangle,
+  \end{equation}
+  即主要是比特激发，但含有小概率 $\left(\frac{g}{\Delta}\right)^2$ 的"腔中有一个光子、比特在基态"的分量；该光子以速率 $\kappa$ 泄露，从而把系统带到 $|g,0\rangle$，表现为比特弛豫。
+  \item \textbf{反向效应 $\kappa_\gamma$}：同理，比特的衰减通道也会导致腔的有效衰减修正（图13亦标注为 inverse Purcell）。
+  \item \textbf{最后一行（含 $\gamma_\Delta$ 的两项）更微妙}：它们对应由比特退相干噪声在色散耦合下"上/下变频"，从而诱导比特在读出时发生非预期跃迁的过程（见下）。
 \end{itemize}
 
-~ \$\$
+\bigskip\hrule\bigskip
 
-~ \textbar{}e,0\rangle ~\to~\textbar{}e,0\rangle +
-\left(\frac{g}{\Delta}\right)\textbar{}g,1\rangle,
+% --------------------------------------------------
+\subsubsection{消去腔自由度得到"dressed dephasing"（读出引发的伪跃迁）}
+% --------------------------------------------------
 
-~ \$\$
-
-~ 即主要是比特激发，但含有小概率 \(\left(\frac{g}{\Delta}\right)^2\)
-的``腔中有一个光子、比特在基态''的分量；该光子以速率 \(\kappa\)
-泄露，从而把系统带到 \(|g,0\rangle\)，表现为比特弛豫。
+按 Boissonneault et al.\ (2008, 2009) 的处理，从式(82)可通过近似消去谐振子自由度得到只对 transmon 的有效主方程。其结果：比特的弛豫与激发速率会额外得到与腔内平均光子数 $\bar n$ 成正比的贡献，量级约为
 
 \begin{itemize}
-\item
-  \textbf{反向效应
-  \(\kappa_\gamma\)}：同理，比特的衰减通道也会导致腔的有效衰减修正（图13亦标注为
-  inverse Purcell）。
-\item
-  \textbf{最后一行（含 \(\gamma_\Delta\)
-  的两项）更微妙}：它们对应由比特退相干噪声在色散耦合下``上/下变频''，从而诱导比特在读出时发生非预期跃迁的过程（见下）。
+  \item 弛豫/激发速率 $\sim \bar n\,\gamma_\Delta$
 \end{itemize}
 
+这在实验上常表现为量子比特测量期间的\textbf{非期望状态跃迁}，可解释为：退相干噪声在失谐频率 $\Delta$ 处被读出光子上/下变频，导致"dressed dephasing"并引发跃迁。
 
-\subsubsection{D.3 消去腔自由度得到``dressed
-dephasing''（读出引发的伪跃迁）}\label{d.3-ux6d88ux53bbux8154ux81eaux7531ux5ea6ux5f97ux5230dressed-dephasingux8bfbux51faux5f15ux53d1ux7684ux4f2aux8dc3ux8fc1}
+\bigskip\hrule\bigskip
 
-按 Boissonneault et al.~(2008, 2009)
-的处理，从式(82)可通过近似消去谐振子自由度得到只对 transmon
-的有效主方程。其结果：比特的弛豫与激发速率会额外得到与腔内平均光子数
-\(\bar n\) 成正比的贡献，量级约为
+% --------------------------------------------------
+\subsubsection{更精细推导：耗散率的频率依赖与"噪声谱"视角}
+% --------------------------------------------------
+
+文中指出：上面对式(82)的"直接把色散变换作用到主方程"的捷径忽略了耗散率的频率依赖。更严格的做法是对\textbf{系统+浴的哈密顿量}先做色散变换，再推导主方程（Boissonneault et al.\ 2009）。这样得到的形式仍类似式(82)，但速率表达式会改变，并显示出"在不同频率探测环境"的物理：
 
 \begin{itemize}
-\tightlist
-\item
-  弛豫/激发速率 \(\sim \bar n\,\gamma_\Delta\)
+  \item 记 $\kappa=\kappa(\omega_r)$，$\gamma=\gamma(\omega_q)$，强调：
+  \begin{itemize}
+    \item 腔光子弛豫"探测"环境在 $\omega_r$ 处的噪声/阻抗
+    \item 比特弛豫"探测"环境在 $\omega_q$ 处的噪声/阻抗
+  \end{itemize}
 \end{itemize}
-
-这在实验上常表现为量子比特测量期间的\textbf{非期望状态跃迁}，可解释为：退相干噪声在失谐频率
-\(\Delta\) 处被读出光子上/下变频，导致``dressed dephasing''并引发跃迁。
-
-
-\subsubsection{D.4
-更精细推导：耗散率的频率依赖与``噪声谱''视角}\label{d.4-ux66f4ux7cbeux7ec6ux63a8ux5bfcux8017ux6563ux7387ux7684ux9891ux7387ux4f9dux8d56ux4e0eux566aux58f0ux8c31ux89c6ux89d2}
-
-文中指出：上面对式(82)的``直接把色散变换作用到主方程''的捷径忽略了耗散率的频率依赖。更严格的做法是对\textbf{系统+浴的哈密顿量}先做色散变换，再推导主方程（Boissonneault
-et
-al.~2009）。这样得到的形式仍类似式(82)，但速率表达式会改变，并显示出``在不同频率探测环境''的物理：
-
-\begin{itemize}
-\tightlist
-\item
-  记 \(\kappa=\kappa(\omega_r)\)，\(\gamma=\gamma(\omega_q)\)，强调：
-\end{itemize}
-
-~ - 腔光子弛豫``探测''环境在 \(\omega_r\) 处的噪声/阻抗
-
-~ - 比特弛豫``探测''环境在 \(\omega_q\) 处的噪声/阻抗
 
 更严格推导下，前两项修正速率变为
+\begin{equation}
+\gamma_\kappa=\left(\frac{g}{\Delta}\right)^2\kappa(\omega_q),\qquad
+\kappa_\gamma=\left(\frac{g}{\Delta}\right)^2\gamma(\omega_r).
+\end{equation}
+从而更清楚地看到：\textbf{Purcell 衰减是"在比特频率 $\omega_q$ 处发射一个光子"，而不是在腔频率 $\omega_r$ 处}（这也解释了白噪声近似可能造成的概念混淆）。
 
-\$\$
-
-\gamma\_\kappa=\left(\frac{g}{\Delta}\right)\^{}2\kappa(\omega\_q),\qquad
-
-\kappa\_\gamma=\left(\frac{g}{\Delta}\right)\^{}2\gamma(\omega\_r).
-
-\$\$
-
-从而更清楚地看到：\textbf{Purcell 衰减是``在比特频率 \(\omega_q\)
-处发射一个光子''，而不是在腔频率 \(\omega_r\)
-处}（这也解释了白噪声近似可能造成的概念混淆）。
-
-同样，对退相干率写成
-\(\gamma_\phi=\gamma_\phi(\omega\to 0)\)，突出低频噪声的重要性。此时式(82)最后两项对应的速率可记为（文中给出）
-
-\$\$
-
-\gamma\emph{\{\Delta-\}=2\left(\frac{g}{\Delta}\right)\^{}2\gamma}\phi(-\Delta),\qquad
-
-\gamma\emph{\{\Delta+\}=2\left(\frac{g}{\Delta}\right)\^{}2\gamma}\phi(\Delta),
-
-\$\$
-
+同样，对退相干率写成 $\gamma_\phi=\gamma_\phi(\omega\to 0)$，突出低频噪声的重要性。此时式(82)最后两项对应的速率可记为（文中给出）
+\begin{equation}
+\gamma_{\Delta-}=2\left(\frac{g}{\Delta}\right)^2\gamma_\phi(-\Delta),\qquad
+\gamma_{\Delta+}=2\left(\frac{g}{\Delta}\right)^2\gamma_\phi(\Delta),
+\end{equation}
 并总结为：
 
 \begin{quote}
-\textbf{dressed dephasing 实际上在探测 transmon--谐振子失谐频率
-\(\Delta\) 处的噪声。}
+\textbf{dressed dephasing 实际上在探测 transmon--谐振子失谐频率 $\Delta$ 处的噪声。}
 \end{quote}
 
-文中提到该效应已被用于在 GHz 频段探测相关噪声（Slichter et al.~2012）。
+文中提到该效应已被用于在 GHz 频段探测相关噪声（Slichter et al.\ 2012）。
 
+\bigskip\hrule\bigskip
 
-\subsubsection{D.5 与纵向耦合（longitudinal
-coupling）的对比}\label{d.5-ux4e0eux7eb5ux5411ux8026ux5408longitudinal-couplingux7684ux5bf9ux6bd4}
+% --------------------------------------------------
+\subsubsection{与纵向耦合（longitudinal coupling）的对比}
+% --------------------------------------------------
 
-本节结论依赖于 Jaynes--Cummings
-型电偶极耦合导致的穿衣（dressing）。若将相互作用替换为纵向耦合（文中指向
-Eq.(63) 形式），则不会产生同样的光-物质穿衣，因此：
+本节结论依赖于 Jaynes--Cummings 型电偶极耦合导致的修饰（dressing）。若将相互作用替换为纵向耦合（文中指向 Eq.(63) 形式），则不会产生同样的光--物质修饰，因此：
 
 \begin{itemize}
-\item
-  \textbf{无 Purcell 衰减}
-\item
-  \textbf{无 dressed dephasing}
+  \item \textbf{无 Purcell 衰减}
+  \item \textbf{无 dressed dephasing}
 \end{itemize}
 
-这也是纵向耦合方案的一个优势（Billangeon et al.~2015a; Kerman 2013）。
+这也是纵向耦合方案的一个优势（Billangeon et al.\ 2015a; Kerman 2013）。
 
+\bigskip\hrule\bigskip
 
-\subsection{E. 多模 Purcell 效应与 Purcell 滤波器（Multi-mode Purcell
-effect and Purcell
-filters）}\label{e.-ux591aux6a21-purcell-ux6548ux5e94ux4e0e-purcell-ux6ee4ux6ce2ux5668multi-mode-purcell-effect-and-purcell-filters}
+% ======================================================================
+\subsection{多模 Purcell 效应与 Purcell 滤波器（Multi-mode Purcell effect and Purcell filters）}
+% ======================================================================
 
-\subsubsection{E.1 从单模到多模：Purcell
-率的求和与发散问题}\label{e.1-ux4eceux5355ux6a21ux5230ux591aux6a21purcell-ux7387ux7684ux6c42ux548cux4e0eux53d1ux6563ux95eeux9898}
+% --------------------------------------------------
+\subsubsection{从单模到多模：Purcell 率的求和与发散问题}
+% --------------------------------------------------
 
-前面讨论的是比特色散耦合到\textbf{单模}谐振子。若谐振子是多模结构（多模腔/传输线谐振器），则``对各模的
-dressing''会带来 Purcell 率的多模累加。朴素类比会得到修正速率形如
+前面讨论的是比特色散耦合到\textbf{单模}谐振子。若谐振子是多模结构（多模腔/传输线谐振器），则"对各模的 dressing"会带来 Purcell 率的多模累加。朴素类比会得到修正速率形如
+\begin{equation}
+\sum_m \left(\frac{g_m}{\Delta_m}\right)^2 \kappa_m,
+\end{equation}
+其中 $m$ 为模编号。
 
-\$\$
+然而若进一步考虑 $f_m$、$g_m$、$\Delta_m$ 的频率依赖，该求和在某些模型下会出现\textbf{发散}（Houck et al.\ 2008）。因此需要更精细的模型（考虑 transmon 的有限尺寸、谐振子输入/输出电容的频率依赖阻抗等；Bourassa 2012; Malekakhlagh 2017）以得到物理上良好的结果。
 
-\sum\_m \left(\frac{g_m}{\Delta_m}\right)\^{}2 \kappa\_m,
+\bigskip\hrule\bigskip
 
-\$\$
-
-其中 \(m\) 为模编号。
-
-然而若进一步考虑 \(f_m\)、\(g_m\)、\(\Delta_m\)
-的频率依赖，该求和在某些模型下会出现\textbf{发散}（Houck et
-al.~2008）。因此需要更精细的模型（考虑 transmon
-的有限尺寸、谐振子输入/输出电容的频率依赖阻抗等；Bourassa 2012;
-Malekakhlagh 2017）以得到物理上良好的结果。
-
-
-\subsubsection{E.2 用``环境导纳''计算
-Purcell：工程视角更直接}\label{e.2-ux7528ux73afux5883ux5bfcux7eb3ux8ba1ux7b97-purcellux5de5ux7a0bux89c6ux89d2ux66f4ux76f4ux63a5}
+% --------------------------------------------------
+\subsubsection{用"环境导纳"计算 Purcell：工程视角更直接}
+% --------------------------------------------------
 
 文中给出一个更简洁且工程上常用的表达：在量子电路中阻尼率由经典参数决定，可证明
 
-\$\$
-
-\gamma\_\kappa=\mathrm{Re}{[}Y(\omega\_q){]},\frac{C_\Sigma}{C_s},
-
-\$\$
+\begin{equation}
+\gamma_\kappa=\mathrm{Re}[Y(\omega_q)]\,\frac{C_\Sigma}{C_s},
+\end{equation}
 
 其中
-
 \begin{itemize}
-\item
-  \(Y(\omega)=1/Z(\omega)\) 为 transmon ``看到的''电磁环境的导纳
-\item
-  \(C_\Sigma\)、\(C_s\)
-  为与器件电容相关的参数（文中给出该形式以强调比例关系与``探测环境''的思想）
+  \item $Y(\omega)=1/Z(\omega)$ 为 transmon "看到的"电磁环境的导纳
+  \item $C_\Sigma$、$C_s$ 为与器件电容相关的参数（文中给出该形式以强调比例关系与"探测环境"的思想）
 \end{itemize}
 
 该表达再次强调：弛豫在系统频率处探测环境（导纳的实部决定耗散）。同时它也指向一个工程策略：
 
 \begin{quote}
-通过设计 \(Y(\omega)\) 使其在 \(\omega_q\)
-附近尽可能``纯反应性''（\(\mathrm{Re}\,Y(\omega_q)\approx 0\)），可以抑制
-Purcell 衰减。
+通过设计 $Y(\omega)$ 使其在 $\omega_q$ 附近尽可能"纯反应性"（$\mathrm{Re}\,Y(\omega_q)\approx 0$），可以抑制 Purcell 衰减。
 \end{quote}
 
+\bigskip\hrule\bigskip
 
-\subsubsection{E.3 Purcell 滤波器（Purcell
-filter）的思想与实现}\label{e.3-purcell-ux6ee4ux6ce2ux5668purcell-filterux7684ux601dux60f3ux4e0eux5b9eux73b0}
+% --------------------------------------------------
+\subsubsection{Purcell 滤波器（Purcell filter）的思想与实现}
+% --------------------------------------------------
 
-一种常见做法是在谐振子的输出端加入合适长度并在开路端终止的传输线支节（transmission-line
-stub），使得在比特频率处形成抑制辐射的响应。这种结构称为 \textbf{Purcell
-filter}（Reed et al.~2010b）。
+一种常见做法是在谐振子的输出端加入合适长度并在开路端终止的传输线支节（transmission-line stub），使得在比特频率处形成抑制辐射的响应。这种结构称为 \textbf{Purcell filter}（Reed et al.\ 2010b）。
 
 其效果（与图13文字一致）：
-
 \begin{itemize}
-\item
-  在不显著牺牲读出需要的腔耗散/带宽的情况下，
-\item
-  \textbf{降低比特频率处的``腔穿衣态密度''与环境耦合}，
-\item
-  从而抑制 Purcell 衰减。
+  \item 在不显著牺牲读出需要的腔耗散/带宽的情况下，
+  \item \textbf{降低比特频率处的"腔修饰态密度"与环境耦合}，
+  \item 从而抑制 Purcell 衰减。
 \end{itemize}
 
-并指出：由于可优化参数更多（一定程度上把``读出所需的
-\(\kappa\)''与``比特弛豫''解耦），各种 Purcell filter
-在实验中很常见（Bonn et al.~2015; Jeffrey et al.~2014; Walter et
-al.~2017）。
+并指出：由于可优化参数更多（一定程度上把"读出所需的 $\kappa$"与"比特弛豫"解耦），各种 Purcell filter 在实验中很常见（Bonn et al.\ 2015; Jeffrey et al.\ 2014; Walter et al.\ 2017）。
 
+\bigskip\hrule\bigskip
 
-\subsection{F. 用微波驱动控制量子系统（Controlling quantum systems with
-microwave
-drives）}\label{f.-ux7528ux5faeux6ce2ux9a71ux52a8ux63a7ux5236ux91cfux5b50ux7cfbux7edfcontrolling-quantum-systems-with-microwave-drives}
+% ======================================================================
+\subsection{用微波驱动控制量子系统（Controlling quantum systems with microwave drives）}
+% ======================================================================
 
-连接到传输线会引入损耗，但对控制与测量是必要的。本节用输入-输出框架描述经典微波驱动。
+连接到传输线会引入损耗，但对控制与测量是必要的。本节用输入--输出框架描述经典微波驱动。
 
-\subsubsection{\texorpdfstring{F.1
-连续波驱动的输入场建模：\(b_{\mathrm{in}}(t)\)
-加上经典部分}{F.1 连续波驱动的输入场建模：b\_\{\textbackslash{}mathrm\{in\}\}(t) 加上经典部分}}\label{f.1-ux8fdeux7eedux6ce2ux9a71ux52a8ux7684ux8f93ux5165ux573aux5efaux6a21b_mathrmint-ux52a0ux4e0aux7ecfux5178ux90e8ux5206}
+% --------------------------------------------------
+\subsubsection{连续波驱动的输入场建模：$b_{\mathrm{in}}(t)$ 加上经典部分}
+% --------------------------------------------------
 
-考虑对谐振子输入端施加频率 \(\omega_d\)、相位 \(\phi_d\) 的连续微波。用
-IV.B 的输入-输出观点，可通过将式(75)中的输入场替换为
+考虑对谐振子输入端施加频率 $\omega_d$、相位 $\phi_d$ 的连续微波。用 IV.B 的输入--输出观点，可通过将式(75)中的输入场替换为
 
-\$\$
-
-\hat b\_\{\mathrm{in}\}(t)~\to~\hat b\_\{\mathrm{in}\}(t)+\beta(t),
-
-\$\$
+\begin{equation}
+\hat b_{\mathrm{in}}(t)\ \to\ \hat b_{\mathrm{in}}(t)+\beta(t),
+\end{equation}
 
 其中经典驱动（输入场的经典部分）
+\begin{equation}
+\beta(t)=A(t)\,e^{-i\omega_d t-i\phi_d},
+\end{equation}
+$A(t)$ 是（可随时间变化的）驱动幅度。
 
-\$\$
+这样在朗之万方程中会出现 $\sqrt{\kappa}\beta(t)$ 的经典驱动项，并可等效吸收到系统哈密顿量中：$\hat H_S\to \hat H_S+\hat H_d$。
 
-\beta(t)=A(t),e\^{}\{-i\omega\_d t-i\phi\_d\},
-
-\$\$
-
-\(A(t)\) 是（可随时间变化的）驱动幅度。
-
-这样在朗之万方程中会出现 \(\sqrt{\kappa}\beta(t)\)
-的经典驱动项，并可等效吸收到系统哈密顿量中：\(\hat H_S\to \hat H_S+\hat H_d\)。
-
-
-\subsubsection{F.2
-驱动哈密顿量形式}\label{f.2-ux9a71ux52a8ux54c8ux5bc6ux987fux91cfux5f62ux5f0f}
+% --------------------------------------------------
+\subsubsection{驱动哈密顿量形式}
+% --------------------------------------------------
 
 驱动对应的哈密顿量为（文中给出）
 
-\$\$
-
-\hat H\_d=\hbar\Big[\epsilon(t)\hat a^\dagger e^{-i\omega_d t-i\phi_d}
-
+\begin{equation}
+\hat H_d=\hbar\Big[\epsilon(t)\hat a^\dagger e^{-i\omega_d t-i\phi_d}
 +\epsilon^*(t)\hat a\, e^{i\omega_d t+i\phi_d}\Big],
-
 \tag{84}
-
-\$\$
+\end{equation}
 
 其中
-
-\$\$
-
-\epsilon(t)= i\sqrt{\kappa},A(t)
-
-\$\$
-
-是谐振子``看到的''驱动强度（可随时间变）。
+\begin{equation}
+\epsilon(t)= i\sqrt{\kappa}\,A(t)
+\end{equation}
+是谐振子"看到的"驱动强度（可随时间变）。
 
 \begin{itemize}
-\tightlist
-\item
-  推广到多个驱动、或直接驱动
-  transmon，在形式上是直接的（更换相应算符与端口耦合）。
+  \item 推广到多个驱动、或直接驱动 transmon，在形式上是直接的（更换相应算符与端口耦合）。
 \end{itemize}
 
+% --------------------------------------------------
+\subsubsection{驱动产生相空间位移：相干态与位移算符}
+% --------------------------------------------------
 
-\subsubsection{F.3
-驱动产生相空间位移：相干态与位移算符}\label{f.3-ux9a71ux52a8ux4ea7ux751fux76f8ux7a7aux95f4ux4f4dux79fbux76f8ux5e72ux6001ux4e0eux4f4dux79fbux7b97ux7b26}
+$\hat H_d$ 本质上是谐振子相空间中的\textbf{位移（displacement）}生成元。适当选择驱动参数可将谐振子态从真空制备到任意相干态（Carmichael 2002; Gardiner \& Zoller 1999）：
 
-\(\hat H_d\)
-本质上是谐振子相空间中的\textbf{位移（displacement）}生成元。适当选择驱动参数可将谐振子态从真空制备到任意相干态（Carmichael
-2002; Gardiner \& Zoller 1999）：
-
-\$\$
-
-\textbar{}\alpha\rangle=\hat D(\alpha)\textbar{}0\rangle
-
-=
-e\textsuperscript{\{-\textbar{}\alpha\textbar{}}2/2\}\sum\_\{n=0\}\^{}\infty \frac{\alpha^n}{\sqrt{n!}}\textbar{}n\rangle.
-
+\begin{equation}
+|\alpha\rangle=\hat D(\alpha)|0\rangle
+= e^{-|\alpha|^2/2}\sum_{n=0}^\infty \frac{\alpha^n}{\sqrt{n!}}|n\rangle.
 \tag{85}
-
-\$\$
+\end{equation}
 
 位移算符为
-
-\$\$
-
-\hat D(\alpha)=e\textsuperscript{\{\alpha \hat a}\dagger-\alpha\^{}*\hat a\}.
-
+\begin{equation}
+\hat D(\alpha)=e^{\alpha \hat a^\dagger-\alpha^*\hat a}.
 \tag{86}
+\end{equation}
 
-\$\$
+文中提示：相干态在下一节的电路 QED 读出中起关键作用（例如读出腔在驱动下建立不同的指针态）。
 
-文中提示：相干态在下一节的电路 QED
-读出中起关键作用（例如读出腔在驱动下建立不同的指针态）。
+% --------------------------------------------------
+\subsubsection{近似来源与适用性：驱动项来自 RWA，大振幅时会偏离}
+% --------------------------------------------------
 
+文中强调：$\hat H_d$ 的写法来自旋转波近似（RWA），可从类似 Eq.(20) 的形式理解；在该近似下驱动常写成
 
-\subsubsection{F.4 近似来源与适用性：驱动项来自
-RWA，大振幅时会偏离}\label{f.4-ux8fd1ux4f3cux6765ux6e90ux4e0eux9002ux7528ux6027ux9a71ux52a8ux9879ux6765ux81ea-rwaux5927ux632fux5e45ux65f6ux4f1aux504fux79bb}
+\begin{equation}
+i\hbar\,\epsilon(t)\cos(\omega_d t+\phi_d)\,(\hat a^\dagger-\hat a).
+\end{equation}
 
-文中强调：\(\hat H_d\) 的写法来自旋转波近似（RWA），可从类似 Eq.(20)
-的形式理解；在该近似下驱动常写成
+对多数常见实验参数足够好，但当驱动幅度很大时，可能观察到偏离式(84)预测的效应（Pietik\"ainen et al.\ 2017; Verney et al.\ 2019）。
 
-\$\$
+\subsection{附：Transmon qubit中的噪声}
+Transmon qubit系统的噪声通常通过某个外参量$\lambda$的涨落进入系统：
+\begin{itemize}
+  \item 电荷/电压噪声
+  \item 磁通噪声
+  \item 临界电流噪声
+  \item 环境噪声
+\end{itemize}
+\textbf{噪声谱密度：}
+$$S(\omega) = \int_{-\infty}^{\infty} dt \, e^{i\omega t} \langle \delta\lambda(t) \delta\lambda(0) \rangle$$
 
-i\hbar,\epsilon(t)\cos(\omega\_d t+\phi\_d),(\hat a\^{}\dagger-\hat a).
+将耦合算法投影到qubit子空间中，得到$$A = A_{\perp}\sigma_x + A_{\parallel}\sigma_z + A_0 I$$
+\begin{itemize}
+  \item $A_{\perp}$：导致能量弛豫的横向耦合
+  \item $A_{\parallel}$：导致退相干的纵向耦合
+\end{itemize}
+\subsubsection{$T_1,T_2,T_\phi$}
+\paragraph{$T_1$}
+描述从激发态到基态的能量弛豫过程，通常由高频噪声驱动($\omega_{01}$附近)，速率可以写为耦合强度与噪声谱在qubit处频率的乘积：
+\paragraph{$T_2$和$T_{\phi}$}
+$T_2$描述相干态的寿命，包含能量弛豫和纯退相干两部分
+$T_{\phi}$为纯退相干时间，通常由低频噪声驱动(接近0频率)，速率可写为灵敏度与噪声谱在0频率处的乘积。
 
-\$\$
+\subsubsection{主要噪声机制}
+\paragraph{电磁环境耦合与辐射损耗}
+\begin{itemize}
+  \item 阻抗型损耗：量子比特通过电容/电感与环境耦合，环境的阻抗导致能量泄漏
+  \item Purcell衰减：表现为腔的线宽会在qubit频率附近打开衰减通道
+\end{itemize}
+\paragraph{材料缺陷与界面态}
+\paragraph{准粒子}
+\paragraph{磁通噪声}
+\paragraph{电荷噪声和临界电流噪声}
+\paragraph{光子噪声与测量噪声}
 
-对多数常见实验参数足够好，但当驱动幅度很大时，可能观察到偏离式(84)预测的效应（Pietikäinen
-et al.~2017; Verney et al.~2019）。
+\subsubsection{实验上的测量}
+\paragraph{$T_1$}
+拟合指数衰减曲线
+\subparagraph{理论推导：}
 
+\paragraph{$T_2^*$}
+Ramsey干涉：$$p_e(\tau) = \frac{1}{2}(1 + e^{-(\tau/T_2)^*}\cos \Delta \tau)$$
+$\alpha$的值取决于低频噪声
+\subparagraph{理论推导：}
+考虑Markov主方程：$$\dot{\rho} = \frac{1}{i\hbar}[H,\rho] + \gamma_1 \mathcal{D}(\sigma_-)\rho + 2\gamma_{\phi} \mathcal{D}(\frac{\sigma_z}{2})$$
+取相干项，有$$\dot{\rho_{01}} = (i\delta -\frac{\gamma_1}{2} - \gamma_{\phi})\rho_{01}$$
+则有$$ \rho_{01} = \rho_{01}(0)e^{i\delta}e^{-\tau/T_2}$$
+以上结果为考虑Markov白噪声的结果，实验中涉及一些更特定的噪声
+\subparagraph{实验情形}
+实验中，qubit的频率会发生漂移$$\omega_q' = \omega_q + \Delta \omega$$
+因此在多次重复Ramsey干涉得到的曲线包络包含平均项$\braket{e^{-i\Delta \omega \tau}}$，其会导致测得的$T_2^*$小于实际的$T_2$，越小，说明低频噪声/漂移占主导。
+\paragraph{$T_{2}^{echo}$}
+施加脉冲序列$$\pi/2 - \tau - \pi - \tau - \pi/2$$
+通过施加相位反转序列使得慢漂移在前后演化积累的相位抵消。
 
-\fi
-
-
-\subsection{测量章节信息笔记（Circuit
-QED）}\label{ux6d4bux91cfux7ae0ux8282ux4fe1ux606fux7b14ux8bb0circuit-qed}
-
+\subsection{附：相干态}
+相干态是微波谐振腔模式中最接近经典的量子态：
+\begin{itemize}
+  \item 波包中心位置遵循经典谐振子运动方程，运动时波包形状不变
+  \item 相干态的涨落与真空态相同，接近海森堡不确定关系的最小值
+\end{itemize}
+在qubit中，相干态可以：
+\begin{itemize}
+  \item 作为读出的指针态，腔会根据qubit的状态进入不同的相干态
+  \item 玻色编码的构件：cat code ，GKP code
+  \item 相空间操作的参考态：相干态在相空间中的图像以及变换直观
+\end{itemize}
+\section{V. CIRCUIT QED 中的测量（Measurements in circuit
+QED）}\label{v.-circuit-qed-ux4e2dux7684ux6d4bux91cfmeasurements-in-circuit-qed}
 \begin{quote}
 覆盖范围：相干态/位移算符的承接内容 + \textbf{V. Measurements in circuit
 QED} 中的 \textbf{A. Microwave field detection} 与 \textbf{B.
 Phase-space representations\ldots{}}（含图 14--16 与式 (87)--(102)
 等）。
 \end{quote}
-
-
-
-\subsubsection{V. CIRCUIT QED 中的测量（Measurements in circuit
-QED）}\label{v.-circuit-qed-ux4e2dux7684ux6d4bux91cfmeasurements-in-circuit-qed}
-
 \paragraph{1) circuit QED 出现前的测量困难与 circuit QED
 的优势}\label{circuit-qed-ux51faux73b0ux524dux7684ux6d4bux91cfux56f0ux96beux4e0e-circuit-qed-ux7684ux4f18ux52bf}
 
@@ -3233,27 +2955,32 @@ QED）}\label{v.-circuit-qed-ux4e2dux7684ux6d4bux91cfmeasurements-in-circuit-qed
 \end{itemize}
 
 
-\subsubsection{A. Microwave field
+\subsection{A. Microwave field
 detection（微波场探测）}\label{a.-microwave-field-detectionux5faeux6ce2ux573aux63a2ux6d4b}
 
-\paragraph{A1. 典型测量链路（图
+\subsubsection{A1. 典型测量链路（图
 14）}\label{a1.-ux5178ux578bux6d4bux91cfux94feux8defux56fe-14}
 
-\textbf{链路结构（从信号源到数字处理）} - 室温微波源产生 RF 信号 →
-经多级衰减器（Att.）进入低温腔输入端。 -
-衰减器作用：吸收从室温沿线路向样品传播的\textbf{热噪声}（thermal
-noise），并实现热锚定（不同温区分段衰减）。 -
-腔输出场先经过\textbf{环行器（circulator）}再进入放大链： -
-环行器：只允许信号正向传输，强烈抑制反向传播（来自放大器的噪声回灌到腔/样品）。
--
-工程限制：环行器常依赖永磁体，体积大、难片上集成，还引入插入损耗与片外损耗；目前有研发超导片上环行器的努力。
-- 第一极：接近量子极限的低温放大（如 JPA/TWPA 等）。 - 后续：HEMT
-放大（低温高电子迁移率晶体管放大器）。 - 然后与本振 LO 在 \textbf{IQ
-mixer} 混频，下变频到 IF。 - IF 信号由 ADC 采样，再由 FPGA
-实时处理/记录。
+\textbf{链路结构（从信号源到数字处理）}
 
-
-\paragraph{A2. 有限带宽下的``滤波输出场''（式
+\begin{itemize}
+   \item 室温微波源产生 RF 信号 → 经多级衰减器（Att.，4K级，still级，CP级）进入低温腔输入端（谐振器），与qubit发生作用，随后将携带qubit信息的信号从谐振器输出。
+   \begin{itemize} \item 衰减器作用：吸收从室温沿线路向样品传播的\textbf{热噪声}（thermal
+noise），降低信号功率，并实现热锚定（不同温区分段衰减）。 \end{itemize}
+  \item 从谐振器输出的信号非常微弱，需要进行放大处理。腔输出场先经过\textbf{环行器（circulator）}再进入放大链。首先通过接近量子极限的低温放大（JPA/TWPA等，在进入HEMT放大。
+     \begin{itemize}
+      \item 环行器：只允许信号正向传输，强烈抑制反向传播（来自放大器的噪声回灌到腔/样品）。 工程限制：环行器常依赖永磁体，体积大、难片上集成，还引入插入损耗与片外损耗；目前有研发超导片上环行器的努力。
+      \item 量子极限放大器，位于10mK温度区，可以引入最低理论极限的放大器。常见的量子极限放大器有：JPA：噪声低，但带宽窄，只能放大特定频率范围的信号，噪声达到量子极限；TWPA：将多个Josephson结串联，可以同时放大不同频率的信号，噪声接近量子极限。
+      \item HEMT：位于4K温度区，增益高但噪声较大，常用来进一步放大信号。
+     \end{itemize}
+  \item 随后进入室温电子学系统。首先与参考信号LO混频，从高频变频到中低频IF信号，随后信号经过ADC采样，再由 FPGA实时处理/记录。
+\end{itemize}
+\begin{figure}[htbp]
+  \centering 
+  \includegraphics[width = 0.6\textwidth]{img/microwave measurement.png}
+  \caption{典型测量链路}
+\end{figure}
+\subsubsection{A2. 有限带宽下的``滤波输出场''（式
 (87)）}\label{a2.-ux6709ux9650ux5e26ux5bbdux4e0bux7684ux6ee4ux6ce2ux8f93ux51faux573aux5f0f-87}
 
 \begin{itemize}
@@ -3276,7 +3003,7 @@ mixer} 混频，下变频到 IF。 - IF 信号由 ADC 采样，再由 FPGA
     \]
   \end{itemize}
 \item
-  滤波函数的用途：
+  滤波函数$f$的用途：
 
   \begin{itemize}
   \tightlist
@@ -3288,7 +3015,7 @@ mixer} 混频，下变频到 IF。 - IF 信号由 ADC 采样，再由 FPGA
 \end{itemize}
 
 
-\paragraph{A3. 放大：相位保持放大器的输入输出关系（式
+\subsubsection{A3. 放大：相位保持放大器的输入输出关系（式
 (88)）}\label{a3.-ux653eux5927ux76f8ux4f4dux4fddux6301ux653eux5927ux5668ux7684ux8f93ux5165ux8f93ux51faux5173ux7cfbux5f0f-88}
 
 \begin{itemize}
@@ -3330,7 +3057,7 @@ GHz）噪声数可低至
 注意：前级到后级之间的衰减会显著恶化有效噪声表现。
 
 
-\paragraph{A4. 含衰减与多级放大的总附加噪声（图 15 与式
+\subsubsection{A4. 含衰减与多级放大的总附加噪声（图 15 与式
 (89)）}\label{a4.-ux542bux8870ux51cfux4e0eux591aux7ea7ux653eux5927ux7684ux603bux9644ux52a0ux566aux58f0ux56fe-15-ux4e0eux5f0f-89}
 
 \begin{itemize}
@@ -3373,7 +3100,7 @@ GHz）噪声数可低至
   \] 理想情况 \(N_T=0 \Rightarrow \eta=1\)。
 
 
-\paragraph{A5. 量子效率的另一种等效定义（图 15(b)，式
+\subsubsection{A5. 量子效率的另一种等效定义（图 15(b)，式
 (90)--(92)）}\label{a5.-ux91cfux5b50ux6548ux7387ux7684ux53e6ux4e00ux79cdux7b49ux6548ux5b9aux4e49ux56fe-15bux5f0f-9092}
 
 \begin{itemize}
@@ -3427,8 +3154,13 @@ GHz）噪声数可低至
   14）。
 \end{itemize}
 
+\begin{figure}[htbp]
+  \centering 
+  \includegraphics[width = 0.8\textwidth]{img/quantum efficiency.png}
+  \caption{量子效率的等效定义}
+\end{figure}
 
-\paragraph{A6. 放大后的电压表达式（式
+\subsubsection{A6. 放大后的电压表达式（式
 (93)）}\label{a6.-ux653eux5927ux540eux7684ux7535ux538bux8868ux8fbeux5f0fux5f0f-93}
 
 \begin{itemize}
@@ -3450,13 +3182,14 @@ GHz）噪声数可低至
 \end{itemize}
 
 
-\paragraph{A7. IQ 混频与外差检测（图 16，式
+\subsubsection{A7. IQ 混频与外差检测（图 16，式
 (94)--(96)）}\label{a7.-iq-ux6df7ux9891ux4e0eux5916ux5deeux68c0ux6d4bux56fe-16ux5f0f-9496}
 
 \begin{itemize}
 \tightlist
 \item
   下一阶段使用 IQ mixer 从放大后的 RF 信号提取信息。
+\item 目的：降低RF频率，从而使得ADC和数字处理更可行；同时获得信号的两正交分量（I/Q），以完整表征信号的幅度与相位。
 \item
   IQ mixer 结构要点（图 16）：
 
@@ -3474,12 +3207,13 @@ GHz）噪声数可低至
   V_{LO}(t)=A_{LO}\cos(\omega_{LO}t-\phi_{LO}).
   \]
 \item
-  单个混频器输出（式 (95)）： \[
-  V_{mixer}(t)=K V_{RF}(t)V_{LO}(t)
-  =\frac{1}{2}KA_{LO}A_{RF}\Big[
+  单个混频器输出（式 (95)）： \[\begin{aligned}
+  V_{mixer}(t)&=K V_{RF}(t)V_{LO}(t) \\
+  &=\frac{1}{2}KA_{LO}A_{RF}\Big[
   \cos((\omega_{LO}-\omega_{RF})t-\phi_{LO})
   +\cos((\omega_{LO}+\omega_{RF})t-\phi_{LO})
   \Big],
+  \end{aligned}
   \]
 
   \begin{itemize}
@@ -3504,7 +3238,11 @@ GHz）噪声数可低至
     信号随后可做平均、实时 FPGA 分析或离线处理。
   \end{itemize}
 \end{itemize}
-
+\begin{figure}[htbp]
+  \centering 
+  \includegraphics[width = 0.8\textwidth]{img/IQ mixer.png}
+  \caption{IQ 混频与外差检测}
+\end{figure}
 \textbf{量子形式的 I/Q 输出（式 (96a)(96b)）} - 合并式 (93) 与
 (95)，并令 I 路 \(\phi_{LO}=0\)、Q 路 \(\phi_{LO}=\pi/2\)，得到： \[
   \hat{V}_I(t)=V_{IF}\Big[\hat{X}_f(t)\cos(\omega_{IF}t)-\hat{P}_f(t)\sin(\omega_{IF}t)\Big]+\hat{V}_{noise,I}(t),
@@ -3515,7 +3253,7 @@ GHz）噪声数可低至
   \] 而 \(\hat{V}_{noise,I/Q}(t)\) 汇集放大器噪声及其它附加噪声贡献。
 
 
-\paragraph{A8. 场正交分量与旋转参考系（式
+\subsubsection{A8. 场正交分量与旋转参考系（式
 (97)--(98)）}\label{a8.-ux573aux6b63ux4ea4ux5206ux91cfux4e0eux65cbux8f6cux53c2ux8003ux7cfbux5f0f-9798}
 
 \begin{itemize}
@@ -3531,7 +3269,7 @@ GHz）噪声数可低至
   \begin{itemize}
   \tightlist
   \item
-    \(\hat{V}_I(t),\hat{V}_Q(t)\) 随时间描绘在 \(x_f\text{–}p_f\)
+    \(\hat{V}_I(t),\hat{V}_Q(t)\) 随时间描绘在 \(X_f\text{–}P_f\)
     平面上的轨迹并携带两正交分量信息。
   \item
     可通过数模/数字处理将信号变换到``静止（stationary）''参考系。
@@ -3547,7 +3285,7 @@ GHz）噪声数可低至
 \end{itemize}
 
 
-\paragraph{A9. 同相（homodyne）检测作为特例（式
+\subsubsection{A9. 同相（homodyne）检测作为特例（式
 (99)）}\label{a9.-ux540cux76f8homodyneux68c0ux6d4bux4f5cux4e3aux7279ux4f8bux5f0f-99}
 
 \begin{itemize}
@@ -3576,13 +3314,13 @@ GHz）噪声数可低至
 \end{itemize}
 
 
-\subsubsection{B. Phase-space representations and their relation to
+\subsection{B. Phase-space representations and their relation to
 field
 detection}\label{b.-phase-space-representations-and-their-relation-to-field-detection}
 
 （相空间表象及其与场探测的关系）
 
-\paragraph{B1.
+\subsubsection{B1.
 为什么引入相空间表象}\label{b1.-ux4e3aux4ec0ux4e48ux5f15ux5165ux76f8ux7a7aux95f4ux8868ux8c61}
 
 \begin{itemize}
@@ -3594,7 +3332,7 @@ detection}\label{b.-phase-space-representations-and-their-relation-to-field-dete
   分布}（此处先展开 Wigner 的定义）。
 \end{itemize}
 
-\paragraph{B2. Wigner 函数与特征函数（式
+\subsubsection{B2. Wigner 函数与特征函数（式
 (100)--(101)）}\label{b2.-wigner-ux51fdux6570ux4e0eux7279ux5f81ux51fdux6570ux5f0f-100101}
 
 \begin{itemize}
@@ -3610,7 +3348,7 @@ detection}\label{b.-phase-space-representations-and-their-relation-to-field-dete
   \]
 \end{itemize}
 
-\paragraph{B3. 与位移算符的联系（式
+\subsubsection{B3. 与位移算符的联系（式
 (102)）}\label{b3.-ux4e0eux4f4dux79fbux7b97ux7b26ux7684ux8054ux7cfbux5f0f-102}
 
 \begin{itemize}
@@ -3634,46 +3372,8 @@ detection}\label{b.-phase-space-representations-and-their-relation-to-field-dete
 \end{itemize}
 
 
-\subsubsection{图示要点速记}\label{ux56feux793aux8981ux70b9ux901fux8bb0}
 
-\begin{itemize}
-\tightlist
-\item
-  \textbf{图
-  14}：完整微波测量链路（衰减器、环行器、低温近量子极限放大、HEMT、IQ
-  mixer、ADC/FPGA），并标注不同温区（室温/4K/10mK）工作位置。
-\item
-  \textbf{图 15(a)}：两级放大 + 两段衰减的链路模型，用分束器透过率
-  \(\eta_1,\eta_2\) 等效衰减并引入真空噪声端口。
-\item
-  \textbf{图 15(b)}：把``有噪声放大器''改写成``无噪声放大器 +
-  等效输入损耗（虚拟分束器）''，引出另一种量子效率定义与 \(\le 1/2\)
-  的上界。
-\item
-  \textbf{图 16}：IQ mixer 原理：RF 经功分后与 LO 混频，其中一路 LO 移相
-  \(\pi/2\)，从而同时测得 I/Q 两路（两正交分量）。
-\end{itemize}
-
-
-好的，我已将您提供的续篇笔记内容中的数学环境修正为正确的 LaTeX
-格式，并统一了排版风格。
-
-
-\subsection{测量章节信息笔记（续）}\label{ux6d4bux91cfux7ae0ux8282ux4fe1ux606fux7b14ux8bb0ux7eed}
-
-\begin{quote}
-覆盖范围：图 17--19；式 (103)--(120)；小节 \textbf{B} 的延续（Wigner/Q
-与检测的关系）、小节 \textbf{C. Dispersive qubit
-readout}（含稳态腔场、SNR/保真度、其它方案），以及 \textbf{VI.
-Qubit-resonator coupling regimes} 的开头。
-\end{quote}
-
-
-\subsubsection{B. Phase-space representations and their relation to
-field
-detection（续）}\label{b.-phase-space-representations-and-their-relation-to-field-detectionux7eed}
-
-\paragraph{B4. 相干态的 Wigner 函数（图 17，式
+\subsubsection{B4. 相干态的 Wigner 函数（图 17，式
 (103)）}\label{b4.-ux76f8ux5e72ux6001ux7684-wigner-ux51fdux6570ux56fe-17ux5f0f-103}
 
 \begin{itemize}
@@ -3697,7 +3397,7 @@ detection（续）}\label{b.-phase-space-representations-and-their-relation-to-f
   negativity）。
 \end{itemize}
 
-\paragraph{B5. Wigner 边缘分布与正交分量测量（式
+\subsubsection{B5. Wigner 边缘分布与正交分量测量（式
 (104a)(104b)）}\label{b5.-wigner-ux8fb9ux7f18ux5206ux5e03ux4e0eux6b63ux4ea4ux5206ux91cfux6d4bux91cfux5f0f-104a104b}
 
 \begin{itemize}
@@ -3719,7 +3419,7 @@ detection（续）}\label{b.-phase-space-representations-and-their-relation-to-f
   积分得到（图 17 直观展示）。
 \end{itemize}
 
-\paragraph{B6. Husimi-Q 分布与异频（heterodyne）检测（式
+\subsubsection{B6. Husimi-Q 分布与异频（heterodyne）检测（式
 (105)--(106)）}\label{b6.-husimi-q-ux5206ux5e03ux4e0eux5f02ux9891heterodyneux68c0ux6d4bux5f0f-105106}
 
 \begin{itemize}
@@ -3765,13 +3465,13 @@ detection（续）}\label{b.-phase-space-representations-and-their-relation-to-f
 \end{itemize}
 
 
-\subsubsection{C. Dispersive qubit
+\subsection{C. Dispersive qubit
 readout（色散量子比特读出）}\label{c.-dispersive-qubit-readoutux8272ux6563ux91cfux5b50ux6bd4ux7279ux8bfbux51fa}
 
-\paragraph{C1. 稳态腔内场（Steady-state intra-cavity
+\subsubsection{C1. 稳态腔内场（Steady-state intra-cavity
 field）}\label{c1.-ux7a33ux6001ux8154ux5185ux573asteady-state-intra-cavity-field}
 
-\subparagraph{C1.1 色散哈密顿量与``指针态''（式
+\paragraph{C1.1 色散哈密顿量与``指针态''（式
 (107)--(108)）}\label{c1.1-ux8272ux6563ux54c8ux5bc6ux987fux91cfux4e0eux6307ux9488ux6001ux5f0f-107108}
 
 \begin{itemize}
@@ -3814,31 +3514,36 @@ field）}\label{c1.-ux7a33ux6001ux8154ux5185ux573asteady-state-intra-cavity-fiel
 \item
   文中用 Stern--Gerlach
   类比解释``测量如何发生''：通过与可观测量相关的场态分离，将``自旋信息''映射为可读出的连续变量分布。
+\item 由于$H_{disp}$与测量算符$\sigma_z$对易，因此测量是QND的。
 \end{itemize}
 
-\subparagraph{C1.2 腔内相干幅度的动力学（式 (109a)(109b)，图
+\paragraph{C1.2 腔内相干幅度的动力学（式 (109a)(109b)，图
 18）}\label{c1.2-ux8154ux5185ux76f8ux5e72ux5e45ux5ea6ux7684ux52a8ux529bux5b66ux5f0f-109a109bux56fe-18}
-
+qubit的测量要求在尽可能短的时间达到足够高的保真度，下面分析腔内场的动力学以理解指针态的形成与分离过程。
 \begin{itemize}
 \tightlist
 \item
   在 Langevin 方程框架下（文中引用先前式 (75)），腔内复振幅
-  \(\alpha_\sigma(t)\)（\(\sigma=g,e\)）满足（式 (109)）： \[
+  \(\alpha_\sigma(t) = Ae^{i\phi}\)（\(\sigma=g,e\)）满足（式 (109)）： \[
   \dot{\alpha}_e(t)=-i\varepsilon(t)-(\delta_r+\chi)\alpha_e(t)-\frac{\kappa}{2}\alpha_e(t),
   \qquad (109a)
   \] \[
   \dot{\alpha}_g(t)=-i\varepsilon(t)-(\delta_r-\chi)\alpha_g(t)-\frac{\kappa}{2}\alpha_g(t),
   \qquad (109b)
   \] 其中 \(\delta_r=\omega_r-\omega_d\)
-  为测量驱动相对``裸腔频率''的失谐，\(\kappa\)
-  为腔能量衰减率，\(\varepsilon(t)\) 为驱动幅度（复包络）。
+  为测量驱动相对``裸腔频率''的失谐（旋转项），\(\kappa\)
+  为腔能量衰减率（耗散项），\(\varepsilon(t)\) 为驱动项，表示外部输入的试探微波脉冲幅度，用于探测腔的频率。
 \item
   图 18（a--c）：展示在相空间中从初态到稳态的轨迹；并对比不同
   \(2\chi/\kappa\) 时两指针态的分离与边缘分布的重叠（圈半径
   \(1/\sqrt{2}\) 表示真空噪声尺度）。
 \end{itemize}
-
-\subparagraph{C1.3 稳态解与稳态正交分量（式
+\begin{figure}[htbp]
+  \centering 
+  \includegraphics[width = 0.6\textwidth]{img/trajectory in phase space.png}
+  \caption{稳态腔内场的动力学}
+\end{figure}
+\paragraph{C1.3 稳态解与稳态正交分量（式
 (110)--(113)）}\label{c1.3-ux7a33ux6001ux89e3ux4e0eux7a33ux6001ux6b63ux4ea4ux5206ux91cfux5f0f-110113}
 
 \begin{itemize}
@@ -3875,8 +3580,12 @@ field）}\label{c1.-ux7a33ux6001ux8154ux5185ux573asteady-state-intra-cavity-fiel
   图
   19：给出两比特态下的透射谱（虚线）与相移（实线）。驱动频率靠近``被拉移的共振频率''时，响应强烈依赖比特态；由此可通过透射/反射信号的幅度与/或相位实现读出。
 \end{itemize}
-
-\subparagraph{C1.4
+\begin{figure}[htbp]
+  \centering 
+  \includegraphics[width = 0.8\textwidth]{img/coupler shift.png}
+  \caption{稳态解与稳态正交分量}
+\end{figure}
+\paragraph{C1.4
 实验上测``外部场''与端口耦合结构的要点（文字总结段落）}\label{c1.4-ux5b9eux9a8cux4e0aux6d4bux5916ux90e8ux573aux4e0eux7aefux53e3ux8026ux5408ux7ed3ux6784ux7684ux8981ux70b9ux6587ux5b57ux603bux7ed3ux6bb5ux843d}
 
 \begin{itemize}
@@ -3901,10 +3610,10 @@ field）}\label{c1.-ux7a33ux6001ux8154ux5185ux573asteady-state-intra-cavity-fiel
 \end{itemize}
 
 
-\paragraph{C2. 信噪比与测量保真度（Signal-to-noise ratio and measurement
+\subsubsection{C2. 信噪比与测量保真度（Signal-to-noise ratio and measurement
 fidelity）}\label{c2.-ux4fe1ux566aux6bd4ux4e0eux6d4bux91cfux4fddux771fux5ea6signal-to-noise-ratio-and-measurement-fidelity}
 
-\subparagraph{C2.1 积分测量算符与权重函数（式
+\paragraph{C2.1 积分测量算符与权重函数（式
 (114)）}\label{c2.1-ux79efux5206ux6d4bux91cfux7b97ux7b26ux4e0eux6743ux91cdux51fdux6570ux5f0f-114}
 
 \begin{itemize}
@@ -3934,7 +3643,7 @@ fidelity）}\label{c2.-ux4fe1ux566aux6bd4ux4e0eux6d4bux91cfux4fddux771fux5ea6sig
   \end{itemize}
 \end{itemize}
 
-\subparagraph{C2.2 SNR 定义（式
+\paragraph{C2.2 SNR 定义（式
 (115)）与``高斯近似''}\label{c2.2-snr-ux5b9aux4e49ux5f0f-115ux4e0eux9ad8ux65afux8fd1ux4f3c}
 
 \begin{itemize}
@@ -3953,7 +3662,7 @@ fidelity）}\label{c2.-ux4fe1ux566aux6bd4ux4e0eux6d4bux91cfux4fddux771fux5ea6sig
   \] 为噪声算符（包含附加噪声与量子真空噪声贡献）。
 \end{itemize}
 
-\subparagraph{C2.3 测量保真度（式 (116)）与与 SNR
+\paragraph{C2.3 测量保真度（式 (116)）与与 SNR
 的关系}\label{c2.3-ux6d4bux91cfux4fddux771fux5ea6ux5f0f-116ux4e0eux4e0e-snr-ux7684ux5173ux7cfb}
 
 \begin{itemize}
@@ -3983,7 +3692,7 @@ F_a = 1-\frac{1}{2}\big[P(e\lvert g)+P(g\lvert e)\big],
 \] 其取值在 \([0,1]\)，而上面的 \(F_m\) 形式上可在 \([-1,1]\)。
 \end{quote}
 
-\subparagraph{C2.4 长时间极限的 SNR 标度与参数优化（式 (117)
+\paragraph{C2.4 长时间极限的 SNR 标度与参数优化（式 (117)
 及随后的讨论）}\label{c2.4-ux957fux65f6ux95f4ux6781ux9650ux7684-snr-ux6807ux5ea6ux4e0eux53c2ux6570ux4f18ux5316ux5f0f-117-ux53caux968fux540eux7684ux8ba8ux8bba}
 
 \begin{itemize}
@@ -4013,7 +3722,7 @@ F_a = 1-\frac{1}{2}\big[P(e\lvert g)+P(g\lvert e)\big],
   SNR。
 \end{itemize}
 
-\subparagraph{C2.5 测量光子数的上限：色散近似失效与非
+\paragraph{C2.5 测量光子数的上限：色散近似失效与非
 QND}\label{c2.5-ux6d4bux91cfux5149ux5b50ux6570ux7684ux4e0aux9650ux8272ux6563ux8fd1ux4f3cux5931ux6548ux4e0eux975e-qnd}
 
 \begin{itemize}
@@ -4035,7 +3744,7 @@ QND}\label{c2.5-ux6d4bux91cfux5149ux5b50ux6570ux7684ux4e0aux9650ux8272ux6563ux8f
   的跃迁可能与系统中的偶然共振有关（引用相关工作）。
 \end{itemize}
 
-\subparagraph{C2.6 读出速度与 Purcell
+\paragraph{C2.6 读出速度与 Purcell
 衰减的约束；最优参数的受限性}\label{c2.6-ux8bfbux51faux901fux5ea6ux4e0e-purcell-ux8870ux51cfux7684ux7ea6ux675fux6700ux4f18ux53c2ux6570ux7684ux53d7ux9650ux6027}
 
 \begin{itemize}
@@ -4056,7 +3765,7 @@ QND}\label{c2.5-ux6d4bux91cfux5149ux5b50ux6570ux7684ux4e0aux9650ux8272ux6563ux8f
   \(E_C\)）；但不能无限增大，因为色散与去相干会随 \(E_C\) 增强而恶化。
 \end{itemize}
 
-\subparagraph{C2.7 实验水平与放大器的重要性；量子效率与退相干的联系（式
+\paragraph{C2.7 实验水平与放大器的重要性；量子效率与退相干的联系（式
 (118)）}\label{c2.7-ux5b9eux9a8cux6c34ux5e73ux4e0eux653eux5927ux5668ux7684ux91cdux8981ux6027ux91cfux5b50ux6548ux7387ux4e0eux9000ux76f8ux5e72ux7684ux8054ux7cfbux5f0f-118}
 
 \begin{itemize}
@@ -4092,10 +3801,10 @@ QND}\label{c2.5-ux6d4bux91cfux5149ux5b50ux6570ux7684ux4e0aux9650ux8272ux6563ux8f
 \end{itemize}
 
 
-\paragraph{C3. 其它读出方案（Other
+\subsubsection{C3. 其它读出方案（Other
 approaches）}\label{c3.-ux5176ux5b83ux8bfbux51faux65b9ux6848other-approaches}
 
-\subparagraph{C3.1 Josephson Bifurcation
+\paragraph{C3.1 Josephson Bifurcation
 Amplifier（JBA）}\label{c3.1-josephson-bifurcation-amplifierjba}
 
 \begin{itemize}
@@ -4109,7 +3818,7 @@ Amplifier（JBA）}\label{c3.1-josephson-bifurcation-amplifierjba}
   通过色散耦合使分岔阈值/动力学依赖量子比特态，从而读出比特。
 \end{itemize}
 
-\subparagraph{C3.2 高功率读出与量子比特 ``punch
+\paragraph{C3.2 高功率读出与量子比特 ``punch
 out''}\label{c3.2-ux9ad8ux529fux7387ux8bfbux51faux4e0eux91cfux5b50ux6bd4ux7279-punch-out}
 
 \begin{itemize}
@@ -4126,7 +3835,7 @@ out''}\label{c3.2-ux9ad8ux529fux7387ux8bfbux51faux4e0eux91cfux5b50ux6bd4ux7279-p
   状态，可用于高保真测量；但代价是完全失去色散读出的 QND 性质。
 \end{itemize}
 
-\subparagraph{C3.3 Squeezing（压缩）以提升 SNR
+\paragraph{C3.3 Squeezing（压缩）以提升 SNR
 标度}\label{c3.3-squeezingux538bux7f29ux4ee5ux63d0ux5347-snr-ux6807ux5ea6}
 
 \begin{itemize}
@@ -4144,7 +3853,7 @@ out''}\label{c3.2-ux9ad8ux529fux7387ux8bfbux51faux4e0eux91cfux5b50ux6bd4ux7279-p
   标度；也提到``强驱动色散耦合腔''作为实现路径之一。
 \end{itemize}
 
-\subparagraph{C3.4 Longitudinal readout（纵向读出）与合成纵向耦合（式
+\paragraph{C3.4 Longitudinal readout（纵向读出）与合成纵向耦合（式
 (119)--(120)）}\label{c3.4-longitudinal-readoutux7eb5ux5411ux8bfbux51faux4e0eux5408ux6210ux7eb5ux5411ux8026ux5408ux5f0f-119120}
 
 \begin{itemize}
@@ -4215,9 +3924,9 @@ out''}\label{c3.2-ux9ad8ux529fux7387ux8bfbux51faux4e0eux91cfux5b50ux6bd4ux7279-p
 此外，尽管许多实验最关注强耦合（strong coupling），也需讨论历史上与混合量子系统相关的\textbf{坏腔极限（bad-cavity limit）}和\textbf{坏比特极限（bad-qubit limit）}；并最终可拓展到\textbf{超强耦合（ultrastrong coupling）}（此处不在 VI.A 重点内）。
 为简化讨论，在本节中将“人工原子”视为\textbf{理想二能级系统}。
 
-\section{A. Resonant regime（共振区）}
+\subsection{A. Resonant regime（共振区）}
 
-\subsection{A.1 Jaynes--Cummings 模型在共振时的低能本征态（dressed states）}
+\subsubsection{A.1 Jaynes--Cummings 模型在共振时的低能本征态（dressed states）}
 在 Jaynes--Cummings（JC）模型中，当量子比特与谐振腔\textbf{共振}（bare detuning $\Delta\equiv \omega_q-\omega_r=0$）时，最低两条激发态由基态 $\ket{g,0}$ 与第一激发流形（$\ket{g,1}$、$\ket{e,0}$）构成。
 
 在共振下，$\ket{g,1}$ 与 $\ket{e,0}$ 混合形成一对“穿戴态/缀饰态”（dressed eigenstates）：
@@ -4229,11 +3938,11 @@ out''}\label{c3.2-ux9ad8ux529fux7387ux8bfbux51faux4e0eux91cfux5b50ux6bd4ux7279-p
 它们在频率上发生分裂，分裂量为 $2g$（$g$ 为 qubit--resonator 耦合强度）。
 这对双峰结构在透射/反射谱中对应真空拉比分裂（vacuum Rabi splitting）的核心物理来源。
 
-\subsection{A.2 实验探测思路：驱动腔并测量透射/反射}
+\subsubsection{A.2 实验探测思路：驱动腔并测量透射/反射}
 在色散读出（dispersive readout）中，常通过对谐振腔输入端口施加相干微波驱动，并测量透射或反射信号来表征耦合系统。
 在共振区也可以采取类似方式，通过驱动腔并扫描探测频率，获得频谱响应并据此区分不同耦合/耗散极限。
 
-\subsection{A.3 在驱动下的运动方程（旋转坐标系）}
+\subsubsection{A.3 在驱动下的运动方程（旋转坐标系）}
 考虑对谐振腔输入端口施加频率为 $\omega_d$、幅度为 $\varepsilon$ 的相干驱动。定义腔与比特相对驱动的失谐：
 \[
 \delta_r=\omega_r-\omega_d,\qquad \delta_q=\omega_q-\omega_d.
@@ -4264,7 +3973,7 @@ $\gamma_2=\gamma_1/2+\gamma_\varphi$（文中提示其定义见前文 Eq.(80b)�
 \end{itemize}
 这些方程对应于在零温、二能级近似下，从主方程得到的平均值动力学（文中亦指出可将其视作从主方程对算符求迹得到）。
 
-\subsection{A.4 低激发功率极限：截断希尔伯特空间与稳态透射}
+\subsubsection{A.4 低激发功率极限：截断希尔伯特空间与稳态透射}
 当驱动很弱（低激发功率）时，可将系统希尔伯特空间截断到最低三能级（$\ket{g,0}$、$\ket{g,1}$、$\ket{e,0}$）。在此截断下，$\hat a\hat\sigma_z\simeq -\hat a$（该近似在比特主要处于基态、弱激发条件下成立），从而可以求解稳态。
 
 令
@@ -4288,17 +3997,17 @@ A\equiv \expval{\hat a},
 
 接下来取 qubit 与腔\textbf{共振}（$\Delta=\omega_q-\omega_r=0$），讨论三种典型“共振相互作用”下的耦合/耗散工作区。
 
-\subsection{A.5 三种共振耦合区的区分与物理图像}
+\subsubsection{A.5 三种共振耦合区的区分与物理图像}
 
-\subsubsection{A.5.1 Bad-cavity limit（坏腔极限）}
-\paragraph{定义与条件}
+\paragraph{A.5.1 Bad-cavity limit（坏腔极限）}
+\subparagraph{定义与条件}
 坏腔极限指腔的衰减率远大于耦合强度，而耦合强度又大于比特线宽：
 \[
 \kappa \gg g \gg \gamma_2.
 \]
 此时腔是\textbf{过阻尼振子}；当 qubit 与腔共振时，qubit 会通过腔快速损耗（快速衰减到基态）。
 
-\paragraph{简化模型与 Purcell 衰减（共振形式）}
+\subparagraph{简化模型与 Purcell 衰减（共振形式）}
 文中基于前述截断希尔伯特空间模型，并为简化暂时忽略腔驱动。由于腔衰减很快，可认为腔场迅速到达稳态 $\expval{\hat a}\approx 0$，从而可将腔自由度近似消去，得到
 \begin{equation}
 \expval{\dot{\hat\sigma}_-}
@@ -4311,7 +4020,7 @@ A\equiv \expval{\hat a},
 \gamma'_\kappa=\frac{4g^2}{\kappa}.
 \]
 
-\paragraph{与色散区 Purcell 公式的关系（文中强调“不矛盾”）}
+\subparagraph{与色散区 Purcell 公式的关系（文中强调“不矛盾”）}
 文中指出：该 $\gamma'_\kappa$ 的表达形式不同于色散区常见的 Purcell 率
 \[
 \gamma_\kappa=\left(\frac{g}{\Delta}\right)^2\kappa,
@@ -4321,7 +4030,7 @@ A\equiv \expval{\hat a},
 \gamma_\kappa \simeq \frac{\kappa g^2}{(\kappa/2)^2+\Delta^2}.
 \]
 
-\paragraph{频谱响应特征（与图示对应的现象总结）}
+\subparagraph{频谱响应特征（与图示对应的现象总结）}
 文中以数值模拟（参见其 Fig.20(a)(b) 的讨论）说明：
 \begin{itemize}
 \item 观察量：初始化在激发态后，激发态概率随时间衰减；即使没有比特本征 $T_1$（$\gamma_1=0$），也会由于 qubit--oscillator 混合而迅速弛豫到基态（能量经腔泄露）。
@@ -4329,19 +4038,19 @@ A\equiv \expval{\hat a},
 \item 该 EIT-like 效应来源于腔内场与探针对比特的有效路径之间的干涉；当存在比特退相干时，该透明窗会消失。
 \end{itemize}
 
-\paragraph{意义与应用}
+\subparagraph{意义与应用}
 尽管坏腔极限不是电路 QED 的主流工作区，它提供了一个研究“比特所感受到的耗散（engineer dissipation）”的机会。
 文中举例：该机制可用于控制混合量子系统中硅长寿命施主自旋的寿命（Bienfait 等 2016）。
 
-\subsubsection{A.5.2 Bad-qubit limit（坏比特极限）}
-\paragraph{定义与条件}
+\paragraph{A.5.2 Bad-qubit limit（坏比特极限）}
+\subparagraph{定义与条件}
 坏比特极限对应于高 $Q$ 腔（小 $\kappa$）且耦合较大，但比特退相干/弛豫率很大：
 \[
 \gamma_2 \gg g \gg \kappa.
 \]
 文中说明：该情形对使用 transmon 的典型电路 QED 并不常见，但对一些具有显著退相干的混合系统相关（例如早期的半导体量子点/超导谐振腔的电荷类比特实验：Frey 2012；Petersson 2012；Viennot 2014 等）。
 
-\paragraph{“反 Purcell”光子衰减率（inverse Purcell）与谱线展宽}
+\subparagraph{“反 Purcell”光子衰减率（inverse Purcell）与谱线展宽}
 类比坏腔极限：当比特强阻尼（强衰减）并与腔耦合时，会诱导腔光子以速率衰减：
 \[
 \kappa'_\gamma=\frac{4g^2}{\gamma_1},
@@ -4349,14 +4058,14 @@ A\equiv \expval{\hat a},
 文中称其有时被称为\textbf{“反 Purcell 率”（inverse Purcell rate）}。
 对应的腔响应表现为被 $\kappa'_\gamma$ 额外展宽的简单洛伦兹峰（文中对应其 Fig.20(c)(d) 的物理解释）。
 
-\paragraph{若直接探测比特：EIT-like 结构}
+\subparagraph{若直接探测比特：EIT-like 结构}
 文中指出：如果不是通过腔间接探测比特，而是直接探测比特响应，则可出现类似 Fig.20(b) 中那样具有 $\kappa'_\gamma$ 尺度的 EIT-like 特征（Rice \& Brecha 1996）。
 
-\paragraph{重要提醒：色散频移不等同于强耦合证据}
+\subparagraph{重要提醒：色散频移不等同于强耦合证据}
 文中强调：在坏比特极限，也可能观察到\textbf{随 qubit--resonator 失谐变化的腔色散频移}；但\textbf{仅凭色散频移的观察，不应误判为强耦合}（Wallraff 等 2013）。
 
-\subsubsection{A.5.3 Strong coupling regime（强耦合区）}
-\paragraph{定义与核心物理}
+\paragraph{A.5.3 Strong coupling regime（强耦合区）}
+\subparagraph{定义与核心物理}
 当耦合强度超过腔与比特的衰减（或线宽）时：
 \[
 g>\kappa,\gamma_2,
@@ -4365,17 +4074,17 @@ g>\kappa,\gamma_2,
 
 在共振 $\Delta=0$ 时，dressed states 间的分裂为 $2g$。当该分裂大于线宽（文中给出可分辨条件为分裂 $2g$ 大于线宽尺度 $\kappa/2+\gamma_2$），即可在频谱上分辨两峰，即真空拉比分裂。
 
-\paragraph{dressed-state 线宽的经验规则}
+\subparagraph{dressed-state 线宽的经验规则}
 文中提示：在“half-photon / half-qubit”的缀饰态图像下，dressed-state 的线宽可近似理解为腔线宽与比特线宽的平均（Haroche 1992 的讨论）。
 
-\paragraph{透射谱特征：真空拉比分裂（Vacuum Rabi Splitting）}
+\subparagraph{透射谱特征：真空拉比分裂（Vacuum Rabi Splitting）}
 在低激发功率下，腔平均光子数显著小于 1。此时透射谱出现位于
 \[
 \omega \approx \omega_r \pm g
 \]
 的一对峰（双峰）。该双峰直接对应于共振时的两条 dressed states（由 $\ket{g,1}$ 与 $\ket{e,0}$ 混合得到），并称为真空拉比分裂，是强耦合区的标志性现象（文中对应 Fig.20(e)(f) 的讨论）。
 
-\paragraph{历史与电路 QED 中的实现要点（文中举例）}
+\subparagraph{历史与电路 QED 中的实现要点（文中举例）}
 \begin{itemize}
 \item 腔 QED 中单原子单光子强耦合的早期观测：Thompson 等 1992。
 \item 对于 $N$ 个原子，集体耦合增强为 $g\sqrt{N}$（Tavis--Cummings 模型）；因此原子数涨落会导致分裂变化，这在原子腔 QED 中是实际问题。
@@ -4383,7 +4092,7 @@ g>\kappa,\gamma_2,
 \item 文中还对比指出：使用 Cooper pair box 的早期实验由于器件设计使 $g$ 较小；随后 transmon 的实验可达到峰间距/线宽比达到几百的量级（参见 Schoelkopf \& Girvin 2008 的综述脉络）。
 \end{itemize}
 
-\paragraph{二维谱图与避免交叉（avoided crossing）}
+\subparagraph{二维谱图与避免交叉（avoided crossing）}
 文中（对应 Fig.22）指出：若将腔透射强度 $A^2=|\expval{\hat a}|^2$ 同时作为探针频率与比特跃迁频率的函数作图，可清楚看到“完全的”qubit--resonator avoided crossing：
 \begin{itemize}
 \item 横向虚线对应 bare 腔频率 $\omega_r$；
@@ -4392,7 +4101,7 @@ g>\kappa,\gamma_2,
 \end{itemize}
 同时文中提醒：在该处被探测到的响应在 dressed states 更“像腔”时更强，而远离腔频率时腔对探针响应会消失（Haroche 1992 讨论）。
 
-\paragraph{分裂大小的修正与测量方式差异}
+\subparagraph{分裂大小的修正与测量方式差异}
 文中指出：
 \begin{itemize}
 \item 式 \eqref{124} 预测的同/外差信号中的分裂，在存在有限弛豫与退相干时会\textbf{小于}理想 $2g$。
@@ -4400,7 +4109,7 @@ g>\kappa,\gamma_2,
 \item 在\textbf{反射测量}中观测到的分裂可能比透射更小。
 \end{itemize}
 
-\paragraph{时域证据：真空拉比振荡（Vacuum Rabi Oscillations）}
+\subparagraph{时域证据：真空拉比振荡（Vacuum Rabi Oscillations）}
 除频域（谱学）外，强耦合也可在时域直接显示（Brune 等 1996 的腔 QED 脉络）：
 \begin{itemize}
 \item 从基态开始，先将 qubit 脉冲激发到第一激发态；
@@ -4409,14 +4118,14 @@ g>\kappa,\gamma_2,
 \end{itemize}
 文中举例：电路 QED 中最早的时域真空拉比振荡在通量比特耦合到离散 LC 振子（由器件偏置电路实现）中实现（Johansson 等 2006），随后在相位比特耦合到共面波导谐振腔中也被观测（Hofheinz 等 2008）。
 
-\paragraph{关键澄清：弱激发下“像两经典耦合振子”，避免交叉并非量子性的充分证据}
+\subparagraph{关键澄清：弱激发下“像两经典耦合振子”，避免交叉并非量子性的充分证据}
 文中强调：在我们一直讨论的\textbf{弱激发功率极限}下，耦合的 qubit--oscillator 系统在实验现象上可能与\textbf{两个耦合的经典线性振子}难以区分。因此：
 \begin{itemize}
 \item 仅凭 avoided crossing 或真空拉比分裂，不能作为“场量子化”或“qubit--oscillator 纠缠”的决定性证据；
 \item 真空拉比分裂也可被解释为两个经典耦合振子的正常模分裂。
 \end{itemize}
 
-\paragraph{量子性更清晰的证据：Jaynes--Cummings 梯子的 $\sqrt{n}$ 非简谐（anharmonicity）}
+\subparagraph{量子性更清晰的证据：Jaynes--Cummings 梯子的 $\sqrt{n}$ 非简谐（anharmonicity）}
 文中指出，要更明确展示量子特征，可探测 JC 梯子更高激发态的能级间距随 $\sqrt{n}$ 的依赖（此前在文中 III.B 已讨论过其矩阵元来源与量子性关联）。
 实验上可通过：
 \begin{itemize}
@@ -4426,7 +4135,7 @@ g>\kappa,\gamma_2,
 \end{itemize}
 文中结合其 Fig.20(f) 讨论：当存在热光子数（示例取 $\bar n_{\mathrm{th}}=0.35$）时，除原来的两峰（间隔 $2g$）外，还会出现更多峰对，其峰间距更小，对应更高流形的跃迁并体现 $\sqrt{n}$ 标度。
 
-\paragraph{多光子跃迁与跃迁选择性（Fig.23 的要点）}
+\subparagraph{多光子跃迁与跃迁选择性（Fig.23 的要点）}
 文中（对应 Fig.23）总结：
 \begin{itemize}
 \item 深色箭头对应在真空拉比分裂实验中被探测到的主要跃迁；
@@ -4434,7 +4143,7 @@ g>\kappa,\gamma_2,
 \item 位于原始真空拉比分裂峰之外的某些跃迁，其矩阵元导致对该频率处的响应被抑制，因此实验上不被观察到（Rau 等 2004）。
 \end{itemize}
 
-\paragraph{高功率/高温下的量子--经典过渡（quantum-to-classical transition）}
+\subparagraph{高功率/高温下的量子--经典过渡（quantum-to-classical transition）}
 文中指出：在更大驱动功率或更高温度下，系统会出现量子到经典过渡，并在腔共振频率 $\omega_r$ 附近出现单峰（Fink 等 2010）。其直观原因可从 JC 哈密顿量理解：
 \begin{itemize}
 \item 相互作用项强度按 $\sqrt{n}$ 增强；
@@ -4443,7 +4152,7 @@ g>\kappa,\gamma_2,
 \end{itemize}
 该机制与文中后续关于高功率读出（在其 VI.C.3 提及）相呼应。
 
-\paragraph{超越谱学：直接纠缠/态层析的证据}
+\subparagraph{超越谱学：直接纠缠/态层析的证据}
 除上述谱学与时域振荡外，文中还指出可通过\textbf{直接测量缀饰态联合密度矩阵}来展示场的量子性与 qubit--photon 纠缠：
 例如 Eichler 等（2012b）在时域真空拉比振荡实验中制备缀饰态 $\{\ket{g,1},\ket{e,0}\}$ 的纠缠态，并通过线性探测方法测量光子态（Eichler 等 2012a）。
 此外，文中还列举利用共振相互作用实现：
@@ -4453,7 +4162,7 @@ g>\kappa,\gamma_2,
 \item 量子态转移（Sillanp{\"a}{\"a} 等 2007）。
 \end{itemize}
 
-\subsection{A.6 小结（VI.A 结束点）}
+\subsubsection{A.6 小结（VI.A 结束点）}
 共振区（$\Delta=0$）下，系统由缀饰态与 $2g$ 分裂主导；在弱驱动下可用截断模型得到稳态响应式 \eqref{124}。
 根据 $g$ 与衰减率（$\kappa,\gamma_2$）的相对大小，可区分：
 \begin{itemize}
@@ -4468,7 +4177,7 @@ g>\kappa,\gamma_2,
 % （承接上一部分 VI.A）
 % =========================
 
-\section{B. Dispersive regime（色散区）}
+\subsection{B. Dispersive regime（色散区）}
 
 在多数量子计算相关的电路 QED 实验中，更常工作在\textbf{色散区}：
 \[
@@ -4477,7 +4186,7 @@ g>\kappa,\gamma_2,
 此时 qubit 与腔场的本征态仅\textbf{弱纠缠}，并可将耦合效应理解为\textbf{彼此频率的状态依赖/光子数依赖“拉拽”（pull）}。
 这与共振区（VI.A）中强混合、缀饰态高度纠缠的情形形成对照。
 
-\subsection{B.1 色散哈密顿量的“重写”：同时看见 cavity pull 与 qubit pull}
+\subsubsection{B.1 色散哈密顿量的“重写”：同时看见 cavity pull 与 qubit pull}
 
 在二能级近似下，色散有效哈密顿量（前文已给出过等价形式）可重写为
 \begin{equation}
@@ -4510,14 +4219,14 @@ g>\kappa,\gamma_2,
   而 $+\chi$（来自 $1/2$ 项）的真空贡献常被称为 \textbf{Lamb shift}（在此前某些推导里可能被省略，此处强调它同样来自色散相互作用）。
 \end{itemize}
 
-\subsection{B.2 Qubit spectroscopy（量子比特谱学）：先假设腔在真空}
+\subsubsection{B.2 Qubit spectroscopy（量子比特谱学）：先假设腔在真空}
 
-\subsubsection{B.2.1 基本测量思路：pump + probe 与“量子跳跃谱学”}
+\paragraph{B.2.1 基本测量思路：pump + probe 与“量子跳跃谱学”}
 为简化讨论，先考虑谱学驱动 qubit 而\textbf{腔仍处于真空}的情形：对 qubit 施加频率为 $\omega_d$ 的相干驱动（可直接打到 qubit 控制线，也可经腔端口耦合进去）。
 
 与原子气体“吸收谱”不同，电路 QED 中常见的是通过驱动\textbf{改变} qubit 的激发态概率，再借助腔的色散读出把该概率读出来（常被称为量子跳跃谱学的思路）。
 
-\subsubsection{B.2.2 两能级 Bloch 方程稳态：洛伦兹线型与功率展宽}
+\paragraph{B.2.2 两能级 Bloch 方程稳态：洛伦兹线型与功率展宽}
 此时 qubit 可用一个受驱动、含弛豫与退相干的两能级系统描述。定义（含 Lamb shift 的）驱动失谐
 \[
 \delta_q = (\omega_q+\chi)-\omega_d,
@@ -4543,7 +4252,7 @@ P_e
   \item 强驱动极限下发生\textbf{饱和}：$P_e\to 1/2$（对应谱线顶端不再升高）。
 \end{itemize}
 
-\subsubsection{B.2.3 通过腔读出谱线：弱色散下相位与布居近似成正比}
+\paragraph{B.2.3 通过腔读出谱线：弱色散下相位与布居近似成正比}
 实际实验中通常用腔的透射/反射相位来读取 qubit 的 $\langle\sigma_z\rangle$。
 在弱色散、探针打在 bare 腔频率且 $|\chi|\ll\kappa$ 时，相位偏移近似满足
 \[
@@ -4552,9 +4261,9 @@ P_e
 \]
 因此扫描 qubit 谱学驱动频率时，测得的相位随频率变化就直接给出 qubit 的洛伦兹线型（Schuster et al.\ 2005）。
 
-\subsection{B.3 ac-Stark shift 与测量导致的展宽/退相干}
+\subsubsection{B.3 ac-Stark shift 与测量导致的展宽/退相干}
 
-\subsubsection{B.3.1 平均光子数导致 qubit 频移：用频移反推腔内光子数（需谨慎）}
+\paragraph{B.3.1 平均光子数导致 qubit 频移：用频移反推腔内光子数（需谨慎）}
 上一小节默认测量探针很弱使得 $\langle \hat a^\dagger \hat a\rangle \approx 0$。
 但由式 \eqref{126} 可知，只要腔内存在平均光子数
 \[
@@ -4568,7 +4277,7 @@ qubit 频率就会发生平均频移
 
 但文中强调：这种“线性反推”只在\textbf{足够深的色散区}、更准确地说在\textbf{小光子数 $n\ll n_{\rm crit}$} 时才可靠；在更高功率下会出现明显非线性（见 B.4）。
 
-\subsubsection{B.3.2 光子数涨落导致测量退相干：photon shot noise / measurement-induced dephasing}
+\paragraph{B.3.2 光子数涨落导致测量退相干：photon shot noise / measurement-induced dephasing}
 除了平均频移外，更关键的是：光子数的涨落会造成 qubit 瞬时频率涨落，从而引入额外退相干（测量导致的退相干）。
 
 用指针态（pointer states）/polaron 变换等方法可将腔自由度消去，得到测量导致退相干率 $\gamma_m$。
@@ -4599,9 +4308,9 @@ qubit 频率就会发生平均频移
 \]
 即 qubit 线宽（或退相干）随测量功率/腔内光子数线性增加：这就是常说的 measurement-induced broadening。
 
-\subsection{B.4 强色散极限（strong dispersive limit）：光子数分辨谱与非线性效应}
+\subsubsection{B.4 强色散极限（strong dispersive limit）：光子数分辨谱与非线性效应}
 
-\subsubsection{B.4.1 光子数分辨（photon-number splitting）}
+\paragraph{B.4.1 光子数分辨（photon-number splitting）}
 当 $\chi/\kappa$ 足够大时（强色散），qubit 的频移 $2\chi n$ 可能大到可以\textbf{逐个分辨不同光子数 $n$ 对应的谱线峰}：
 \begin{itemize}
   \item qubit 谱不再是单一洛伦兹峰，而是出现一系列间隔约为 $2\chi$ 的峰；
@@ -4610,7 +4319,7 @@ qubit 频率就会发生平均频移
   \item 这也可用于条件逻辑操作：例如仅当腔内有 $n$ 个光子时才驱动 qubit 翻转（文中提及该思想在相关实验中已实现/讨论）。
 \end{itemize}
 
-\subsubsection{B.4.2 用 ac-Stark 或线宽反推 $\bar n$ 的“适用边界”：高功率下 cavity pull 变小}
+\paragraph{B.4.2 用 ac-Stark 或线宽反推 $\bar n$ 的“适用边界”：高功率下 cavity pull 变小}
 文中回到一个实验上很重要的问题：能否用测得的 ac-Stark shift 或线宽展宽来反推出腔内光子数？
 
 关键警告是：式 \eqref{126} 给出的“线性”图像在大光子数下会失效。随着驱动增强、腔内光子数升高，由于更高阶修正（以及对 transmon 而言的多能级效应），\textbf{有效腔频率的拉拽会减小}，即被拉开的两条腔响应频率会逐渐向 bare 腔频率靠拢（文中对应图示展示了 $\omega_r(n)$ 随驱动增大向 $\omega_r$ 回归）。
@@ -4622,7 +4331,7 @@ qubit 频率就会发生平均频移
 \end{itemize}
 结论是：\textbf{安全}地用频移/展宽反推 $\bar n$ 通常需要限制在\textbf{小光子数（$n\ll n_{\rm crit}$）}的标定区间内；而在高功率读出时必须使用包含非线性/多能级的模型。
 
-\subsection{B.5（承上启下）小结与过渡}
+\subsubsection{B.5（承上启下）小结与过渡}
 色散区的核心是：qubit 与腔并不发生显著能量交换（相较共振区），而主要表现为\textbf{频率的相互拉拽}：
 \begin{itemize}
   \item 腔频率对 qubit 态敏感（读出基础）；
@@ -4636,7 +4345,7 @@ qubit 频率就会发生平均频移
 % （承接 VI.B 色散区）
 % =========================
 
-\section{C. Beyond strong coupling: ultrastrong coupling regime（超强耦合区）}
+\subsection{C. Beyond strong coupling: ultrastrong coupling regime（超强耦合区）}
 
 在 VI.A（共振区）与 VI.B（色散区）的讨论中，光--物质相互作用虽然能产生显著物理后果，但仍满足一个关键前提：
 \[
@@ -4647,7 +4356,7 @@ qubit 频率就会发生平均频移
 当耦合强度进一步增大，使得 $g$ 不再相对于系统本征频率足够“小”时（典型判据是 $g/\omega_r$ 或 $g/\omega_q$ 达到 $0.1$ 量级甚至更大），\textbf{反旋转项（counter-rotating terms）不能忽略}，系统进入\textbf{超强耦合（ultrastrong coupling, USC）}区。
 此时许多“强耦合但仍可用 JC + RWA”的直觉将失效。
 
-\subsection{C.1 从 Jaynes--Cummings 到量子 Rabi 模型：激发数不再守恒}
+\subsubsection{C.1 从 Jaynes--Cummings 到量子 Rabi 模型：激发数不再守恒}
 
 在 RWA 下，JC 相互作用项为
 \[
@@ -4676,16 +4385,16 @@ qubit 频率就会发生平均频移
   \item 系统的\textbf{基态}也会发生本质变化（见 C.3）。
 \end{itemize}
 
-\subsection{C.2 为什么电路平台更容易进入 USC：有效“精细结构常数”可工程化}
+\subsubsection{C.2 为什么电路平台更容易进入 USC：有效“精细结构常数”可工程化}
 
 文献强调：在天然原子体系中，$g$ 相对于 $\omega$ 的比例通常受基本常数（精细结构常数 $\alpha\simeq 1/137$）约束而很小，因此 USC 非常困难；但在超导电路中，电磁环境（尤其是\textbf{谐振腔/传输线的特征阻抗}与\textbf{耦合方式}）可以工程化，从而显著增大有效耦合强度，实现 $g/\omega$ 的大幅提升。
 
-\subsection{C.2.1 实现路径 1：in-line transmon（“在线”transmon）}
+\paragraph{C.2.1 实现路径 1：in-line transmon（“在线”transmon）}
 一种方案（Devoret et al.\ 2007）是所谓的 \textbf{in-line transmon}：
 将传输线谐振腔的中心导体用一个 Josephson 结（或等效结构）“打断”，使得结直接嵌入谐振腔电流反节点附近，从而增强光--物质耦合。
 文献指出该结构原则上可达到较大的 $g/\omega_r$（例如 $\sim 0.15$ 量级），但继续增大该比值往往会以\textbf{降低 transmon 非简谐性}为代价（Bourassa et al.\ 2012），对量子比特可控性不利。
 
-\subsubsection{C.2.2 实现路径 2：与 flux qubit 的电流式（galvanic）强耦合与高阻抗工程}
+\paragraph{C.2.2 实现路径 2：与 flux qubit 的电流式（galvanic）强耦合与高阻抗工程}
 另一条路线是将 \textbf{flux qubit 与谐振腔中心导体作电流式（galvanic）耦合}，并通过提高耦合区域等效阻抗（例如用 Josephson 结或结阵列在局部“抬高”阻抗）进一步放大零点涨落，从而实现更大的 $g/\omega$。
 文献给出典型实验进展脉络：
 \begin{itemize}
@@ -4694,9 +4403,9 @@ qubit 频率就会发生平均频移
   \item 类似思想也可扩展到 \textbf{waveguide QED}：qubit 耦合到开放传输线而非局域腔模（Forn-Diaz et al.\ 2016）。
 \end{itemize}
 
-\subsection{C.3 USC 的直接物理后果（文献强调的三点）}
+\subsubsection{C.3 USC 的直接物理后果（文献强调的三点）}
 
-\subsubsection{C.3.1 Bloch--Siegert shift（布洛赫--西格特频移）}
+\paragraph{C.3.1 Bloch--Siegert shift（布洛赫--西格特频移）}
 在 USC 中，除了熟悉的（色散/拉姆）频移之外，还会出现由反旋转项导致的 \textbf{Bloch--Siegert shift}。
 其典型量级可写为
 \begin{equation}
@@ -4706,15 +4415,15 @@ qubit 频率就会发生平均频移
 它可被视为反旋转过程的二阶微扰效应（Bloch \& Siegert 1940）。
 该频移在 $g/\omega$ 不够小时通常可忽略，但在 USC 中会成为需要显式纳入拟合/建模的修正。
 
-\subsubsection{C.3.2 基态不再是 $\ket{g,0}$：真空被“缀饰”，出现虚光子成分}
+\paragraph{C.3.2 基态不再是 $\ket{g,0}$：真空被“缀饰”，出现虚光子成分}
 在 JC/RWA 图像下，基态近似就是 bare 真空 $\ket{g,0}$。
 而在 USC（更明显在 DSC）区，由于反旋转项混合不同激发数的组分，系统基态会变成\textbf{纠缠的 qubit--resonator 缀饰态}，可包含非零的“虚光子”成分（强调：这并不等同于可直接输出测到的自由传播光子，涉及对“光子”定义与探测的更细致讨论）。
 
-\subsubsection{C.3.3 耗散与主方程需要重新写：不能直接套用弱耦合/JC 下的 Lindblad 形式}
+\paragraph{C.3.3 耗散与主方程需要重新写：不能直接套用弱耦合/JC 下的 Lindblad 形式}
 文献指出：当基态已不再是 $\ket{g,0}$ 时，若仍使用在弱耦合或 JC 框架下写出的简单主方程（将衰减算符直接写成 bare 的 $\hat a$、$\hat\sigma_-$ 等），可能会给出\textbf{不正确的稳态}或\textbf{违反物理直觉的基态激发}。
 因此在 USC 中需要使用更合适的耗散理论（例如在系统\textbf{本征态基底}中构造耗散，或使用针对 USC 推导的有效主方程；文献提及 Beaudoin et al.\ 2011 的讨论）。
 
-\subsection{C.4 小结与建议阅读}
+\subsubsection{C.4 小结与建议阅读}
 超强耦合区的要点是：\textbf{不仅要比较 $g$ 与线宽（$\kappa,\gamma$），还要比较 $g$ 与本征频率（$\omega_r,\omega_q$）}。
 当 $g/\omega$ 不再很小：
 \begin{itemize}
@@ -4725,43 +4434,52 @@ qubit 频率就会发生平均频移
 \end{itemize}
 关于 USC/DSC 的更系统综述，文献建议参考 Forn-Diaz et al.\ (2019) 与 Frisk Kockum et al.\ (2019) 等综述论文。
 
+
 \section{VII.\quad Circuit QED 中的量子计算：整体图景}
-\subsection{为何 circuit QED 适合量子计算}
+
+\noindent\textbf{为何 circuit QED 适合量子计算}
+
 \begin{itemize}
   \item \textbf{Transmon} 是当前最常用的超导量子比特之一。
   \item 典型读出：\textbf{色散（dispersive）测量}，通过谐振腔频移实现量子无破坏/弱测量读出。
   \item 除读出外，近距离制造的 transmon 之间可以通过\textbf{电容耦合}实现双比特门；或利用\textbf{谐振腔作为量子总线（bus）}在更远距离实现有效相互作用。
-  \item 实际芯片常将多种功能（驱动线、通量线、读出腔、耦合腔、Purcell 滤波器等）集成在同一封装/芯片上（对应图示如四 transmon 器件的显微图）。
+  \item 实际芯片常将多种功能（驱动线、通量线、读出腔、耦合腔、Purcell 滤波器等）集成在同一封装/芯片上。
 \end{itemize}
 
-\subsection{本节关注点}
+\noindent\textbf{本节关注点}
+
 \begin{itemize}
-  \item 不追求穷举全部门方案，而强调：\textbf{光-物质相互作用如何支持相干控制}、常用单/双比特门的关键哈密顿量形式与实现要点。
+  \item 不追求穷举全部门方案，而强调：\textbf{光--物质相互作用如何支持相干控制}、常用单/双比特门的关键哈密顿量形式与实现要点。
 \end{itemize}
 
-\section{A.\quad 单比特控制（Single-qubit control）}
-\subsection{两种常见驱动路径}
+\subsection{A.\quad 单比特控制（Single-qubit control）}
+
+\subsubsection{两种常见驱动路径}
+
 \begin{enumerate}
   \item \textbf{经谐振腔端口驱动量子比特：}
   \begin{itemize}
     \item 类似于测量驱动，但用于门操作时往往选择与腔模\textbf{较大失谐}，以减少测量诱导退相干（远离谐振，腔内光子数小）。
     \item 多比特共用同一谐振腔时，需确保量子比特之间频率足够分离，避免驱动串扰。
   \end{itemize}
+
   \item \textbf{额外加一条控制传输线（电容耦合到量子比特）：}
   \begin{itemize}
     \item 便于做快速门与独立寻址；
-    \item 但需控制该端口耦合强度，避免明显增加能量弛豫（例如增加辐射损耗）。
+    \item 但需控制该端口耦合强度，避免明显增加能量弛豫，例如增加辐射损耗。
   \end{itemize}
 \end{enumerate}
 
-\subsection{驱动幅度与输入场的关系（输入输出观点）}
+\subsubsection{驱动幅度与输入场的关系（输入输出观点）}
+
 量子比特“看到”的驱动幅度可写为
 \[
   \epsilon(t) = -i\sqrt{\beta}\, b(t),
 \]
 其中 $b(t)$ 为输入端口的驱动场幅度，$\beta$ 由量子比特与传输线之间的电容/耦合决定。
 
-\subsection{含驱动的 transmon 模型：实验室系与旋转系}
+\subsubsection{含驱动的 transmon 模型：实验室系与旋转系}
+
 将 transmon 视为弱非简谐振子，其哈密顿量（含驱动）常写为
 \begin{equation}
   \hat H(t)=\hat H_q + \hbar \epsilon(t)\Big(\hat b^\dagger e^{-i\omega_d t-i\phi_d}+\hat b\, e^{+i\omega_d t+i\phi_d}\Big),
@@ -4782,82 +4500,128 @@ $\omega_d$ 为驱动频率，$\phi_d$ 为驱动相位，$\hat b$ 为 transmon �
 \end{equation}
 其中失谐 $\delta_q=\omega_q-\omega_d$。
 
-\subsection{截断到两能级：Bloch 球上的旋转轴由相位决定}
+\subsubsection{截断到两能级：Bloch 球上的旋转轴由相位决定}
+
 将 transmon 截断为两能级（计算子空间），得到
 \begin{equation}
   \hat H'=\frac{\hbar\delta_q}{2}\sigma_z+\frac{\hbar\Omega_R(t)}{2}\Big(\cos\phi_d\,\sigma_x+\sin\phi_d\,\sigma_y\Big),
   \qquad \Omega_R(t)=2\epsilon(t),
   \label{eq:twolevel}
 \end{equation}
-要点：
+要点如下：
 \begin{itemize}
   \item 当 $\delta_q=0$（共振驱动）时，实现绕 $xy$ 平面的旋转；
   \item $\phi_d$ 决定旋转轴方向：$\phi_d=0$ 为 $X$ 轴旋转，$\phi_d=\pi/2$ 为 $Y$ 轴旋转；
   \item 任意单比特旋转可分解为 $X/Y$ 旋转的组合。
 \end{itemize}
 
-\subsection{脉冲整形与 DRAG 思路}
-\paragraph{为什么不能简单用方波？}
+\subsubsection{脉冲整形与 DRAG 思路}
+
+\noindent\textbf{为什么不能简单用方波？}
+
 \begin{itemize}
   \item 受限带宽传输线会使方波边沿畸变；
   \item transmon 是\textbf{弱非简谐多能级系统}，脉冲中的高频分量易泄漏到非计算能级（leakage）。
 \end{itemize}
 
-\paragraph{常见策略}
+\noindent\textbf{常见策略}
+
 \begin{itemize}
-  \item 用更平滑的脉冲（如高斯）减少高频谱成分，但门时长可能变长；
+  \item 用更平滑的脉冲，例如高斯脉冲，以减少高频谱成分，但门时长可能变长；
   \item \textbf{DRAG（Derivative Removal by Adiabatic Gate）}：使用两正交象限（IQ）控制，其中一个象限形状与另一个象限包络的时间导数相关，用于抑制泄漏与相位误差；
   \item 更一般地，可将脉冲优化视为数值最优化问题，例如 \textbf{GRAPE}。
 \end{itemize}
 
-\subsection{$Z$ 轴旋转的实现：真实 $Z$ 与虚拟 $Z$}
-\paragraph{方式 1：调节量子比特频率（真实 $Z$）}
+\paragraph{DRAG}
+DRAG的核心思想是：在主驱动上施加一个平滑的包络，同时在与其正交方向施加一个与主包络时间导数成比例的辅助驱动，以抵消非简谐引起的泄漏和相位误差。
+\par 例如，在I通道的主驱动为$\Omega_x(t)$，则在Q通道施加一个辅助驱动$\Omega_y(t) = -\beta \dot{\Omega}_x(t)$，其中$\beta$是一个实验校准的参数。
+\subparagraph{DRAG的标定}
+
+DRAG的标定包括
+\begin{itemize}
+  \item 主脉冲幅度：决定旋转角度
+  \item 脉冲宽度：决定门事件和频谱宽度
+  \item $\beta$ 参数：调整辅助驱动的强度以最小化泄漏和相位误差
+  \item 驱动频率
+\end{itemize}
+
+为了实现更高的门保真度，还有二阶DRAG等更复杂的方案，涉及更多参数和更精细的优化。
+
+\paragraph{GRAPE}
+GRAPE可以自动寻找一组时间依赖的控制脉冲，以最大化某个目标函数（例如门保真度）。它通过计算系统动力学的梯度来优化控制参数，适用于复杂系统和多参数优化。
+
+其可以实现多种任务的优化，如量子门，制备特定量子态等。
+
+\subparagraph{基本原理}
+
+GRAPE进行优化时，需要有一个代价函数，例如优化量子门时的代价函数就是门保真度，态制备时的代价函数就是制备态与目标态的重叠度。
+
+在实际计算时，首先将总时间切片为N份，脉冲函数变为一个N维向量，每个分量对应一个时刻的哈密顿量，由此可以计算每个时刻的传播算符，各项相乘可以得到总传播算符，即模拟门算符，计算代价函数，并通过反向传播计算梯度，最后使用梯度下降等方法更新控制参数。
+\subsubsection{$Z$ 轴旋转的实现：真实 $Z$ 与虚拟 $Z$}
+
+\noindent\textbf{方式 1：调节量子比特频率（真实 $Z$）}
+
 \begin{itemize}
   \item 在无驱动时（$\Omega_R=0$），通过暂时改变 $\omega_q$ 并持续一段时间，使态矢量积累相位，得到绕 $Z$ 轴旋转；
   \item 常用手段：通量可调 transmon 施加磁通脉冲；
-  \item 代价：引入对通量噪声的敏感性（更多退相干通道）。
+  \item 代价：引入对通量噪声的敏感性，带来更多退相干通道。
 \end{itemize}
 
-\paragraph{方式 2：失谐微波驱动诱导 ac-Stark shift（有效 $Z$）}
+\noindent\textbf{方式 2：失谐微波驱动诱导 ac-Stark shift（有效 $Z$）}
+
 当满足 $\Omega_R/\delta_q \ll 1$ 时，失谐驱动导致能级产生二阶频移（ac-Stark shift），可写成有效哈密顿量
 \begin{equation}
   \hat H'' \simeq \frac{1}{2}\Big(\hbar\omega_q-\frac{E_C\,\Omega_R^2}{\delta_q^2}\Big)\sigma_z.
   \label{eq:acstark}
 \end{equation}
-因此通过驱动幅度（或持续时间）即可控制绕 $Z$ 轴的相位积累。
+因此通过驱动幅度或持续时间即可控制绕 $Z$ 轴的相位积累。
 
-\paragraph{方式 3：虚拟 $Z$（Virtual $Z$ gate）}
+\noindent\textbf{方式 3：虚拟 $Z$（Virtual $Z$ gate）}
+
 \begin{itemize}
   \item 注意到式 \eqref{eq:twolevel} 中 $X/Y$ 轴由驱动相位 $\phi_d$ 定义；
   \item 因此只需对后续所有驱动脉冲的参考相位整体加一个偏置，就等效于插入一个 $Z$ 旋转；
   \item 优点：几乎\textbf{零时长、零额外误差}，在编译与校准中非常常用。
 \end{itemize}
 
-\section{B.\quad 双比特门（Two-qubit gates）概览}
-\subsection{难点与设计目标}
+\subsection{B.\quad 双比特门（Two-qubit gates）}
+
+\subsubsection{难点与设计目标}
+
 \begin{itemize}
-  \item 双比特门通常比单比特门更难：误差率更高；
-  \item 核心挑战：需要\textbf{快速、可控地打开/关闭}比特--比特相互作用；
+  \item 双比特门通常比单比特门更难，误差率也更高；
+  \item 核心挑战是需要\textbf{快速、可控地打开和关闭}比特--比特相互作用；
   \item 与单比特门“打开/关闭微波驱动”相比，双比特门的 on/off 比实现更困难。
 \end{itemize}
 
-\subsection{方案分类（按相互作用激活方式）}
+\subsubsection{方案分类（按相互作用激活方式）}
+
 \begin{itemize}
-  \item \textbf{依赖频率可调性}（常通过通量调谐）：将两个量子比特调到共振或接近共振以激活相互作用；
-  \item \textbf{全微波（all-microwave）}：不需要通量调频，通过微波驱动激发有效相互作用（可作用于量子比特或耦合器/腔）；
+  \item \textbf{依赖频率可调性}：常通过通量调谐，将两个量子比特调到共振或接近共振以激活相互作用；
+  \item \textbf{全微波（all-microwave）}：不需要通量调频，通过微波驱动激发有效相互作用，可作用于量子比特或耦合器/腔；
   \item \textbf{参数门（parametric gates）}：对系统参数做时间调制，在某个频率上“桥接”两量子态间能量差以实现耦合。
 \end{itemize}
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.8\textwidth]{img/two qubit gate.png}
+  \caption{双比特门方案分类示意图（文献图示）}
+  \label{fig:2qgate}
+\end{figure}
+\subsubsection{B.1\quad 交换型相互作用（Exchange-type interactions）}
 
-\section{B.1\quad 量子比特交换（exchange）相互作用}
-\subsection{(a) 直接电容耦合（Direct capacitive coupling）}
-两 transmon 直接通过电容耦合时，常用模型为（弱非简谐振子形式）
+\noindent\textbf{(a) 直接电容耦合（Direct capacitive coupling）}
+
+两 transmon 直接通过电容耦合时，常用模型为
 \begin{equation}
   \hat H=\hat H_{q1}+\hat H_{q2}+\hbar J\big(\hat b_1^\dagger \hat b_2+\hat b_1 \hat b_2^\dagger\big),
   \label{eq:directcap}
 \end{equation}
-其中 $\hat H_{qi}=\hbar\omega_{qi}\hat b_i^\dagger \hat b_i-\frac{E_{C_i}}{2}(\hat b_i^\dagger)^2\hat b_i^2$。
+其中
+\[
+  \hat H_{qi}=\hbar\omega_{qi}\hat b_i^\dagger \hat b_i-\frac{E_{C_i}}{2}(\hat b_i^\dagger)^2\hat b_i^2.
+\]
 
-耦合强度常写成（与电路参数相关）
+耦合强度常写成
 \begin{equation}
   \hbar J=\frac{2E_{C_1}E_{C_2}}{E_{C_c}}
   \left(\frac{E_{J_1}}{2E_{C_1}}\times \frac{E_{J_2}}{2E_{C_2}}\right)^{1/4},
@@ -4865,8 +4629,9 @@ $\omega_d$ 为驱动频率，$\phi_d$ 为驱动相位，$\hat b$ 为 transmon �
 \end{equation}
 其中 $E_{J_i},E_{C_i}$ 分别为第 $i$ 个 transmon 的 Josephson 能与充电能，$E_{C_c}=e^2/(2C_c)$ 与耦合电容 $C_c$ 有关。
 
-\subsection{两能级近似与 $\sqrt{i\mathrm{SWAP}}$}
-当两比特调到共振 $\omega_{q1}=\omega_{q2}$ 并在旋转波近似（RWA）下，式 \eqref{eq:directcap} 在两能级子空间约化为
+\noindent\textbf{两能级近似与 $\sqrt{i\mathrm{SWAP}}$}
+
+当两比特调到共振 $\omega_{q1}=\omega_{q2}$ 并在旋转波近似下，式 \eqref{eq:directcap} 在两能级子空间约化为
 \begin{equation}
   \hat H'=\hbar J\big(\sigma_{+1}\sigma_{-2}+\sigma_{-1}\sigma_{+2}\big).
   \label{eq:exchange2level}
@@ -4875,38 +4640,36 @@ $\omega_d$ 为驱动频率，$\phi_d$ 为驱动相位，$\hat b$ 为 transmon �
 \[
   t=\frac{\pi}{4J}
 \]
-可得到纠缠门 $\sqrt{i\mathrm{SWAP}}$；配合单比特旋转可构造 CNOT（或等价的通用双比特门集）。
+可得到纠缠门 $\sqrt{i\mathrm{SWAP}}$；配合单比特旋转可构造 CNOT 或等价的通用双比特门集。
 
-\subsection{如何实现 on/off：失谐开关与残余相互作用}
+\noindent\textbf{如何实现 on/off：失谐开关与残余相互作用}
+
 \begin{itemize}
-  \item 常见做法：通过将两比特失谐 $\Delta_{12}=\omega_{q1}-\omega_{q2}$ 来“关闭”交换作用。
-  \item 当 $J/\Delta_{12}\ll 1$ 时，交换项被抑制，但会出现二阶残余耦合（常表现为 $ZZ$ 形式），量级可写成
+  \item 常见做法是通过将两比特失谐 $\Delta_{12}=\omega_{q1}-\omega_{q2}$ 来“关闭”交换作用。
+  \item 当 $J/\Delta_{12}\ll 1$ 时，交换项被抑制，但会出现二阶残余耦合，常表现为 \textbf{$ZZ$} 形式，量级可写成
   \[
     \propto \frac{J^2}{\Delta_{12}}\,\sigma_{z1}\sigma_{z2},
   \]
-  其导致条件相位累积，进而带来门误差（需要校准/回波（refocusing）等技术补偿）。
+  其导致条件相位累积，进而带来门误差，需要用校准或回波技术补偿。
   \item 若想进一步提高 on/off 比，可引入\textbf{可调耦合器（tunable coupler）}，使 $J$ 本身可调，但电路复杂度与潜在退相干通道也会增加。
 \end{itemize}
 
-\section{B.1\quad (b) 谐振腔介导耦合（Resonator-mediated coupling）}
-\subsection{两比特耦合到同一腔模：基本模型}
-若两个量子比特通过同一谐振腔模式（量子总线）耦合，而彼此无直接耦合，则
+\noindent\textbf{(b) 谐振腔介导耦合（Resonator-mediated coupling）}
+
+\noindent\textbf{基本模型：}若两个量子比特通过同一谐振腔模式作为量子总线耦合，而彼此无直接耦合，则
 \begin{equation}
   \hat H=\hat H_{q1}+\hat H_{q2}+\hbar\omega_r \hat a^\dagger \hat a+\sum_{i=1}^{2}\hbar g_i(\hat a^\dagger \hat b_i+\hat a\,\hat b_i^\dagger),
   \label{eq:bus}
 \end{equation}
 其中 $\hat a$ 为腔模算符，$g_i$ 为第 $i$ 个比特与腔的耦合强度。
 
-\subsection{两种用法：真实激发交换 vs 色散区虚激发}
+\noindent\textbf{两种用法：}
 \begin{itemize}
-  \item \textbf{真实激发（真空 Rabi 交换）思路：}
-    先将比特 1 与腔调到共振，把激发交换到腔，再把腔激发交换给比特 2，可实现态交换（演示“总线”作用），但该序列本身并不直接对应一个标准的纠缠双比特门。
-  \item \textbf{色散区（dispersive）虚激发思路：}
-    两比特均与腔大失谐，仅虚占据腔模，通过二阶过程产生有效比特--比特相互作用，更常用于门实现与可控耦合分析。
+  \item \textbf{真实激发（真空 Rabi 交换）思路：}先将比特 1 与腔调到共振，把激发交换到腔，再把腔激发交换给比特 2，可实现态交换并演示“总线”作用，但该序列本身并不直接对应一个标准的纠缠双比特门。
+  \item \textbf{色散区（dispersive）虚激发思路：}两比特均与腔大失谐，仅虚占据腔模，通过二阶过程产生有效比特--比特相互作用，更常用于门实现与可控耦合分析。
 \end{itemize}
 
-\subsection{色散变换后的有效哈密顿量结构}
-令 $\Delta_i=\omega_{qi}-\omega_r$，在色散近似下（保留到二阶），可得到有效形式（结构性写法）
+\noindent\textbf{色散变换后的有效哈密顿量结构：}令 $\Delta_i=\omega_{qi}-\omega_r$，在色散近似下，保留到二阶，可得到有效形式
 \begin{align}
   \hat H'&=\hat H_{q1}'+\hat H_{q2}'+\hbar J(\hat b_1^\dagger \hat b_2+\hat b_1 \hat b_2^\dagger)
   +\hbar\tilde{\omega}_r \hat a^\dagger \hat a
@@ -4918,60 +4681,94 @@ $\omega_d$ 为驱动频率，$\phi_d$ 为驱动相位，$\hat b$ 为 transmon �
 \begin{itemize}
   \item $\hat H_{qi}'$ 为包含 Lamb shift 等修正后的有效单比特项；
   \item $\chi_{ab_i}$ 是腔光子数 $\hat a^\dagger\hat a$ 与第 $i$ 个比特激发数 $\hat b_i^\dagger\hat b_i$ 的交叉-Kerr（色散）耦合；
-  \item $\Xi_{ij}$ 对应有效的比特--比特非线性/条件频移（常与 $ZZ$ 相关）。
+  \item $\Xi_{ij}$ 对应有效的比特--比特非线性或条件频移，常与 $ZZ$ 相关。
 \end{itemize}
 在常见参数区间里，$\Xi$ 往往比直接交换项 $J$ 小，因此在某些讨论中可近似忽略。
 
-\subsection{总线诱导的有效交换耦合强度}
-有效交换耦合可写为
+\noindent\textbf{总线诱导的有效交换耦合强度：}
 \begin{equation}
   J=\frac{g_1 g_2}{2}\left(\frac{1}{\Delta_1}+\frac{1}{\Delta_2}\right).
   \label{eq:Jbus}
 \end{equation}
 其频域表现为：在单激发子空间中，态 $|01\rangle$ 与 $|10\rangle$ 出现大小为 $2J$ 的\textbf{反交叉（anticrossing）}。
 
-\subsection{真空腔近似下的简化理解}
-若腔初态为真空且在色散相互作用下仅被\textbf{虚占据}，则对实际动力学而言，式 \eqref{eq:Heffbus} 中与 $\hat a^\dagger\hat a$ 成正比的项（如交叉-Kerr 项）在很多情形下可忽略；此时可将问题近似回到“有效直接交换耦合”的图像。
 
-\subsection{如何用总线实现门}
+
+FIG.30图展示了两个 transmon 量子比特耦合到同一个谐振腔时的能谱图（能量频率随调谐参数变化的曲线）。
+
+图中的状态标记为 $|q_1, q_2, r\rangle$，分别代表 |量子比特1的激发数, 量子比特2的激发数, 谐振腔的光子数>。
+
+浅蓝色虚线 (Guides to the eye)： 代表如果不发生任何相互作用时，量子比特原本的频率（裸频率 Bare frequency）。
+深蓝色实线： 代表实际发生相互作用后，系统真实的能量状态。当两条线本该交叉时，如果它们之间有耦合，就会发生“能级排斥” (Avoided crossing / Anticrossing)，即两条线会避开彼此，产生一个间隙。
+
+
+\textbf{图 (b) -- 单激发流形 (1-excitation manifold)}
+这部分只包含系统中总共只有1个能量量子的情况。
+
 \begin{itemize}
-  \item 类似直接耦合：通过将两比特\textbf{调入/调出}彼此共振（但仍可处于与腔色散区）来开启/关闭交换；
-  \item 或者使 $g_i$ 可调（通过可调耦合器/可调耦合结构）实现更好的开关比与频谱可管理性。
+    \item \textbf{横轴：} 正在被调节频率的量子比特（假设为量子比特 2）。
+    \item \textbf{纵轴：} 系统的频率/能量 (GHz)。
+    \item \textbf{水平的直线 ($\ket{1, 0, 0}$)：} 代表频率固定的量子比特 1处于激发态。它的能量不随横轴变化。
+    \item \textbf{倾斜向上走的线 ($\ket{0, 1, 0}$)：} 代表正在被调频的量子比特 2处于激发态。随着横轴向右，它的能量越来越高。
+    \item \textbf{现象 1 -- 真空拉比分裂 (Vacuum Rabi splitting, 标有 $2g_\downarrow$)：}
+          当倾斜的线在较低频率处（图的偏左侧，虽然腔的水平线没画出，但能看出在这里发生了弯曲）遇到谐振腔的频率时，量子比特 2 与谐振腔发生共振。这里产生了一个较大的能级排斥，间隙大小为 \textbf{$2g$}（量子比特与腔的直接耦合强度）。
+    \item \textbf{现象 2 -- 腔介导的耦合 (标有 $2J_\downarrow$)：}
+          这是这张图要表达的\textbf{核心}！当倾斜的线继续往上走，在频率达到 \(\sim 8\,\text{GHz}\) 时，它遇到了固定频率的量子比特 1 ($\ket{1, 0, 0}$)。
+          \textbf{注意：} 虽然这两个量子比特没有直接物理连接，而且此时它们的频率都远离谐振腔的频率，但由于谐振腔的“虚拟介导”作用，它们在这里依然发生了一个较小的能级排斥。这个间隙的大小就是前面提到的\textbf{有效耦合强度 $2J$}。这就直观地证明了“量子总线”的存在。
 \end{itemize}
 
-\section{图示内容的功能性解读（不含复刻）}
-\begin{itemize}
-  \item（对应四 transmon 芯片图）多层布线与模块：读出谐振腔、耦合谐振腔、控制线（电荷驱动）、通量线（频率调谐）、Purcell 滤波器等共同组成可扩展的 circuit QED 架构要素。
-  \item（单比特门误差随脉冲长度/宽度图）展示：高斯脉冲与 DRAG 脉冲在短门时长下的误差差异；DRAG 通常可在更短门时长下保持较低误差，并与考虑多能级的数值模拟更一致。
-  \item（双比特方案示意图）总结了：直接耦合、耦合器/总线介导、全微波激活、参数调制等主要类别。
-  \item（频谱反交叉图）展示了：腔-比特真空 Rabi 分裂与比特-比特有效交换耦合造成的反交叉，可用于从谱线中提取 $g_i$ 与 $J$。
-\end{itemize}
-% =========================
-% 承接：VII.B Two-qubit gates
-% （从上一份笔记的 B.1(b) 谐振腔介导耦合 之后继续）
-% =========================
+\textbf{图 (a) -- 双激发流形 (2-excitation manifold)}
+这部分包含系统中总共有2个能量量子的高阶情况，用来展示系统更复杂的动力学。
 
-\subsection*{B.1(b)\;补充：色散总线在时间域的简化理解（与直接耦合的联系）}
+\begin{itemize}
+    \item \textbf{水平线 ($\ket{2, 0, 0}$)：} 固定频率的量子比特 1 吸掉了 2 个能量量子。能量固定。
+    \item \textbf{平缓倾斜的线 ($\ket{1, 1, 0}$)：} 两个量子比特各吸掉 1 个能量量子。因为其中一个是固定的，另一个是变化的，所以斜率是下一条线的一半。
+    \item \textbf{陡峭倾斜的线 ($\ket{0, 2, 0}$)：} 被调频的量子比特 2 独自吸掉了 2 个能量量子。能量随调节快速上升。
+    \item \textbf{现象 -- 高阶相互作用 (标有 $\zeta_\downarrow$)：}
+          当$\ket{1,1,0}$，能量调节至与$\ket{2,0,0}$一致时，发生了能级排斥（间隙为 $\zeta$）。这表明在多激发状态下，通过谐振腔介导的相互作用同样会引起复杂的能级混合，这对于设计高保真度的量子门（需要避免这些高能级的泄漏）是非常重要的参考数据。
+\end{itemize}
+
+\textbf{总结图意}
+图 (b) 完美地用实验/数值模拟数据证明了文本的理论：\textbf{你不需要让两个量子比特直接接触，只要它们都连在同一个谐振腔上，当它们的频率靠近时（图b中的 $2J$ 处），它们就能自动“感知”到对方并发生物理耦合。}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.8\textwidth]{img/spectrum of two qubit.png}
+  \caption{色散总线介导的交换耦合示意图（文献图示）}
+  \label{fig:busanticrossing}
+\end{figure}
+\noindent\textbf{真空腔近似下的简化理解：}若腔初态为真空且在色散相互作用下仅被\textbf{虚占据}，则对实际动力学而言，式 \eqref{eq:Heffbus} 中与 $\hat a^\dagger\hat a$ 成正比的项在很多情形下可忽略；此时可将问题近似回到“有效直接交换耦合”的图像。
+
+\noindent\textbf{如何用总线实现门：}
+\begin{itemize}
+  \item 类似直接耦合，通过将两比特\textbf{调入或调出}彼此共振，但仍可处于与腔色散区，来开启和关闭交换；
+  \item 或者使 $g_i$ 可调，通过可调耦合器或可调耦合结构实现更好的开关比与频谱可管理性。
+\end{itemize}
+
+\noindent\textbf{色散总线在时间域的简化理解：}
 \begin{itemize}
   \item 若谐振腔初态为真空态 $|0\rangle_r$，在色散相互作用主导且腔仅被\textbf{虚激发}的条件下，腔在时间演化中对许多门操作序列而言可近似保持在真空：
   \[
     |0\rangle_r \rightarrow |0\rangle_r,
   \]
   直观含义是：腔并不真实承载光子，只通过虚过程介导有效相互作用。
-  \item 因此在有效哈密顿量（上一部分对应的结构式，如含 $\hat a^\dagger\hat a$ 的项）中，若腔始终近似处于真空，可在实践上忽略与 $\hat a^\dagger\hat a$ 成正比的那一类项；动力学主要退化为\textbf{有效直接交换耦合}形式（回到直接耦合图像）。
-  \item 结论：当两比特彼此调到（近）共振、但仍与腔保持色散失谐时，腔作为量子总线可提供等效的交换相互作用，从而以与直接电容耦合类似的方式实现纠缠门（通过调频或可调 $g_i$ 来开关）。
+  \item 因此在有效哈密顿量中，若腔始终近似处于真空，可在实践上忽略与 $\hat a^\dagger\hat a$ 成正比的那一类项；动力学主要退化为\textbf{有效直接交换耦合}形式。
+  \item 结论是：当两比特彼此调到近共振、但仍与腔保持色散失谐时，腔作为量子总线可提供等效的交换相互作用，从而以与直接电容耦合类似的方式实现纠缠门。
 \end{itemize}
 
-% -------------------------
-\subsection{B.2\quad Flux-tuned 11--02 phase gate（通量调谐的 $|11\rangle$--$|02\rangle$ 相位门）}
-\paragraph{门的物理来源与适用对象}
+\subsubsection{B.2\quad Flux-tuned $|11\rangle$--$|02\rangle$ phase gate（通量调谐的 $|11\rangle$--$|02\rangle$ 相位门）}
+
+\noindent\textbf{门的物理来源与适用对象}
+
 \begin{itemize}
   \item 该门是一类\textbf{受控相位门（controlled-phase gate）}，特别适用于弱非简谐的 transmon。
-  \item 它利用两比特交换耦合（可来自直接耦合或谐振腔总线介导）导致的\textbf{非计算能级参与}：计算态 $|11\rangle$ 与非计算态 $|02\rangle$（某一比特的二激发态）在调谐过程中产生\textbf{反交叉}。
-  \item 与 $\sqrt{i\mathrm{SWAP}}$（基于 $|01\rangle \leftrightarrow |10\rangle$ 共振交换）不同，11--02 相位门不需要将\emph{计算态之间}调到共振，而是通过接近 $|11\rangle$--$|02\rangle$ 反交叉来使 $|11\rangle$ 获得额外的能级排斥与相位积累。
+  \item 它利用两比特交换耦合，耦合可来自直接耦合或谐振腔总线介导，导致\textbf{非计算能级参与}：计算态 $|11\rangle$ 与非计算态 $|02\rangle$ 在调谐过程中产生\textbf{反交叉}。
+  \item 与 $\sqrt{i\mathrm{SWAP}}$ 不同，11--02 相位门不需要将\emph{计算态之间}调到共振，而是通过接近 $|11\rangle$--$|02\rangle$ 反交叉来使 $|11\rangle$ 获得额外的能级排斥与相位积累。
+  \item 在做门时，使系统缓慢地接近能级简并点，于是由于能级排斥，只有$\ket{11}$会发生能级偏移，导致其能量比$E_1 + E_2$低$\zeta$，由于相位累积取决于能量，$\ket{11}$会比单比特情形积累不同的相位，因此在除去全局相位以及单比特相位（virtual Z）后，即得到CZ。
 \end{itemize}
 
-\paragraph{绝热通量脉冲下的幺正与与 $\mathrm{CZ}$ 的关系}
+\noindent\textbf{绝热通量脉冲下的幺正以及与 $\mathrm{CZ}$ 的关系}
+
 对一次绝热通量调谐轨迹，计算子空间 $\{|00\rangle,|01\rangle,|10\rangle,|11\rangle\}$ 上的演化可写为对角形式
 \begin{equation}
   \hat C_Z(\phi_{01},\phi_{10},\phi_{11})
@@ -4979,9 +4776,9 @@ $\omega_d$ 为驱动频率，$\phi_d$ 为驱动相位，$\hat b$ 为 transmon �
   \mathrm{diag}\!\left(1, e^{i\phi_{01}}, e^{i\phi_{10}}, e^{i\phi_{11}}\right),
   \tag{139}
 \end{equation}
-其中相位由动力学相位给出（例如 $\phi_{ab}=\int dt\, E_{ab}(t)/\hbar$，$E_{ab}$ 为对应瞬时本征能量）。
+其中相位由动力学相位给出，例如 $\phi_{ab}=\int dt\, E_{ab}(t)/\hbar$，$E_{ab}$ 为对应瞬时本征能量。
 
-该门在忽略单比特相位（可通过虚拟 $Z$ 或后处理补偿）后等价于标准受控相位门：
+该门在忽略单比特相位，可通过虚拟 $Z$ 或后处理补偿后，等价于标准受控相位门：
 \begin{align}
   \hat C_Z(\phi)
   &=\mathrm{diag}\!\left(1,1,1,e^{i\phi}\right)\nonumber\\
@@ -4995,41 +4792,46 @@ $\omega_d$ 为驱动频率，$\phi_d$ 为驱动相位，$\hat b$ 为 transmon �
 \]
 表示第 $i$ 个量子比特的单比特相位门。
 \begin{itemize}
-  \item 当 $\phi=\pi$ 时得到 $\mathrm{CZ}$（或 $\mathrm{CPHASE}$）。
+  \item 当 $\phi=\pi$ 时得到 $\mathrm{CZ}$ 或 $\mathrm{CPHASE}$。
 \end{itemize}
 
-\paragraph{非绝热（sudden）实现思路}
+\noindent\textbf{非绝热（sudden）实现思路}
+
 \begin{itemize}
   \item 除了绝热进出反交叉外，还可将系统\textbf{快速脉冲}到反交叉附近并停留时间 $t$。
-  \item 在“突然近似”下，初态 $|11\rangle$ 在 $\{|11\rangle,|02\rangle\}$ 子空间内发生两能级演化：
+  \item 在“突然近似”下，初态 $|11\rangle$ 在 $\{|11\rangle,|02\rangle\}$ 子空间内发生两能级演化，哈密顿量可以写为$$\begin{pmatrix} E_{11} & \frac{\zeta}{2} \\ -\frac{\zeta}{2} & E_{02} \end{pmatrix}$$，其中$E_{11}$和$E_{02}$的能量相等，此时的系统会发生一个Rabi振荡：
   \[
     |11\rangle \rightarrow \cos(\tfrac{\zeta t}{2\hbar})|11\rangle + i\sin(\tfrac{\zeta t}{2\hbar})|02\rangle,
   \]
-  其中 $\zeta$ 表示反交叉处的能级排斥（能隙）。
-  \item 选择 $t=h/\zeta$ 时，$|11\rangle$ 回到自身但获得一个负号（相位 $\pi$），而其它逻辑态因远离共振近似只积累平庸相位，从而实现 $\mathrm{CPHASE}$。
+  其中 $\zeta$ 表示反交叉处的能级排斥，也就是能隙。
+  \item 选择 $t=h/\zeta$ 时，$|11\rangle$ 回到自身但获得一个负号，即相位 $\pi$，而其它逻辑态因远离共振近似只积累平庸相位，从而实现 $\mathrm{CPHASE}$。
 \end{itemize}
 
-\paragraph{工程挑战：通量脉冲畸变与补偿}
+\noindent\textbf{工程挑战：通量脉冲畸变与补偿}
+
 \begin{itemize}
-  \item 控制电子学与走线有限带宽会导致通量脉冲\textbf{波形畸变}；并且通量响应可能具有\textbf{历史依赖}（与之前的通量轨迹有关），从而造成门误差与漂移。
-  \item 常用缓解：对已知传递函数做\textbf{预失真（pre-distortion）}；以及围绕 transmon 甜点（sweet spot）设计对称通量轨迹以抵消不期望项。
+  \item 控制电子学与走线有限带宽会导致通量脉冲\textbf{波形畸变}；并且通量响应可能具有\textbf{历史依赖}，从而造成门误差与漂移。
+  \item 常用缓解方法包括：对已知传递函数做\textbf{预失真（pre-distortion）}；以及围绕 transmon 甜点设计对称通量轨迹以抵消不期望项。
 \end{itemize}
 
-% -------------------------
-\subsection{B.3\quad All-microwave gates（全微波双比特门）}
-\paragraph{动机}
+\subsubsection{B.3\quad All-microwave gates（全微波双比特门）}
+
+\noindent\textbf{动机}
+
 \begin{itemize}
-  \item 前述基于调频/调耦合的门需要较大的频率调谐范围或可调耦合器，可能带来额外退相干与频谱拥挤问题。
-  \item 全微波门希望像单比特门一样，主要通过\textbf{打开/关闭微波驱动}来实现双比特纠缠，在固定频率（fixed-frequency）比特架构中特别有吸引力。
+  \item 前述基于调频或调耦合的门需要较大的频率调谐范围或可调耦合器，可能带来额外退相干与频谱拥挤问题。
+  \item 全微波门希望像单比特门一样，主要通过\textbf{打开和关闭微波驱动}来实现双比特纠缠，在固定频率比特架构中特别有吸引力。
 \end{itemize}
 
-本小节聚焦两类代表性方案：\textbf{RIP} 与 \textbf{CR}（其余方案此处略）。
+本小节聚焦两类代表性方案：\textbf{RIP} 与 \textbf{CR}。
 
-\subsubsection{B.3(a)\quad Resonator-induced phase (RIP) gate}
-\paragraph{基本设置与哈密顿量}
+\noindent\textbf{(a) Resonator-induced phase (RIP) gate}
+
+\noindent\textbf{基本设置与哈密顿量}
+
 \begin{itemize}
-  \item 两个彼此强失谐的量子比特（可近似忽略其直接交换 $J$），共同\textbf{色散耦合}到同一个谐振腔模式。
-  \item 通过驱动谐振腔，在计算子空间中产生条件相位（有效 $ZZ$）。
+  \item 两个彼此强失谐的量子比特，可近似忽略其直接交换 $J$，共同\textbf{色散耦合}到同一个谐振腔模式。
+  \item 通过驱动谐振腔，在计算子空间中产生条件相位，也就是有效 $ZZ$。
 \end{itemize}
 
 在两能级近似并包含对腔的驱动时，可写为
@@ -5045,8 +4847,9 @@ $\omega_d$ 为驱动频率，$\phi_d$ 为驱动相位，$\hat b$ 为 transmon �
 \end{equation}
 其中 $\chi_i$ 为第 $i$ 个比特的色散系数，$\omega_d$ 为腔驱动频率。
 
-\paragraph{有效哈密顿量与条件相位来源}
-通过转到驱动旋转系并做极化子（polaron）变换，可得到近似有效形式
+\noindent\textbf{有效哈密顿量与条件相位来源}
+
+通过转到驱动旋转系并做极化子变换，可得到近似有效形式
 \begin{align}
   \frac{\hat H''}{\hbar}
   &\simeq
@@ -5056,27 +4859,31 @@ $\omega_d$ 为驱动频率，$\phi_d$ 为驱动相位，$\hat b$ 为 transmon �
   -\frac{2\chi_1\chi_2|\alpha(t)|^2}{\delta_r}\,\sigma_{z1}\sigma_{z2},
   \tag{142}
 \end{align}
-其中 $\delta_r=\tilde\omega_r-\omega_d$，$\tilde\delta_i$ 为相应失谐（包含频移修正），$\alpha(t)$ 为腔场经典幅度（满足 $\dot\alpha=-i\delta_r\alpha-i\epsilon(t)$）。
+其中 $\delta_r=\tilde\omega_r-\omega_d$，$\tilde\delta_i$ 为相应失谐，包含频移修正，$\alpha(t)$ 为腔场经典幅度，满足 $\dot\alpha=-i\delta_r\alpha-i\epsilon(t)$。
 \begin{itemize}
   \item 最后一项即为\textbf{驱动诱导的有效 $ZZ$}，从而产生受控相位。
-  \item 通过\textbf{绝热}地开关 $\epsilon(t)$ 并使腔在门始末回到真空（或相同场态），可避免门结束时腔与比特残余纠缠。
+  \item 通过\textbf{绝热}地开关 $\epsilon(t)$ 并使腔在门始末回到真空或相同场态，可避免门结束时腔与比特残余纠缠。
 \end{itemize}
 
-\paragraph{限制与改进方向}
+\noindent\textbf{限制与改进方向}
+
 \begin{itemize}
-  \item 为避免测量诱导退相干，通常需要较强腔失谐（$\delta_r\gg\kappa$），这会压低有效相互作用强度，导致门时间变长。
-  \item 可通过脉冲整形、（在输出场上）使用压缩态降低可区分信息、或采用纵向耦合（longitudinal coupling）等思路缓解。
+  \item 为避免测量诱导退相干，通常需要较强腔失谐，即 $\delta_r\gg\kappa$，这会压低有效相互作用强度，导致门时间变长。
+  \item 可通过脉冲整形、在输出场上使用压缩态降低可区分信息、或采用纵向耦合等思路缓解。
 \end{itemize}
 
-\subsubsection{B.3(b)\quad Cross-resonance (CR) gate}
-\paragraph{核心思想}
+\noindent\textbf{(b) Cross-resonance (CR) gate}
+
+\noindent\textbf{核心思想}
+
 \begin{itemize}
-  \item 两比特彼此失谐但存在交换耦合 $J$（可直接电容耦合或由总线介导）。
-  \item 直接驱动比特 1（控制比特），驱动频率选在比特 2（目标比特）的频率附近，从而在目标比特上产生依赖于控制比特态的有效驱动项（典型为 $ZX$）。
+  \item 两比特彼此失谐但存在交换耦合 $J$，该耦合可直接来自电容耦合，也可由总线介导。
+  \item 直接驱动比特 1，也就是控制比特，驱动频率选在比特 2，也就是目标比特的频率附近，从而在目标比特上产生依赖于控制比特态的有效驱动项，典型为 $ZX$。
 \end{itemize}
 
-\paragraph{两能级近似下的出发点}
-无驱动时（两能级近似），耦合系统可写为
+\noindent\textbf{两能级近似下的出发点}
+
+无驱动时，在两能级近似下，耦合系统可写为
 \begin{equation}
   \hat H
   =
@@ -5085,10 +4892,11 @@ $\omega_d$ 为驱动频率，$\phi_d$ 为驱动相位，$\hat b$ 为 transmon �
   +\hbar J\left(\sigma_{+1}\sigma_{-2}+\sigma_{-1}\sigma_{+2}\right).
   \tag{143}
 \end{equation}
-在 $|J/\Delta_{12}|\ll 1$（$\Delta_{12}=\omega_{q1}-\omega_{q2}$）下做对角化/Schrieffer--Wolff 变换后，驱动比特 1 的项会“泄露”到比特 2 并带上条件性，从而出现有效的 $ZX$ 相互作用。
+在 $|J/\Delta_{12}|\ll 1$，其中 $\Delta_{12}=\omega_{q1}-\omega_{q2}$，下做对角化或 Schrieffer--Wolff 变换后，驱动比特 1 的项会“泄露”到比特 2 并带上条件性，从而出现有效的 $ZX$ 相互作用。
 
-\paragraph{驱动诱导的条件项（直观近似）}
-在同一旋转系中，比特 1 的驱动可近似写为（保留到一阶 $J/\Delta_{12}$）
+\noindent\textbf{驱动诱导的条件项（直观近似）}
+
+在同一旋转系中，比特 1 的驱动可近似写为，保留到一阶 $J/\Delta_{12}$，
 \begin{align}
   \hbar\Omega_R(t)\cos(\omega_d t)\left(\cos\theta\,\sigma_{x1}+\sin\theta\,\sigma_{z1}\sigma_{x2}\right)
   \approx
@@ -5096,9 +4904,10 @@ $\omega_d$ 为驱动频率，$\phi_d$ 为驱动相位，$\hat b$ 为 transmon �
   \left(\sigma_{x1}+\frac{J}{\Delta_{12}}\sigma_{z1}\sigma_{x2}\right),
   \tag{144}
 \end{align}
-并在选择 $\omega_d\approx \tilde\omega_{q2}$ 时，$\sigma_{z1}\sigma_{x2}$ 项可用于构造 CNOT（配合单比特项回波消除）。
+并在选择 $\omega_d\approx \tilde\omega_{q2}$ 时，$\sigma_{z1}\sigma_{x2}$ 项可用于构造 CNOT，配合单比特项回波消除即可。
 
-\paragraph{考虑 transmon 多能级后的更准确模型}
+\noindent\textbf{考虑 transmon 多能级后的更准确模型}
+
 从弱非简谐振子模型出发，在比特 1 上施加驱动
 \begin{equation}
   \hat H
@@ -5108,7 +4917,7 @@ $\omega_d$ 为驱动频率，$\phi_d$ 为驱动相位，$\hat b$ 为 transmon �
   +\hbar\epsilon(t)\!\left(\hat b_1^\dagger e^{-i\omega_d t}+\hat b_1 e^{+i\omega_d t}\right),
   \tag{145}
 \end{equation}
-经过旋转系与 Schrieffer--Wolff 变换、并截断到两能级后，可得到（给出结果形式）
+经过旋转系与 Schrieffer--Wolff 变换，并截断到两能级后，可得到
 \begin{align}
   \hat H'
   \simeq\;
@@ -5123,7 +4932,7 @@ $\omega_d$ 为驱动频率，$\phi_d$ 为驱动相位，$\hat b$ 为 transmon �
   \right),
   \tag{146}
 \end{align}
-其中（文本中给出的参数定义）
+其中
 \begin{equation}
   \chi_{12}
   =
@@ -5135,27 +4944,30 @@ $\omega_d$ 为驱动频率，$\phi_d$ 为驱动相位，$\hat b$ 为 transmon �
   \tag{147}
 \end{equation}
 
-\paragraph{重要结论（为何 CR 难、且需要校准/回波）}
+\noindent\textbf{重要结论：为何 CR 难，且需要校准与回波}
+
 \begin{itemize}
-  \item \textbf{有用项：}驱动产生的 $\sigma_{z1}\sigma_{x2}$（即 $ZX$）实现纠缠。
+  \item \textbf{有用项：}驱动产生的 $\sigma_{z1}\sigma_{x2}$，也就是 $ZX$，实现纠缠。
   \item \textbf{不想要的项：}
     \begin{itemize}
-      \item 固有的 $\sigma_{z1}\sigma_{z2}$（$ZZ$）项 $\propto \chi_{12}$ 会使目标比特频率依赖控制比特态，导致驱动“永远无法同时对两种控制态都严格共振”，从而限制门速度与保真度；
-      \item 存在对目标比特的串扰驱动（如 $-\frac{J}{\Delta_{12}}\sigma_{x2}$），以及更复杂的多能级效应导致的偏差。
+      \item 固有的 $\sigma_{z1}\sigma_{z2}$，也就是 $ZZ$，项 $\propto \chi_{12}$ 会使目标比特频率依赖控制比特态，导致驱动无法同时对两种控制态都严格共振，从而限制门速度与保真度；
+      \item 存在对目标比特的串扰驱动，例如 $-\frac{J}{\Delta_{12}}\sigma_{x2}$，以及更复杂的多能级效应导致的偏差。
     \end{itemize}
   \item 实验上通常采用\textbf{CR-echo} 等回波序列抵消单比特项与部分误差项，并通过标定提取有效 $ZX$ 强度与相位。
-  \item 门时长历史上多在数百 ns 量级；通过更精细的建模与校准可推进到更短时间尺度（依平台而定）。
+  \item 门时长历史上多在数百 ns 量级；通过更精细的建模与校准可推进到更短时间尺度，具体依平台而定。
 \end{itemize}
 
-% -------------------------
-\subsection{B.4\quad Parametric gates（参数调制门）}
-\paragraph{基本思想}
+\subsubsection{B.4\quad Parametric gates（参数调制门）}
+
+\noindent\textbf{基本思想}
+
 \begin{itemize}
-  \item 通过对系统参数做时间周期调制（如耦合强度、比特频率、总线谐振腔频率等），在频域产生边带，从而把原本失谐的相互作用“搬移”到共振条件，实现可控的有效耦合。
-  \item 目标：获得较大 on/off 比，并缓解频谱拥挤；调制频率常在\textbf{几百 MHz}量级（相较直接微波驱动门的 GHz 频段更易工程实现）。
+  \item 通过对系统参数做时间周期调制，例如耦合强度、比特频率、总线谐振腔频率等，在频域产生边带，从而把原本失谐的相互作用“搬移”到共振条件，实现可控的有效耦合。
+  \item 目标是获得较大 on/off 比，并缓解频谱拥挤；调制频率常在\textbf{几百 MHz}量级，相较直接微波驱动门的 GHz 频段更易工程实现。
 \end{itemize}
 
-\subsubsection*{B.4.1\;调制耦合强度 $J(t)$：恢复交换相互作用（类 iSWAP）}
+\noindent\textbf{B.4.1\quad 调制耦合强度 $J(t)$：恢复交换相互作用（类 iSWAP）}
+
 从两能级模型出发
 \begin{equation}
   \hat H
@@ -5179,8 +4991,7 @@ $\omega_d$ 为驱动频率，$\phi_d$ 为驱动相位，$\hat b$ 为 transmon �
   \Big).
   \tag{149}
 \end{equation}
-当 $J(t)=J_0$ 常数且 $|J_0/(\omega_{q1}-\omega_{q2})|\ll 1$ 时，上式快速振荡项平均掉，门处于“off”状态。
-选择调制频率
+当 $J(t)=J_0$ 为常数且 $|J_0/(\omega_{q1}-\omega_{q2})|\ll 1$ 时，上式快速振荡项平均掉，门处于“off”状态。选择调制频率
 \[
   \omega_m=\omega_{q1}-\omega_{q2}
 \]
@@ -5191,9 +5002,13 @@ $\omega_d$ 为驱动频率，$\phi_d$ 为驱动相位，$\hat b$ 为 transmon �
 \end{equation}
 从而实现 iSWAP 类纠缠门。
 
-\subsubsection*{B.4.2\;调制比特频率：FM 边带与贝塞尔函数权重}
-另一种常见做法是调制某个比特频率（例如 $\omega_{q1}(t)=\omega_{q1}+\epsilon\sin(\omega_m t)$），在频域产生边带并与另一比特对齐。
-一个典型有效表达可写为（给出文本中结果形式）
+\noindent\textbf{B.4.2\quad 调制比特频率：FM 边带与贝塞尔函数权重}
+
+另一种常见做法是调制某个比特频率，例如
+\[
+  \omega_{q1}(t)=\omega_{q1}+\epsilon\sin(\omega_m t),
+\]
+在频域产生边带并与另一比特对齐。一个典型有效表达可写为
 \begin{equation}
   \hat U
   =\exp\!\left[
@@ -5216,39 +5031,41 @@ $\omega_d$ 为驱动频率，$\phi_d$ 为驱动相位，$\hat b$ 为 transmon �
 \end{align}
 其中 $J_n(\cdot)$ 为第一类贝塞尔函数。选择 $n\omega_m\approx \Delta_{12}$ 可使第 $n$ 个边带的交换项共振，从而恢复有效交换耦合；通常 $n=1$ 贡献最大。
 
-\paragraph{实现路径的扩展}
+\noindent\textbf{实现路径的扩展}
+
 \begin{itemize}
-  \item 除了调制比特频率/耦合强度，也可调制总线谐振腔频率（例如在传输线谐振腔中引入 SQUID 以实现可调电感，从而调谐腔频率），达到类似的参数门效果。
-  \item 参数门的一个优势是可以在固定频率比特架构下实现较快门速并降低对通量噪声的敏感性（取决于具体调制变量与工作点）。
+  \item 除了调制比特频率或耦合强度，也可调制总线谐振腔频率，例如在传输线谐振腔中引入 SQUID 以实现可调电感，从而调谐腔频率，达到类似的参数门效果。
+  \item 参数门的一个优势是可以在固定频率比特架构下实现较快门速并降低对通量噪声的敏感性，但具体收益仍取决于调制变量与工作点。
 \end{itemize}
 
-% =========================
-% 注：到此为止均属于 VII.B（Two-qubit gates）。
-% 按用户要求，“C. Encoding a qubit in an oscillator” 暂不整理。
-% =========================
-% =========================
-% 承接：VII. QUANTUM COMPUTING WITH CIRCUIT QED
-% 继续：C. Encoding a qubit in an oscillator
-% =========================
+\subsubsection{图示内容的功能性解读}
+
+\begin{itemize}
+  \item 多层布线与模块，包括读出谐振腔、耦合谐振腔、控制线、电荷驱动、通量线、频率调谐与 Purcell 滤波器等，共同组成可扩展的 circuit QED 架构要素。
+  \item 单比特门误差随脉冲长度或宽度变化的图展示：高斯脉冲与 DRAG 脉冲在短门时长下的误差差异；DRAG 通常可在更短门时长下保持较低误差，并与考虑多能级的数值模拟更一致。
+  \item 双比特方案示意图总结了：直接耦合、耦合器或总线介导、全微波激活、参数调制等主要类别。
+  \item 频谱反交叉图展示了：腔--比特真空 Rabi 分裂与比特--比特有效交换耦合造成的反交叉，可用于从谱线中提取 $g_i$ 与 $J$。
+\end{itemize}
 
 \subsection{C.\quad 将量子比特编码进振子（Encoding a qubit in an oscillator）}
 
 \subsubsection{C.1\quad 动机：为何考虑振子编码（bosonic encoding）}
+
 \begin{itemize}
-  \item 前面讨论主要将量子信息编码在“人造原子”（如 transmon）的\textbf{最低两能级}中，并使用谐振腔用于读出与双比特门。
-  \item 但在超导平台中，\textbf{腔模/振子模}（尤其 3D 腔）往往具有更好的相干性（更长寿命），因此将量子信息编码到振子中可能更有利：
+  \item 前面讨论主要将量子信息编码在“人造原子”，如 transmon，的\textbf{最低两能级}中，并使用谐振腔用于读出与双比特门。
+  \item 但在超导平台中，\textbf{腔模或振子模}，尤其 3D 腔，往往具有更好的相干性，因此将量子信息编码到振子中可能更有利：
   \begin{itemize}
     \item 可利用振子长相干时间存储量子信息；
     \item 振子主导误差常可近似为\textbf{单光子损失（amplitude damping / photon loss）}，误差模型相对简单；
     \item 借助振子的无限维希尔伯特空间，可以用较少“物理器件数”提供冗余，从而构造\textbf{玻色子纠错码（bosonic QEC codes）}。
   \end{itemize}
-  \item 关键点：即使信息在振子中，仍通常需要一个\textbf{非线性元件}（如与腔色散耦合的 transmon/其他约瑟夫森电路）来实现
-  \textbf{制备、门操作、以及稳定子测量/纠错循环}，该非线性元件理想情况下只提供控制能力而尽量不引入额外噪声。
-  \item 文献脉络：振子编码在量子光学与 circuit QED 中对应多类方案，如 cat codes、binomial codes、GKP codes 等。
+  \item 关键点是：即使信息在振子中，仍通常需要一个\textbf{非线性元件}，如与腔色散耦合的 transmon 或其他约瑟夫森电路，来实现\textbf{制备、门操作、以及稳定子测量和纠错循环}；该非线性元件理想情况下只提供控制能力而尽量不引入额外噪声。
+  \item 文献脉络上，振子编码在量子光学与 circuit QED 中对应多类方案，如 cat codes、binomial codes、GKP codes 等。
 \end{itemize}
 
 \subsubsection{C.2\quad 最简单的 binomial code 示例：抵抗单光子损失}
-为理解玻色子码的基本思想，先考虑最简单的 binomial code（单模腔中）：
+
+为理解玻色子码的基本思想，先考虑最简单的 binomial code：
 \begin{equation}
   |0_L\rangle=\frac{1}{\sqrt{2}}\big(|0\rangle+|4\rangle\big),
   \qquad
@@ -5257,114 +5074,132 @@ $\omega_d$ 为驱动频率，$\phi_d$ 为驱动相位，$\hat b$ 为 transmon �
 \end{equation}
 其中 $|n\rangle$ 是振子的 Fock 态。
 
-\paragraph{（1）平均光子数与“损失信息不可区分性”}
+\noindent\textbf{（1）平均光子数与“损失信息不可区分性”}
+
 \begin{itemize}
   \item 两个逻辑码字的平均光子数相同：
   \[
     \bar n_{0_L}=\bar n_{1_L}=2.
   \]
-  \item 因此一次光子损失事件发生的概率（在短时间内与 $\bar n$ 成正比）对两码字\textbf{相同}，观测到“发生了损失”并不会泄露逻辑信息（不会告诉你更可能来自 $|0_L\rangle$ 还是 $|1_L\rangle$）。
-  \item 这可视为纠错编码需要满足的一种“错误不携带逻辑信息”的条件，否则纠错测量本身会导致信息坍缩/退相干。
+  \item 因此一次光子损失事件发生的概率，在短时间内与 $\bar n$ 成正比，对两码字\textbf{相同}，观测到“发生了损失”并不会泄露逻辑信息。
+  \item 这可视为纠错编码需要满足的一种“错误不携带逻辑信息”的条件，否则纠错测量本身会导致信息坍缩或退相干。
 \end{itemize}
 
-\paragraph{（2）单光子损失作用下的可恢复性（系数保持）}
+\noindent\textbf{（2）单光子损失作用下的可恢复性（系数保持）}
+
 光子损失对应算符 $\hat a$。若逻辑态为任意叠加
 \[
   |\psi_L\rangle=c_0|0_L\rangle+c_1|1_L\rangle,
 \]
-则一次损失后（忽略归一化）：
+则一次损失后，忽略归一化，
 \[
   \hat a|\psi_L\rangle
   =c_0\,\hat a|0_L\rangle+c_1\,\hat a|1_L\rangle
   \propto c_0|3\rangle + c_1|1\rangle.
 \]
-要点：
+要点是：
 \begin{itemize}
-  \item 逻辑系数 $(c_0,c_1)$ 被\textbf{保留下来}（只是码空间变成了“错误子空间”）。
+  \item 逻辑系数 $(c_0,c_1)$ 被\textbf{保留下来}，只是码空间变成了“错误子空间”；
   \item 因此原则上可通过一次纠错映射将错误子空间态恢复回原码空间态。
 \end{itemize}
 
-\paragraph{（3）用光子数奇偶校验检测损失：单稳定子测量}
-注意式(154) 的码空间支持在\textbf{偶光子数}子空间，而一次光子损失会翻转奇偶性。定义光子数奇偶算符
+\noindent\textbf{（3）用光子数奇偶校验检测损失：单稳定子测量}
+
+注意式 (154) 的码空间支持在\textbf{偶光子数}子空间，而一次光子损失会翻转奇偶性。定义光子数奇偶算符
 \[
   \hat P = (-1)^{\hat n},
 \]
 则
 \begin{itemize}
-  \item 无损失：处于偶奇偶（$\hat P=+1$）；
-  \item 一次损失：变为奇奇偶（$\hat P=-1$）。
+  \item 无损失时处于偶奇偶，即 $\hat P=+1$；
+  \item 一次损失后变为奇奇偶，即 $\hat P=-1$。
 \end{itemize}
-因此只需测量一个稳定子（奇偶性）即可检测单光子损失事件；在 circuit QED 中，这类奇偶测量可高保真实现。
+因此只需测量一个稳定子，也就是奇偶性，即可检测单光子损失事件；在 circuit QED 中，这类奇偶测量可高保真实现。
 
-\paragraph{（4）纠错循环与不可纠错错误概率的阶数改善}
-若以时间步长 $\delta t$ 反复执行检测/纠错，则不可纠错错误的概率可从
+\noindent\textbf{（4）纠错循环与不可纠错错误概率的阶数改善}
+
+若以时间步长 $\delta t$ 反复执行检测与纠错，则不可纠错错误的概率可从
 \[
   O(\kappa\,\delta t)
   \quad \rightarrow \quad
   O((\kappa\,\delta t)^2),
 \]
-其中 $\kappa$ 是腔能量衰减率（光子损失率）。直观上：纠错把“一次损失”从致命错误变成可校正事件，主要不可纠错来源变为\textbf{同一轮间隔内发生两次损失}，因此概率阶数提高。
+其中 $\kappa$ 是腔能量衰减率，也就是光子损失率。直观上，纠错把“一次损失”从致命错误变成可校正事件，主要不可纠错来源变为\textbf{同一轮间隔内发生两次损失}，因此概率阶数提高。
 
-\paragraph{对比：直接用 $|0\rangle,|1\rangle$ 存储信息的脆弱性}
-若直接用 Fock 态 $\{|0\rangle,|1\rangle\}$ 存储，单光子损失会将
+\noindent\textbf{对比：直接用 $|0\rangle,|1\rangle$ 存储信息的脆弱性}
+
+若直接用 Fock 态 $\{|0\rangle,|1\rangle\}$ 存储，则单光子损失会将
 \[
   c_0|0\rangle + c_1|1\rangle
   \xrightarrow{\hat a}
   c_1|0\rangle,
 \]
-逻辑信息不可逆丢失；这对比说明振子编码的关键收益。
+逻辑信息不可逆丢失；这正说明了振子编码的关键收益。
 
-\subsubsection{C.3\quad 与最简单四量子比特码的“正面对比”：开销与测量难度}
-为了比较玻色子码与多物理量子比特码在“振幅阻尼（photon loss / amplitude damping）”情形下的开销，可考虑一个能一阶纠正单比特振幅阻尼误差的四量子比特码（最简形式之一）：
+\subsubsection{C.3\quad 与最简单四量子比特码的正面对比：开销与测量难度}
+
+为了比较玻色子码与多物理量子比特码在“振幅阻尼”情形下的开销，可考虑一个能一阶纠正单比特振幅阻尼误差的四量子比特码：
 \begin{align}
   |0_L\rangle &= \frac{1}{\sqrt{2}}\big(|0000\rangle+|1111\rangle\big), \tag{155a}\\
   |1_L\rangle &= \frac{1}{\sqrt{2}}\big(|1100\rangle+|0011\rangle\big). \tag{155b}
 \end{align}
 
-\paragraph{核心对比维度（对应表格信息的要点抽取）}
+\noindent\textbf{核心对比维度}
+
 \begin{itemize}
   \item \textbf{平均激发数：}二者都可安排使平均激发数约为 $2$，从而在损失概率尺度上可比。
   \item \textbf{希尔伯特空间维数：}
   \begin{itemize}
     \item 四量子比特：维数 $2^4=16$；
-    \item 最简单 binomial：只用到 $\{0,1,2,3,4\}$ 五个 Fock 态（有效维数约 $5$）。
+    \item 最简单 binomial：只用到 $\{0,1,2,3,4\}$ 五个 Fock 态，有效维数约为 $5$。
   \end{itemize}
   \item \textbf{可纠正错误集合：}
   \begin{itemize}
-    \item 四量子比特码可处理多类单比特误差（表中列出五种不同错误类型/综合）；
-    \item 最简单 binomial 码在此例中主要针对“无损失/单光子损失”两类事件进行检测与恢复。
+    \item 四量子比特码可处理多类单比特误差：对应与无损失以及4个独立的单光子态的损失$\{I, \sigma_1^-,\sigma_2^-,\sigma_3^-,\sigma_4^-\}$；
+    \item 最简单 binomial 码在此例中主要针对“无损失”和“单光子损失”两类事件进行检测与恢复。
   \end{itemize}
   \item \textbf{稳定子测量复杂度：}
   \begin{itemize}
-    \item 四量子比特码需要测量多个多体稳定子（例如权重为2或4的泡利串），在超导体系中实现高保真多体测量较难；
+    \item 稳定子定义为在编码态上本征值为1，在损失态上本征值为-1。
+    \item 四量子比特码希尔伯特空间维数为16，为了编码01态，需要3个稳定子：$S_1 = Z_1Z_2$, $S_2 = Z_3Z_4$, $S_3 = X_-1X_2X_3X_4$
     \item binomial 示例只需测量\textbf{单个奇偶稳定子} $\hat P=(-1)^{\hat n}$，在 circuit QED 中相对更直接、高保真且对态破坏小。
   \end{itemize}
-  \item \textbf{“break-even” 视角：}玻色子码在实验上已接近或达到纠错收益超过未编码存储的“break-even”表现（文中引用了相关实验进展）。
+  \item \textbf{QEC:}
+  \begin{itemize}
+    \item 两者可以实现无误差以及一次损失的纠错，无法处理两阶以上的损失。
+  \end{itemize}
 \end{itemize}
 
 \subsubsection{C.4\quad Cat-state bosonic encodings：四分量 cat code 与相空间图像}
-除 binomial 外，circuit QED 中另一类广泛研究的玻色子编码是 \textbf{cat code}。
-一个实验中使用的四分量 cat 编码可写为（每个码字是四个相干态的叠加）：
+
+除 binomial 外，circuit QED 中另一类广泛研究的玻色子编码是 \textbf{cat code}。一个实验中使用的四分量 cat 编码可写为
 \begin{align}
   |0_L\rangle &= \mathcal{N}_0\Big(|\alpha\rangle + |i\alpha\rangle + |-\alpha\rangle + |-i\alpha\rangle\Big), \tag{156a}\\
   |1_L\rangle &= \mathcal{N}_1\Big(|\alpha\rangle - |i\alpha\rangle + |-\alpha\rangle - |-i\alpha\rangle\Big), \tag{156b}
 \end{align}
 其中 $\mathcal{N}_{0,1}$ 为归一化常数，且在 $|\alpha|$ 足够大时常有 $\mathcal{N}_0\simeq \mathcal{N}_1$。
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.6\textwidth]{img/cat code.png}
+  \caption{四分量 cat 码字在相空间中的 Wigner 函数示意图，展示了多峰结构与干涉条纹。}
+  \label{fig:cat_code}
+\end{figure}
+\noindent\textbf{与 binomial 示例的关系：用 Fock 展开理解结构}
 
-\paragraph{与 binomial 示例的关系（用 Fock 展开理解结构）}
 \begin{itemize}
-  \item 四分量 cat 码字在 Fock 基中具有\textbf{选择定则}（只支持特定模 $4$ 的光子数类），从而在光子损失作用下可被映射到正交错误子空间，类似于 binomial 中“偶/奇”结构带来的可检测性。
-  \item 相空间表征（Wigner 函数）能直观显示 cat 码字的干涉条纹与多峰结构（文中对应图给出四分量与两分量的 Wigner 对比）。
+  \item 将相干态关于Fock态的展开代入，可以看到$\ket{0_L}$只包含$\ket{4n}$项，$\ket{1_L}$只包含$\ket{4n+2}$项，这与binomial编码的情形类似。因此，该情形下的光子损失也可以纠正。
+  \item 相空间表征，也就是 Wigner 函数，能直观显示 cat 码字的干涉条纹与多峰结构。cat code的良性质来源于其相空间的旋转对称性
 \end{itemize}
 
-\subsubsection{C.5\quad 两分量 cat code 与“偏置噪声（biased noise）”思想}
-有时还使用更简单的两分量 cat 编码（在某个逻辑基下）：
+\subsubsection{C.5\quad 两分量 cat code 与偏置噪声（biased noise）思想}
+
+有时还使用更简单的两分量 cat 编码：
 \[
   |+_L\rangle=\mathcal{N}_0\big(|\alpha\rangle+|-\alpha\rangle\big),
   \qquad
-  |- _L\rangle=\mathcal{N}_1\big(|\alpha\rangle-|-\alpha\rangle\big),
+  |-_L\rangle=\mathcal{N}_1\big(|\alpha\rangle-|-\alpha\rangle\big),
 \]
-并在 $|\alpha|$ 足够大时，将逻辑 $Z$ 基态近似写为（文中给出近似式）
+并在 $|\alpha|$ 足够大时，将逻辑 $Z$ 基态近似写为
 \begin{align}
   |0_L\rangle &= \frac{1}{\sqrt{2}}\big(|+_L\rangle+|-_L\rangle\big)
   =|\alpha\rangle+O(e^{-2|\alpha|^2}), \tag{157a}\\
@@ -5372,25 +5207,24 @@ $\omega_d$ 为驱动频率，$\phi_d$ 为驱动相位，$\hat b$ 为 transmon �
   =|-\alpha\rangle+O(e^{-2|\alpha|^2}). \tag{157b}
 \end{align}
 
-\paragraph{关键物理：光子损失带来的“错误偏置”}
+\noindent\textbf{关键物理：光子损失带来的“错误偏置”}
+
 \begin{itemize}
-  \item 在大振幅极限下，相干态满足 $\hat a|\alpha\rangle=\alpha|\alpha\rangle$，即一次光子损失主要带来幅度因子与相空间位移的“温和”变化。
+  \item 在大振幅极限下，相干态满足 $\hat a|\alpha\rangle=\alpha|\alpha\rangle$，即一次光子损失主要带来幅度因子与相空间位移的“温和”变化，即：
+  $$a\ket{0_L} \approx \ket{\alpha} \approx \ket{0_L} \,\, \, a\ket{1_L} \approx - \ket{-\alpha} \approx -\ket{1_L}$$
   \item cat 编码中更关键的是：光子损失往往更倾向诱导\textbf{相位翻转（phase flips）}而非\textbf{比特翻转（bit flips）}，并且比特翻转率可随 $|\alpha|$ \textbf{指数抑制}：
   \[
     \text{bit-flip 相关矩阵元} \sim \langle +_L|\hat a|-_L\rangle \propto e^{-2|\alpha|^2}.
   \]
-  \item 结果：随着 $|\alpha|^2$ 增大，\textbf{比特翻转率指数下降}，而某些相位翻转通道仅随 $|\alpha|^2$ 线性增长，从而形成强烈的\textbf{噪声偏置}。
-  \item 这启发一种体系结构层面的策略：用玻色子码（如式(157)）主要压制最“昂贵”的错误类型，再在上层纠错码中重点纠正剩余占主导的错误（例如以纠正相位翻转为主），从而降低容错量子计算的总开销。
+  \item 结果是：随着 $|\alpha|^2$ 增大，\textbf{比特翻转率指数下降}，而某些相位翻转通道仅随 $|\alpha|^2$ 线性增长，从而形成强烈的\textbf{噪声偏置}。
+  \item 这启发了一种体系结构层面的策略：用玻色子码主要压制最“昂贵”的错误类型，再在上层纠错码中重点纠正剩余占主导的错误，例如以纠正相位翻转为主，从而降低容错量子计算的总开销。
 \end{itemize}
 
 \subsubsection{C.6\quad GKP 码的简述定位（本文此处不展开）}
+
 \begin{itemize}
-  \item 另一类已在 circuit QED 中实现演示的玻色子编码是 \textbf{Gottesman--Kitaev--Preskill (GKP) code}，其码字基于相空间中的\textbf{平移对称性（translational symmetry）}而非旋转对称性（cat/binomial 更接近旋转对称结构）。
-  \item 文本在此处指出 GKP 的实验进展与意义，但不在该段落详细展开，建议读者参考相关综述。
+  \item 另一类已在 circuit QED 中实现演示的玻色子编码是 \textbf{Gottesman--Kitaev--Preskill (GKP) code}，其码字基于相空间中的\textbf{平移对称性（translational symmetry）}而非旋转对称性。
+  \item 本文在此处仅指出 GKP 的实验进展与意义，不再详细展开。
 \end{itemize}
 
-% =========================
-% 到这里结束 VII.C（振子编码）在截图范围内的主要内容。
-% 下一节将进入 VIII. QUANTUM OPTICS ON A CHIP（若后续继续整理可再衔接）。
-% =========================
 \end{document}
