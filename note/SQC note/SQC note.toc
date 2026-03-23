@@ -1,0 +1,365 @@
+\contentsline {section}{\numberline {I}I. 引言（Introduction）}{1}{section.0.1}%
+\contentsline {subsection}{\numberline {A}量子计算发展的整体背景}{1}{subsection.0.1.1}%
+\contentsline {subsection}{\numberline {B}为什么 cQED 是核心平台之一}{1}{subsection.0.1.2}%
+\contentsline {subsection}{\numberline {C}cQED 的基本定义与物理优势}{2}{subsection.0.1.3}%
+\contentsline {subsubsection}{\numberline {1}cQED 的基本含义}{2}{subsubsection.0.1.3.1}%
+\contentsline {subsubsection}{\numberline {2}cQED 平台的突出特征}{2}{subsubsection.0.1.3.2}%
+\contentsline {subsubsection}{\numberline {3}构建 cQED 量子处理器的要求}{3}{subsubsection.0.1.3.3}%
+\contentsline {subsection}{\numberline {D}本文的定位、目标读者与写作动机}{3}{subsection.0.1.4}%
+\contentsline {subsubsection}{\numberline {1}为什么还需要这篇 Tutorial}{3}{subsubsection.0.1.4.1}%
+\contentsline {subsubsection}{\numberline {2}目标读者}{4}{subsubsection.0.1.4.2}%
+\contentsline {subsubsection}{\numberline {3}与已有教学性综述的区别}{4}{subsubsection.0.1.4.3}%
+\contentsline {subsubsection}{\numberline {4}本文的核心目标}{4}{subsubsection.0.1.4.4}%
+\contentsline {subsection}{\numberline {E}图1：文章所强调的核心工程图景}{5}{subsection.0.1.5}%
+\contentsline {subsubsection}{\numberline {1}图1(a)：cQED 量子计算机的全栈结构}{5}{subsubsection.0.1.5.1}%
+\contentsline {subsubsection}{\numberline {2}图1(b)：cQED 器件开发的工程闭环}{6}{subsubsection.0.1.5.2}%
+\contentsline {subsubsection}{\numberline {3}图中的“Quantum info.”与“Physics”分界}{8}{subsubsection.0.1.5.3}%
+\contentsline {subsection}{\numberline {F}A. Overview of article：全文工作流与章节安排}{8}{subsection.0.1.6}%
+\contentsline {subsubsection}{\numberline {1}整体组织方式}{8}{subsubsection.0.1.6.1}%
+\contentsline {subsubsection}{\numberline {2}第二节的作用：建立共同的物理基础}{8}{subsubsection.0.1.6.2}%
+\contentsline {subsubsection}{\numberline {3}第三节：从目标哈密顿量到真实物理电路}{9}{subsubsection.0.1.6.3}%
+\contentsline {subsubsection}{\numberline {4}第四节：低温环境、室温环境与控制链路}{10}{subsubsection.0.1.6.4}%
+\contentsline {subsubsection}{\numberline {5}第五节：器件表征、校准与性能诊断}{10}{subsubsection.0.1.6.5}%
+\contentsline {subsubsection}{\numberline {6}前五节之间的整体关系：共同构成工程闭环}{11}{subsubsection.0.1.6.6}%
+\contentsline {subsubsection}{\numberline {7}最终目标与本文边界}{11}{subsubsection.0.1.6.7}%
+\contentsline {subsubsection}{\numberline {8}第六节：两条前沿研究主线}{12}{subsubsection.0.1.6.8}%
+\contentsline {subsection}{\numberline {G}引言部分的整体逻辑总结}{12}{subsection.0.1.7}%
+\contentsline {subsection}{\numberline {H}这一部分应重点把握的关键词}{13}{subsection.0.1.8}%
+\contentsline {subsection}{\numberline {I}一句话概括}{14}{subsection.0.1.9}%
+\contentsline {section}{\numberline {II}cQED 的物理}{14}{section.0.2}%
+\contentsline {subsection}{\numberline {A}cQED 框架概述}{14}{subsection.0.2.1}%
+\contentsline {subsection}{\numberline {B}超导谐振器}{15}{subsection.0.2.2}%
+\contentsline {subsubsection}{\numberline {1}孤立的超导谐振器}{15}{subsubsection.0.2.2.1}%
+\contentsline {paragraph}{\numberline {a}1. 集总元件模型与更一般的观点}{15}{paragraph.0.2.2.1.1}%
+\contentsline {paragraph}{\numberline {b}2. 两个无量纲的正则变量}{16}{paragraph.0.2.2.1.2}%
+\contentsline {paragraph}{\numberline {c}3. 对易关系与 LC 哈密顿量}{16}{paragraph.0.2.2.1.3}%
+\contentsline {paragraph}{\numberline {d}4. 用频率和阻抗重写哈密顿量}{17}{paragraph.0.2.2.1.4}%
+\contentsline {paragraph}{\numberline {e}5. 升降算符、零点涨落与物理解释}{17}{paragraph.0.2.2.1.5}%
+\contentsline {paragraph}{\numberline {f}6. 图 2 的物理含义}{18}{paragraph.0.2.2.1.6}%
+\contentsline {subsubsection}{\numberline {2}与环境接触的谐振器}{18}{subsubsection.0.2.2.2}%
+\contentsline {paragraph}{\numberline {a}1. 从封闭系统到开放系统}{18}{paragraph.0.2.2.2.1}%
+\contentsline {paragraph}{\numberline {b}2. 输入场、输出场与对易关系}{19}{paragraph.0.2.2.2.2}%
+\contentsline {paragraph}{\numberline {c}3. 输入--输出关系}{19}{paragraph.0.2.2.2.3}%
+\contentsline {paragraph}{\numberline {d}4. 量子 Langevin 方程}{19}{paragraph.0.2.2.2.4}%
+\contentsline {paragraph}{\numberline {e}5. 刚性泵浦（stiff-pump）近似}{20}{paragraph.0.2.2.2.5}%
+\contentsline {subsection}{\numberline {C}约瑟夫森结}{20}{subsection.0.2.3}%
+\contentsline {paragraph}{\numberline {a}1. 结构与制备}{21}{paragraph.0.2.3.0.1}%
+\contentsline {paragraph}{\numberline {b}2. 电荷表象中的直观哈密顿量}{21}{paragraph.0.2.3.0.2}%
+\contentsline {paragraph}{\numberline {c}3. 磁通（相位）表象中的哈密顿量}{22}{paragraph.0.2.3.0.3}%
+\contentsline {paragraph}{\numberline {d}4. Josephson 电感与非线性的来源}{22}{paragraph.0.2.3.0.4}%
+\contentsline {subsection}{\numberline {D}Transmon}{22}{subsection.0.2.4}%
+\contentsline {paragraph}{\numberline {a}1. 典型工作频率与设计考虑}{22}{paragraph.0.2.4.0.1}%
+\contentsline {paragraph}{\numberline {b}2. 非简谐性与快速控制}{23}{paragraph.0.2.4.0.2}%
+\contentsline {paragraph}{\numberline {c}3. 物理结构}{23}{paragraph.0.2.4.0.3}%
+\contentsline {paragraph}{\numberline {d}4. 基本哈密顿量}{23}{paragraph.0.2.4.0.4}%
+\contentsline {paragraph}{\numberline {e}5. 参数区间 \(E_J\gg E_C\) 及其意义}{24}{paragraph.0.2.4.0.5}%
+\contentsline {paragraph}{\numberline {f}6. 弱非简谐振子近似}{24}{paragraph.0.2.4.0.6}%
+\contentsline {paragraph}{\numberline {g}7. 旋转波近似（RWA）的物理依据}{25}{paragraph.0.2.4.0.7}%
+\contentsline {paragraph}{\numberline {h}8. 振子图像与二能级图像}{25}{paragraph.0.2.4.0.8}%
+\contentsline {paragraph}{\numberline {i}9. 可调频的 SQUID Transmon}{25}{paragraph.0.2.4.0.9}%
+\contentsline {subsection}{\numberline {E}其他量子比特}{27}{subsection.0.2.5}%
+\contentsline {subsection}{\numberline {F}色散耦合}{27}{subsection.0.2.6}%
+\contentsline {paragraph}{\numberline {a}1. 物理图像与相互作用哈密顿量}{27}{paragraph.0.2.6.0.1}%
+\contentsline {paragraph}{\numberline {b}2. 图 3 的信息}{28}{figure.0.2}%
+\contentsline {paragraph}{\numberline {c}3. 常用参数区间与近似条件}{29}{paragraph.0.2.6.0.3}%
+\contentsline {paragraph}{\numberline {d}4. 海森堡图像下的 Langevin 方程}{30}{paragraph.0.2.6.0.4}%
+\contentsline {paragraph}{\numberline {e}5. 线性部分的对角化与 Lamb 位移}{30}{paragraph.0.2.6.0.5}%
+\contentsline {paragraph}{\numberline {f}6. Purcell 效应}{31}{paragraph.0.2.6.0.6}%
+\contentsline {paragraph}{\numberline {g}7. Dressed 模与混合角}{31}{paragraph.0.2.6.0.7}%
+\contentsline {paragraph}{\numberline {h}8. 将 Transmon 非线性投影到 dressed 模上}{31}{paragraph.0.2.6.0.8}%
+\contentsline {paragraph}{\numberline {i}9. 有效色散哈密顿量}{32}{paragraph.0.2.6.0.9}%
+\contentsline {paragraph}{\numberline {j}10. 色散耦合的物理解释与强色散区}{32}{paragraph.0.2.6.0.10}%
+\contentsline {paragraph}{\numberline {k}11. 实际实现方式与 cQED 中的三项核心能力}{32}{paragraph.0.2.6.0.11}%
+\contentsline {paragraph}{\numberline {l}12. 受驱动相互作用、四波混频与应用}{33}{paragraph.0.2.6.0.12}%
+\contentsline {paragraph}{\numberline {m}13. 本节主线总结}{33}{paragraph.0.2.6.0.13}%
+\contentsline {section}{\numberline {III}量子电路设计：从目标哈密顿量到物理实现}{34}{section.0.3}%
+\contentsline {subsection}{\numberline {A}总体目标与设计闭环}{34}{subsection.0.3.1}%
+\contentsline {subsection}{\numberline {B}器件架构：平面架构与 3D 架构}{35}{subsection.0.3.2}%
+\contentsline {subsubsection}{\numberline {1}两类主流架构的基本区分}{35}{subsubsection.0.3.2.1}%
+\contentsline {subsubsection}{\numberline {2}3D 架构}{36}{subsubsection.0.3.2.2}%
+\contentsline {paragraph}{\numberline {a}基本物理实现}{36}{paragraph.0.3.2.2.1}%
+\contentsline {paragraph}{\numberline {b}典型器件构成（对应图 5）}{36}{figure.0.3}%
+\contentsline {paragraph}{\numberline {c}3D 架构的优点}{37}{paragraph.0.3.2.2.3}%
+\contentsline {paragraph}{\numberline {d}3D 架构的局限}{38}{paragraph.0.3.2.2.4}%
+\contentsline {subsubsection}{\numberline {3}平面架构}{38}{subsubsection.0.3.2.3}%
+\contentsline {paragraph}{\numberline {a}基本物理实现}{38}{paragraph.0.3.2.3.1}%
+\contentsline {paragraph}{\numberline {b}典型器件构成（对应图 6）}{39}{figure.0.4}%
+\contentsline {paragraph}{\numberline {c}平面架构的优势}{39}{paragraph.0.3.2.3.3}%
+\contentsline {paragraph}{\numberline {d}平面架构的扩展挑战与未来趋势}{41}{paragraph.0.3.2.3.4}%
+\contentsline {subsection}{\numberline {C}构建基本模块：从需求到具体电路}{41}{subsection.0.3.3}%
+\contentsline {subsubsection}{\numberline {1}设计起点：先回答哪些问题}{41}{subsubsection.0.3.3.1}%
+\contentsline {subsubsection}{\numberline {2}线性模：谐振器的实现}{42}{subsubsection.0.3.3.2}%
+\contentsline {paragraph}{\numberline {a}通用认识}{42}{paragraph.0.3.3.2.1}%
+\contentsline {paragraph}{\numberline {b}CPW 谐振器}{42}{paragraph.0.3.3.2.2}%
+\contentsline {paragraph}{\numberline {c}同轴/3D 谐振器}{43}{paragraph.0.3.3.2.3}%
+\contentsline {subsubsection}{\numberline {3}非线性模：量子比特、耦合器与参量器件}{44}{subsubsection.0.3.3.3}%
+\contentsline {paragraph}{\numberline {a}基本构成}{44}{paragraph.0.3.3.3.1}%
+\contentsline {paragraph}{\numberline {b}以 transmon 为例的典型设计范围}{44}{paragraph.0.3.3.3.2}%
+\contentsline {subsubsection}{\numberline {4}耦合设计与频率布局}{45}{subsubsection.0.3.3.4}%
+\contentsline {paragraph}{\numberline {a}电容耦合与感应耦合}{45}{paragraph.0.3.3.4.1}%
+\contentsline {paragraph}{\numberline {b}耦合不仅取决于 \(g\)，也取决于失谐}{45}{paragraph.0.3.3.4.2}%
+\contentsline {paragraph}{\numberline {c}多量子比特系统中的频率规划}{45}{paragraph.0.3.3.4.3}%
+\contentsline {subsubsection}{\numberline {5}元件功能定位：读出、存储、总线与控制}{46}{subsubsection.0.3.3.5}%
+\contentsline {paragraph}{\numberline {a}谐振器的三类典型功能}{46}{paragraph.0.3.3.5.1}%
+\contentsline {paragraph}{\numberline {b}量子比特的功能与可调谐性}{46}{paragraph.0.3.3.5.2}%
+\contentsline {paragraph}{\numberline {c}微波控制线}{47}{paragraph.0.3.3.5.3}%
+\contentsline {subsubsection}{\numberline {6}控制线路引入的耗散与相干性代价}{47}{subsubsection.0.3.3.6}%
+\contentsline {paragraph}{\numberline {a}微波驱动线引起的衰减}{48}{paragraph.0.3.3.6.1}%
+\contentsline {paragraph}{\numberline {b}磁通偏置线引起的衰减}{48}{paragraph.0.3.3.6.2}%
+\contentsline {paragraph}{\numberline {c}理解这些公式时的注意事项}{48}{paragraph.0.3.3.6.3}%
+\contentsline {subsection}{\numberline {D}电磁仿真与系统参数提取}{49}{subsection.0.3.4}%
+\contentsline {subsubsection}{\numberline {1}为什么需要电磁仿真}{49}{subsubsection.0.3.4.1}%
+\contentsline {subsubsection}{\numberline {2}仿真中的建模近似}{49}{subsubsection.0.3.4.2}%
+\contentsline {subsubsection}{\numberline {3}网格与收敛设置}{50}{subsubsection.0.3.4.3}%
+\contentsline {paragraph}{\numberline {a}网格策略}{50}{paragraph.0.3.4.3.1}%
+\contentsline {paragraph}{\numberline {b}收敛标准}{50}{paragraph.0.3.4.3.2}%
+\contentsline {subsubsection}{\numberline {4}从仿真结果到哈密顿量参数}{50}{subsubsection.0.3.4.4}%
+\contentsline {paragraph}{\numberline {a}1.\ 黑箱量子化（BBQ, blackbox quantization）}{51}{paragraph.0.3.4.4.1}%
+\contentsline {paragraph}{\numberline {b}2.\ 能量参与比（EPR, energy participation ratio）方法}{51}{paragraph.0.3.4.4.2}%
+\contentsline {subsection}{\numberline {E}平面 cQED 器件中的潜在损耗通道}{52}{subsection.0.3.5}%
+\contentsline {subsubsection}{\numberline {1}界面损耗是平面器件的重要问题}{53}{subsubsection.0.3.5.1}%
+\contentsline {subsection}{\numberline {F}本部分内容的逻辑总结}{53}{subsection.0.3.6}%
+\contentsline {subsection}{\numberline {G}最优相干性的设计考量}{54}{subsection.0.3.7}%
+\contentsline {subsubsection}{\numberline {1}退相干并不完全由电路参数决定}{54}{subsubsection.0.3.7.1}%
+\contentsline {subsubsection}{\numberline {2}决定退相干速率的三个核心因素}{54}{subsubsection.0.3.7.2}%
+\contentsline {subsubsection}{\numberline {3}介质损耗：电容参与比视角}{55}{subsubsection.0.3.7.3}%
+\contentsline {paragraph}{\numberline {a}介质损耗的微观来源}{56}{paragraph.0.3.7.3.1}%
+\contentsline {paragraph}{\numberline {b}电容损耗导致的衰减率}{56}{paragraph.0.3.7.3.2}%
+\contentsline {subsubsection}{\numberline {4}体材料与界面材料：谁更关键}{56}{subsubsection.0.3.7.4}%
+\contentsline {paragraph}{\numberline {a}体基底的重要性}{56}{paragraph.0.3.7.4.1}%
+\contentsline {paragraph}{\numberline {b}沉积介质的危险性}{57}{paragraph.0.3.7.4.2}%
+\contentsline {paragraph}{\numberline {c}真正常见的限制因素：表面/界面非晶层}{57}{paragraph.0.3.7.4.3}%
+\contentsline {subsubsection}{\numberline {5}表面参与比的尺度规律与经验估算}{58}{subsubsection.0.3.7.5}%
+\contentsline {paragraph}{\numberline {a}经验规律}{58}{paragraph.0.3.7.5.1}%
+\contentsline {paragraph}{\numberline {b}一个典型估算}{58}{paragraph.0.3.7.5.2}%
+\contentsline {subsubsection}{\numberline {6}表面参与比的数值计算与几何优化}{58}{subsubsection.0.3.7.6}%
+\contentsline {paragraph}{\numberline {a}为什么需要更精细的仿真}{58}{paragraph.0.3.7.6.1}%
+\contentsline {paragraph}{\numberline {b}常见策略}{59}{paragraph.0.3.7.6.2}%
+\contentsline {paragraph}{\numberline {c}来自数值结果的几何经验}{59}{paragraph.0.3.7.6.3}%
+\contentsline {subsubsection}{\numberline {7}几何放大并非总是有利：设计折中}{59}{subsubsection.0.3.7.7}%
+\contentsline {paragraph}{\numberline {a}1.\ 辐射损耗}{59}{paragraph.0.3.7.7.1}%
+\contentsline {paragraph}{\numberline {b}2.\ 多量子比特系统中的串扰}{59}{paragraph.0.3.7.7.2}%
+\contentsline {paragraph}{\numberline {c}3.\ 几何优化存在最终极限}{60}{paragraph.0.3.7.7.3}%
+\contentsline {subsubsection}{\numberline {8}电感损耗：动能电感分数与表面 \(Q\)}{60}{subsubsection.0.3.7.8}%
+\contentsline {paragraph}{\numberline {a}电感能量的两部分来源}{60}{paragraph.0.3.7.8.1}%
+\contentsline {paragraph}{\numberline {b}动能电感分数 \(\alpha \)}{61}{paragraph.0.3.7.8.2}%
+\contentsline {paragraph}{\numberline {c}实验测量 \(\alpha \) 的方法}{61}{paragraph.0.3.7.8.3}%
+\contentsline {paragraph}{\numberline {d}电感损耗导致的衰减率}{61}{paragraph.0.3.7.8.4}%
+\contentsline {paragraph}{\numberline {e}有限表面 \(Q\) 的物理来源}{62}{paragraph.0.3.7.8.5}%
+\contentsline {subsubsection}{\numberline {9}谐振器与量子比特在电感损耗上的差异}{62}{subsubsection.0.3.7.9}%
+\contentsline {paragraph}{\numberline {a}谐振器：通常对电感损耗不太敏感}{62}{paragraph.0.3.7.9.1}%
+\contentsline {paragraph}{\numberline {b}量子比特：往往由约瑟夫森结主导}{62}{paragraph.0.3.7.9.2}%
+\contentsline {subsubsection}{\numberline {10}关于最优相干性设计的阶段性结论}{63}{subsubsection.0.3.7.10}%
+\contentsline {subsection}{\numberline {H}器件制备}{63}{subsection.0.3.8}%
+\contentsline {subsubsection}{\numberline {1}约瑟夫森结制备是超导量子器件的核心}{63}{subsubsection.0.3.8.1}%
+\contentsline {paragraph}{\numberline {a}常见工艺路线}{63}{paragraph.0.3.8.1.1}%
+\contentsline {subsubsection}{\numberline {2}制备中的关键问题：TLS 与界面质量}{64}{subsubsection.0.3.8.2}%
+\contentsline {paragraph}{\numberline {a}寄生 TLS 的危害}{64}{paragraph.0.3.8.2.1}%
+\contentsline {paragraph}{\numberline {b}保持基底--金属界面洁净}{64}{paragraph.0.3.8.2.2}%
+\contentsline {paragraph}{\numberline {c}硅基底的额外处理}{65}{paragraph.0.3.8.2.3}%
+\contentsline {paragraph}{\numberline {d}其他 TLS 抑制思路}{65}{paragraph.0.3.8.2.4}%
+\contentsline {subsubsection}{\numberline {3}室温快速表征：由正常态电阻估算 \(E_J\)}{65}{subsubsection.0.3.8.3}%
+\contentsline {paragraph}{\numberline {a}为什么室温电阻有用}{66}{paragraph.0.3.8.3.1}%
+\contentsline {paragraph}{\numberline {b}零温极限}{66}{paragraph.0.3.8.3.2}%
+\contentsline {paragraph}{\numberline {c}实验上需要注意的修正}{66}{paragraph.0.3.8.3.3}%
+\contentsline {subsubsection}{\numberline {4}3D 超导腔体的制备与优化}{67}{subsubsection.0.3.8.4}%
+\contentsline {paragraph}{\numberline {a}材料与加工}{67}{paragraph.0.3.8.4.1}%
+\contentsline {paragraph}{\numberline {b}提高腔体本征品质因数的方法}{67}{paragraph.0.3.8.4.2}%
+\contentsline {subsubsection}{\numberline {5}微加工腔体：平面小型化与 3D 高相干性的结合}{67}{subsubsection.0.3.8.5}%
+\contentsline {subsection}{\numberline {I}本部分补充总结：从相干性优化到器件落地}{68}{subsection.0.3.9}%
+\contentsline {section}{\numberline {IV}构建有效的量子环境}{69}{section.0.4}%
+\contentsline {subsection}{\numberline {A}总体目标与设计原则}{69}{subsection.0.4.1}%
+\contentsline {subsection}{\numberline {B}低温系统配置（Cryogenic configurations）}{69}{subsection.0.4.2}%
+\contentsline {subsubsection}{\numberline {1}工作温度与核心设计任务}{69}{subsubsection.0.4.2.1}%
+\contentsline {subsubsection}{\numberline {2}输入微波线的设计：热噪声、衰减与滤波}{70}{subsubsection.0.4.2.2}%
+\contentsline {paragraph}{\numberline {a}1. 残余热光子对退相干的影响}{70}{paragraph.0.4.2.2.1}%
+\contentsline {paragraph}{\numberline {b}2. 各温度级的热光子占据数}{71}{paragraph.0.4.2.2.2}%
+\contentsline {paragraph}{\numberline {c}3. 衰减器的热噪声模型与两级衰减器示例}{71}{paragraph.0.4.2.2.3}%
+\contentsline {paragraph}{\numberline {d}4. 低温滤波器的配置}{72}{paragraph.0.4.2.2.4}%
+\contentsline {subsubsection}{\numberline {3}输出线的设计：信号提取、隔离与放大}{72}{subsubsection.0.4.2.3}%
+\contentsline {paragraph}{\numberline {a}1. 输出信号的特点}{72}{paragraph.0.4.2.3.1}%
+\contentsline {paragraph}{\numberline {b}2. 环行器与隔离器的作用}{73}{paragraph.0.4.2.3.2}%
+\contentsline {paragraph}{\numberline {c}3. 放大链的设计原则}{73}{paragraph.0.4.2.3.3}%
+\contentsline {paragraph}{\numberline {d}4. 量子极限放大器与后续低温放大}{74}{paragraph.0.4.2.3.4}%
+\contentsline {paragraph}{\numberline {e}5. 利用噪声可见度比（NVR）验证放大链性能}{75}{paragraph.0.4.2.3.5}%
+\contentsline {subsubsection}{\numberline {4}磁屏蔽与材料选择}{75}{subsubsection.0.4.2.4}%
+\contentsline {subsubsection}{\numberline {5}图8所示典型微波链路的逐级解读}{76}{subsubsection.0.4.2.5}%
+\contentsline {paragraph}{\numberline {a}1. 输入驱动线（绿色与紫色）}{76}{paragraph.0.4.2.5.1}%
+\contentsline {paragraph}{\numberline {b}2. 输出读出线（红色）}{77}{paragraph.0.4.2.5.2}%
+\contentsline {paragraph}{\numberline {c}3. 室温信号处理单元}{77}{paragraph.0.4.2.5.3}%
+\contentsline {paragraph}{\numberline {d}4. 通量控制线（棕色）}{78}{paragraph.0.4.2.5.4}%
+\contentsline {paragraph}{\numberline {e}5. 图中涉及的典型器件}{78}{paragraph.0.4.2.5.5}%
+\contentsline {subsection}{\numberline {C}微波信号处理（Microwave signal processing）}{78}{subsection.0.4.3}%
+\contentsline {subsubsection}{\numberline {1}实验任务与硬件平台}{78}{subsubsection.0.4.3.1}%
+\contentsline {subsubsection}{\numberline {2}单比特控制脉冲的选择与幅度估算}{79}{subsubsection.0.4.3.2}%
+\contentsline {subsubsection}{\numberline {3}IQ 混频与单边带调制（SSB）}{80}{subsubsection.0.4.3.3}%
+\contentsline {paragraph}{\numberline {a}1. 理想的 IQ 混频过程}{80}{paragraph.0.4.3.3.1}%
+\contentsline {paragraph}{\numberline {b}2. 实际 IQ 混频中的三类主要非理想性}{81}{paragraph.0.4.3.3.2}%
+\contentsline {paragraph}{\numberline {c}3. 为什么常选用低边带（LSB）驱动}{82}{paragraph.0.4.3.3.3}%
+\contentsline {paragraph}{\numberline {d}4. 室温射频链中的后续放大、滤波与开关}{82}{paragraph.0.4.3.3.4}%
+\contentsline {section}{\numberline {V}器件表征与标定}{82}{section.0.5}%
+\contentsline {subsection}{\numberline {A}总体目标与工作流}{82}{subsection.0.5.1}%
+\contentsline {subsubsection}{\numberline {1}图 9：单个磁通可调比特调机的依赖图}{83}{subsubsection.0.5.1.1}%
+\contentsline {subsection}{\numberline {B}谱学实验（Spectroscopy experiments）}{84}{subsection.0.5.2}%
+\contentsline {subsubsection}{\numberline {1}基本定义与作用}{84}{subsubsection.0.5.2.1}%
+\contentsline {subsubsection}{\numberline {2}读出谐振腔频率的识别：通常是第一步}{84}{subsubsection.0.5.2.2}%
+\contentsline {subsubsection}{\numberline {3}透射响应 \(S_{21}\) 的线型模型}{85}{subsubsection.0.5.2.3}%
+\contentsline {subsubsection}{\numberline {4}为什么高功率谱学有用：先找 bare 模，再谈精细标定}{86}{subsubsection.0.5.2.4}%
+\contentsline {subsubsection}{\numberline {5}功率扫描：从 bare 频率到 dressed 频率}{86}{subsubsection.0.5.2.5}%
+\contentsline {paragraph}{\numberline {a}核心思想}{87}{paragraph.0.5.2.5.1}%
+\contentsline {paragraph}{\numberline {b}图 10 的物理图像}{87}{paragraph.0.5.2.5.2}%
+\contentsline {paragraph}{\numberline {c}低功率极限的线型与读出功率选择}{87}{paragraph.0.5.2.5.3}%
+\contentsline {paragraph}{\numberline {d}残余热激发与色散位移}{88}{paragraph.0.5.2.5.4}%
+\contentsline {subsubsection}{\numberline {6}用磁通偏置缩小量子比特频率搜索范围}{88}{subsubsection.0.5.2.6}%
+\contentsline {subsubsection}{\numberline {7}双音连续波量子比特谱（two-tone continuous-wave spectroscopy）}{89}{subsubsection.0.5.2.7}%
+\contentsline {paragraph}{\numberline {a}实现上的难点：谱学驱动功率的选择}{90}{paragraph.0.5.2.7.1}%
+\contentsline {subsubsection}{\numberline {8}如何确认找到的确实是目标量子比特模}{90}{subsubsection.0.5.2.8}%
+\contentsline {subsubsection}{\numberline {9}脉冲式双音谱（pulsed two-tone spectroscopy）}{90}{subsubsection.0.5.2.9}%
+\contentsline {subsubsection}{\numberline {10}三音谱与非谐性的测量}{91}{subsubsection.0.5.2.10}%
+\contentsline {paragraph}{\numberline {a}实验思路}{91}{paragraph.0.5.2.10.1}%
+\contentsline {paragraph}{\numberline {b}具体扫描方式}{91}{paragraph.0.5.2.10.2}%
+\contentsline {paragraph}{\numberline {c}谱图中的特征}{92}{paragraph.0.5.2.10.3}%
+\contentsline {subsection}{\numberline {C}单比特实验（Single-qubit experiments）}{92}{subsection.0.5.3}%
+\contentsline {subsubsection}{\numberline {1}进入单比特实验的前提}{92}{subsubsection.0.5.3.1}%
+\contentsline {subsubsection}{\numberline {2}Rabi 实验与 DRAG 标定}{93}{subsubsection.0.5.3.2}%
+\contentsline {paragraph}{\numberline {a}Rabi 实验的核心任务}{93}{paragraph.0.5.3.2.1}%
+\contentsline {paragraph}{\numberline {b}为什么先标定 \(\pi \) 脉冲}{93}{paragraph.0.5.3.2.2}%
+\contentsline {paragraph}{\numberline {c}\(\pi \) 脉冲设计的两个主要考虑}{94}{paragraph.0.5.3.2.3}%
+\contentsline {paragraph}{\numberline {d}DRAG：进一步抑制泄漏与 ac Stark 效应}{94}{paragraph.0.5.3.2.4}%
+\contentsline {subsubsection}{\numberline {3}相干性测量：\(T_1\)、Ramsey、Echo}{95}{subsubsection.0.5.3.3}%
+\contentsline {paragraph}{\numberline {a}\(T_1\) 测量}{96}{paragraph.0.5.3.3.1}%
+\contentsline {paragraph}{\numberline {b}Ramsey 实验与 \(T_2^*\)}{96}{paragraph.0.5.3.3.2}%
+\contentsline {paragraph}{\numberline {c}为什么 Ramsey 常常要“故意失谐”}{97}{paragraph.0.5.3.3.3}%
+\contentsline {paragraph}{\numberline {d}\(T_1\)、\(T_2^*\) 与纯去相位}{97}{paragraph.0.5.3.3.4}%
+\contentsline {paragraph}{\numberline {e}Ramsey 衰减指数 \(n\) 的物理意义}{97}{paragraph.0.5.3.3.5}%
+\contentsline {paragraph}{\numberline {f}Echo 实验与 \(T_2^{\mathrm {E}}\)}{98}{paragraph.0.5.3.3.6}%
+\contentsline {paragraph}{\numberline {g}更广义的 echo 与动态解耦}{98}{paragraph.0.5.3.3.7}%
+\contentsline {paragraph}{\numberline {h}高激发态的相干性也可测量}{98}{paragraph.0.5.3.3.8}%
+\contentsline {paragraph}{\numberline {i}为什么这些测量重要}{98}{paragraph.0.5.3.3.9}%
+\contentsline {subsubsection}{\numberline {4}单比特操作的系统标定：ALLXY、频率精调、DRAG 与脉冲串}{99}{subsubsection.0.5.3.4}%
+\contentsline {paragraph}{\numberline {a}为什么仅有 Rabi 还不够}{99}{paragraph.0.5.3.4.1}%
+\contentsline {paragraph}{\numberline {b}ALLXY：最常用的单比特门误差诊断工具之一}{100}{paragraph.0.5.3.4.2}%
+\contentsline {paragraph}{\numberline {c}ALLXY 为什么强大}{100}{paragraph.0.5.3.4.3}%
+\contentsline {paragraph}{\numberline {d}系统改进单比特门保真度的三步法}{101}{paragraph.0.5.3.4.4}%
+\contentsline {paragraph}{\numberline {e}第一步：用重复 Ramsey 精调量子比特频率}{101}{paragraph.0.5.3.4.5}%
+\contentsline {paragraph}{\numberline {f}第二步：校准 DRAG 系数}{102}{paragraph.0.5.3.4.6}%
+\contentsline {paragraph}{\numberline {g}第三步：用 pulse-train 精调脉冲幅度}{102}{paragraph.0.5.3.4.7}%
+\contentsline {subsection}{\numberline {D}本部分的逻辑主线总结}{103}{subsection.0.5.4}%
+\contentsline {subsection}{\numberline {E}读出优化（Readout optimization）}{104}{subsection.0.5.5}%
+\contentsline {subsubsection}{\numberline {1}好读出的两个核心指标：保真度与 QND 性}{104}{subsubsection.0.5.5.1}%
+\contentsline {subsubsection}{\numberline {2}色散读出的机制}{105}{subsubsection.0.5.5.2}%
+\contentsline {paragraph}{\numberline {a}图 12 的作用}{106}{paragraph.0.5.5.2.1}%
+\contentsline {paragraph}{\numberline {b}读出谐振腔内场的动力学}{106}{paragraph.0.5.5.2.2}%
+\contentsline {paragraph}{\numberline {c}图 12(b) 的物理意义：两条相空间轨迹}{106}{paragraph.0.5.5.2.3}%
+\contentsline {paragraph}{\numberline {d}为什么不能无限增大读出功率}{107}{paragraph.0.5.5.2.4}%
+\contentsline {paragraph}{\numberline {e}输出场与参数 \(\chi \)、\(\kappa \) 的关系}{107}{paragraph.0.5.5.2.5}%
+\contentsline {subsubsection}{\numberline {3}读出过程中的测量诱导退相干}{108}{subsubsection.0.5.5.3}%
+\contentsline {paragraph}{\numberline {a}位移变换}{109}{paragraph.0.5.5.3.1}%
+\contentsline {subsubsection}{\numberline {4}关键读出指标的提取：单次读出、蝴蝶实验与条件概率}{110}{subsubsection.0.5.5.4}%
+\contentsline {paragraph}{\numberline {a}单次读出的统计图像}{110}{paragraph.0.5.5.4.1}%
+\contentsline {paragraph}{\numberline {b}保真度与 QND 的定义}{111}{paragraph.0.5.5.4.2}%
+\contentsline {paragraph}{\numberline {c}蝴蝶测量（butterfly measurement）}{111}{paragraph.0.5.5.4.3}%
+\contentsline {paragraph}{\numberline {d}由两次测量推回测后态}{112}{paragraph.0.5.5.4.4}%
+\contentsline {paragraph}{\numberline {e}蝴蝶实验的意义}{112}{paragraph.0.5.5.4.5}%
+\contentsline {subsubsection}{\numberline {5}读出优化中的权衡：SNR、读出时长、功率与状态扰动}{113}{subsubsection.0.5.5.5}%
+\contentsline {paragraph}{\numberline {a}以方波读出脉冲为例}{113}{paragraph.0.5.5.5.1}%
+\contentsline {paragraph}{\numberline {b}为什么要整形读出脉冲}{113}{paragraph.0.5.5.5.2}%
+\contentsline {paragraph}{\numberline {c}最佳积分权重与匹配滤波思想}{114}{paragraph.0.5.5.5.3}%
+\contentsline {subsubsection}{\numberline {6}测量效率 \(\eta \)}{115}{subsubsection.0.5.5.6}%
+\contentsline {paragraph}{\numberline {a}\(\eta \) 的物理范围}{115}{paragraph.0.5.5.6.1}%
+\contentsline {paragraph}{\numberline {b}高效率读出的实验要求}{116}{paragraph.0.5.5.6.2}%
+\contentsline {subsubsection}{\numberline {7}读出优化部分的小结}{116}{subsubsection.0.5.5.7}%
+\contentsline {subsection}{\numberline {F}双比特门工程（Engineering two-qubit gates）}{117}{subsection.0.5.6}%
+\contentsline {subsubsection}{\numberline {1}快速磁通脉冲型双比特门}{117}{subsubsection.0.5.6.1}%
+\contentsline {paragraph}{\numberline {a}基本思想}{117}{paragraph.0.5.6.1.1}%
+\contentsline {paragraph}{\numberline {b}性能特点}{118}{paragraph.0.5.6.1.2}%
+\contentsline {paragraph}{\numberline {c}优点}{118}{paragraph.0.5.6.1.3}%
+\contentsline {paragraph}{\numberline {d}缺点}{118}{paragraph.0.5.6.1.4}%
+\contentsline {subsubsection}{\numberline {2}全微波驱动型双比特门}{118}{subsubsection.0.5.6.2}%
+\contentsline {paragraph}{\numberline {a}基本思想}{118}{paragraph.0.5.6.2.1}%
+\contentsline {paragraph}{\numberline {b}性能特点}{119}{paragraph.0.5.6.2.2}%
+\contentsline {paragraph}{\numberline {c}优点}{119}{paragraph.0.5.6.2.3}%
+\contentsline {paragraph}{\numberline {d}缺点}{119}{paragraph.0.5.6.2.4}%
+\contentsline {subsubsection}{\numberline {3}参数调制型双比特门}{120}{subsubsection.0.5.6.3}%
+\contentsline {paragraph}{\numberline {a}基本思想}{120}{paragraph.0.5.6.3.1}%
+\contentsline {paragraph}{\numberline {b}方法定位}{120}{paragraph.0.5.6.3.2}%
+\contentsline {paragraph}{\numberline {c}优点}{120}{paragraph.0.5.6.3.3}%
+\contentsline {paragraph}{\numberline {d}缺点}{120}{paragraph.0.5.6.3.4}%
+\contentsline {subsubsection}{\numberline {4}从少比特到多比特：频率碰撞成为核心问题}{121}{subsubsection.0.5.6.4}%
+\contentsline {paragraph}{\numberline {a}理想的两比特 CZ 情形}{121}{paragraph.0.5.6.4.1}%
+\contentsline {paragraph}{\numberline {b}加入第三个比特后的复杂性}{121}{paragraph.0.5.6.4.2}%
+\contentsline {paragraph}{\numberline {c}图 14 的具体说明}{122}{paragraph.0.5.6.4.3}%
+\contentsline {paragraph}{\numberline {d}规模扩展的困难}{122}{paragraph.0.5.6.4.4}%
+\contentsline {subsubsection}{\numberline {5}多比特芯片中的频率设计与架构策略}{122}{subsubsection.0.5.6.5}%
+\contentsline {paragraph}{\numberline {a}频率规划的重要性}{122}{paragraph.0.5.6.5.1}%
+\contentsline {paragraph}{\numberline {b}8 比特单元策略}{123}{paragraph.0.5.6.5.2}%
+\contentsline {paragraph}{\numberline {c}可调耦合器策略}{123}{paragraph.0.5.6.5.3}%
+\contentsline {subsubsection}{\numberline {6}双比特门工程部分的小结}{123}{subsubsection.0.5.6.6}%
+\contentsline {subsection}{\numberline {G}截至目前内容的整体结构总结}{124}{subsection.0.5.7}%
+\contentsline {subsection}{\numberline {H}量子操作表征（Characterization of qubit operations）}{125}{subsection.0.5.8}%
+\contentsline {subsubsection}{\numberline {1}量子门表征的目标与总体思路}{125}{subsubsection.0.5.8.1}%
+\contentsline {subsubsection}{\numberline {2}量子操作的数学表示：CPTP 映射与 PTM}{125}{subsubsection.0.5.8.2}%
+\contentsline {subsubsection}{\numberline {3}门误差的两大来源：相干误差与非相干误差}{126}{subsubsection.0.5.8.3}%
+\contentsline {paragraph}{\numberline {a}1. 相干误差（coherent errors）}{127}{paragraph.0.5.8.3.1}%
+\contentsline {paragraph}{\numberline {b}2. 非相干误差（incoherent errors）}{127}{paragraph.0.5.8.3.2}%
+\contentsline {subsubsection}{\numberline {4}常见性能指标：过程保真度、平均误差、钻石范数与幺正性}{128}{subsubsection.0.5.8.4}%
+\contentsline {subsubsection}{\numberline {5}三类核心门表征协议：QPT、GST 与 RB}{129}{subsubsection.0.5.8.5}%
+\contentsline {paragraph}{\numberline {a}1. 过程层析（QPT）}{129}{paragraph.0.5.8.5.1}%
+\contentsline {paragraph}{\numberline {b}2. 门集层析（GST）}{129}{paragraph.0.5.8.5.2}%
+\contentsline {paragraph}{\numberline {c}3. 随机基准测试（RB）}{130}{paragraph.0.5.8.5.3}%
+\contentsline {subsubsection}{\numberline {6}信息量与实验代价的折中}{130}{subsubsection.0.5.8.6}%
+\contentsline {subsubsection}{\numberline {7}现实 cQED 器件中的隐藏假设与协议局限}{131}{subsubsection.0.5.8.7}%
+\contentsline {paragraph}{\numberline {a}图 15：违反标准门表征假设的典型误差}{131}{paragraph.0.5.8.7.1}%
+\contentsline {subsubsection}{\numberline {8}对现有协议的扩展与修正}{131}{subsubsection.0.5.8.8}%
+\contentsline {paragraph}{\numberline {a}对 RB 的扩展}{132}{paragraph.0.5.8.8.1}%
+\contentsline {paragraph}{\numberline {b}对 GST 的扩展}{132}{paragraph.0.5.8.8.2}%
+\contentsline {subsubsection}{\numberline {9}泄漏表征中的一个典型困难}{132}{subsubsection.0.5.8.9}%
+\contentsline {subsubsection}{\numberline {10}一种更实用的思路：面向物理机制的操作性表征}{133}{subsubsection.0.5.8.10}%
+\contentsline {subsubsection}{\numberline {11}示例：多比特器件中的残余 \(ZZ\) 相互作用}{134}{subsubsection.0.5.8.11}%
+\contentsline {paragraph}{\numberline {a}物理背景}{134}{paragraph.0.5.8.11.1}%
+\contentsline {paragraph}{\numberline {b}二阶近似下的频移}{134}{paragraph.0.5.8.11.2}%
+\contentsline {paragraph}{\numberline {c}残余 idle 哈密顿量}{135}{paragraph.0.5.8.11.3}%
+\contentsline {paragraph}{\numberline {d}它在实验上意味着什么}{135}{paragraph.0.5.8.11.4}%
+\contentsline {paragraph}{\numberline {e}图 16：残余 \(ZZ\) 的回波测量协议}{135}{paragraph.0.5.8.11.5}%
+\contentsline {paragraph}{\numberline {f}这一协议的优点}{136}{paragraph.0.5.8.11.6}%
+\contentsline {subsubsection}{\numberline {12}量子操作表征部分的小结}{136}{subsubsection.0.5.8.12}%
+\contentsline {subsection}{\numberline {I}腔体表征（Cavity characterization）}{137}{subsection.0.5.9}%
+\contentsline {subsubsection}{\numberline {1}高 \(Q\) 腔体在 cQED 中的角色}{137}{subsubsection.0.5.9.1}%
+\contentsline {paragraph}{\numberline {a}图 17(a)：腔体表征的依赖图}{138}{paragraph.0.5.9.1.1}%
+\contentsline {subsubsection}{\numberline {2}典型硬件构型与记号约定}{138}{subsubsection.0.5.9.2}%
+\contentsline {subsubsection}{\numberline {3}表征腔体所依赖的两类关键条件操作}{139}{subsubsection.0.5.9.3}%
+\contentsline {paragraph}{\numberline {a}1. 光子数选择的 transmon 旋转 \(R_\theta ^n\)}{139}{paragraph.0.5.9.3.1}%
+\contentsline {paragraph}{\numberline {b}2. 腔体--transmon 条件相位门 \(C_\Phi \)}{140}{paragraph.0.5.9.3.2}%
+\contentsline {subsubsection}{\numberline {4}腔体频率的测量：cavity spectroscopy}{140}{subsubsection.0.5.9.4}%
+\contentsline {subsubsection}{\numberline {5}色散耦合 \(\chi \) 的测量：number splitting 与 Ramsey revival}{141}{subsubsection.0.5.9.5}%
+\contentsline {paragraph}{\numberline {a}1. 数分裂实验（number splitting）}{141}{paragraph.0.5.9.5.1}%
+\contentsline {paragraph}{\numberline {b}2. Ramsey revival}{141}{paragraph.0.5.9.5.2}%
+\contentsline {subsubsection}{\numberline {6}腔体相干性的表征：\(T_1\) 与 \(T_2\)}{142}{subsubsection.0.5.9.6}%
+\contentsline {paragraph}{\numberline {a}1. 腔体 \(T_1\)：光子损耗时间}{142}{paragraph.0.5.9.6.1}%
+\contentsline {paragraph}{\numberline {b}2. 腔体 \(T_2\)：相位相干时间}{143}{paragraph.0.5.9.6.2}%
+\contentsline {paragraph}{\numberline {c}图 17 中关于相干测量的补充}{143}{paragraph.0.5.9.6.3}%
+\contentsline {subsubsection}{\numberline {7}任意腔态的奇偶测量：QND 光子数奇偶读出}{144}{subsubsection.0.5.9.7}%
+\contentsline {paragraph}{\numberline {a}这一协议的意义}{145}{paragraph.0.5.9.7.1}%
+\contentsline {subsubsection}{\numberline {8}Wigner 函数与腔体态层析}{145}{subsubsection.0.5.9.8}%
+\contentsline {subsubsection}{\numberline {9}腔体表征与玻色子纠错的关系}{146}{subsubsection.0.5.9.9}%
+\contentsline {subsubsection}{\numberline {10}腔体表征部分的小结}{146}{subsubsection.0.5.9.10}%
+\contentsline {subsection}{\numberline {J}本轮新增内容的整体总结}{147}{subsection.0.5.10}%
+\contentsline {section}{\numberline {VI}迈向鲁棒大规模量子计算：NISQ器件、腔基逻辑量子比特与展望}{150}{section.0.6}%
+\contentsline {subsection}{\numberline {A}总体脉络：从小型器件标定走向大规模量子计算}{150}{subsection.0.6.1}%
+\contentsline {subsection}{\numberline {B}NISQ器件：规模、性能指标与近期应用}{151}{subsection.0.6.2}%
+\contentsline {subsubsection}{\numberline {1}仅有“比特数”并不足以衡量处理器能力}{151}{subsubsection.0.6.2.1}%
+\contentsline {subsubsection}{\numberline {2}电路深度与量子体积}{151}{subsubsection.0.6.2.2}%
+\contentsline {subsubsection}{\numberline {3}量子体积的局限与NISQ应用的现实逻辑}{152}{subsubsection.0.6.2.3}%
+\contentsline {subsubsection}{\numberline {4}大规模NISQ系统的表征与自动化标定难题}{153}{subsubsection.0.6.2.4}%
+\contentsline {subsubsection}{\numberline {5}器件良率、模块化集成与工程约束}{153}{subsubsection.0.6.2.5}%
+\contentsline {subsubsection}{\numberline {6}低温与微波基础设施的扩展问题}{154}{subsubsection.0.6.2.6}%
+\contentsline {subsection}{\numberline {C}基于腔体的逻辑量子比特：玻色子编码、模块化架构与新型辅助线路}{155}{subsection.0.6.3}%
+\contentsline {subsubsection}{\numberline {1}连续变量路线与玻色子编码的核心优势}{155}{subsubsection.0.6.3.1}%
+\contentsline {subsubsection}{\numberline {2}模块化量子计算架构中的地位}{155}{subsubsection.0.6.3.2}%
+\contentsline {subsubsection}{\numberline {3}为什么3D超导腔特别适合作为逻辑单元}{156}{subsubsection.0.6.3.3}%
+\contentsline {subsubsection}{\numberline {4}大希尔伯特空间、误差模型与玻色子纠错的简化}{157}{subsubsection.0.6.3.4}%
+\contentsline {subsubsection}{\numberline {5}从“能存”到“能算”：逻辑门与容错操作的挑战}{158}{subsubsection.0.6.3.5}%
+\contentsline {subsubsection}{\numberline {6}当前主流架构的局限：transmon辅助比特并非终点}{158}{subsubsection.0.6.3.6}%
+\contentsline {subsubsection}{\numberline {7}新型辅助电路：三波混频、ATS与驱动玻色子辅助单元}{159}{subsubsection.0.6.3.7}%
+\contentsline {subsubsection}{\numberline {8}模块间量子通信：从“局域纠错”走向“全系统互联”}{160}{subsubsection.0.6.3.8}%
+\contentsline {subsection}{\numberline {D}总结与展望}{160}{subsection.0.6.4}%

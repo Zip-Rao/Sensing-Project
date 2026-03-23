@@ -50,7 +50,6 @@ class TransmonQubit:
 
         # 计算哈密顿量
         self.hamiltonian = self.get_hamiltonian()
-
         
         
     def calculate_frequency(self):
@@ -63,6 +62,27 @@ class TransmonQubit:
         计算Transmon Qubit的非谐性（GHz）
         '''
         return -self.EC
+
+    def frequency_sensitivity(self, delta_flux=1e-6):
+        '''
+        计算Transmon Qubit频率对磁通的敏感度（GHz/Φ0）
+        使用中心差分法计算数值导数
+        :param delta_flux: 磁通变化量（Φ0），用于有限差分计算
+        '''
+        # 计算磁通增加delta_flux时的频率
+        flux_plus = self.flux + delta_flux
+        EJ_plus = self.EJ_0 * abs(math.cos(math.pi * flux_plus))
+        f_plus = np.sqrt(8 * EJ_plus * self.EC) - self.EC
+
+        # 计算磁通减少delta_flux时的频率
+        flux_minus = self.flux - delta_flux
+        EJ_minus = self.EJ_0 * abs(math.cos(math.pi * flux_minus))
+        f_minus = np.sqrt(8 * EJ_minus * self.EC) - self.EC
+
+        # 中心差分计算导数
+        df_dphi = (f_plus - f_minus) / (2 * delta_flux)
+        return df_dphi
+
     def get_hamiltonian(self):
         '''
         计算Transmon Qubit的哈密顿量 ，
@@ -92,6 +112,41 @@ class TransmonQubit:
         H_rwa = H_0 + H_1
         return H_rwa
     
+    def get_collapse_operators(self):
+        '''
+        返回Lindblad算符列表，包含退相干噪声算符
+        '''
+        gamma_1 = 1 / self.T1  # 弛豫率
+        gamma_phi = 1 / self.T2 - 0.5 * gamma_1  # 纯退相干率
+        c_ops = []
+        # 添加退相干噪声算符
+        c_ops.append(np.sqrt(gamma_1) * self.a)
+        c_ops.append(np.sqrt(gamma_phi) * self.n)
+        return c_ops
+    
+    def generate_1f_noise(self, t_lists, amplitude, f_min, f_max):
+        '''
+        生成1/f噪声时间序列
+        :param amplitude: 噪声幅度
+        :param f_min: 最小频率（Hz）
+        :param f_max: 最大频率（Hz）
+        :param t_lists: 时间列表（ns）  
+        '''
+        dt = t_lists[1] - t_lists[0]  # 时间步长
+        n = len(t_lists)
+        freqs = np.fft.fftfreq(n, dt)
+        spectrum = np.zeros(n, dtype=complex)
+        for i in range(1, n // 2):
+            f = abs(freqs[i])
+            if f_min <= f <= f_max:
+                spectrum[i] = amplitude / np.sqrt(f) * (np.random.normal() + 1j * np.random.normal())
+        # 对称化，保证实数
+        spectrum[n // 2 + 1:] = np.conj(spectrum[1:n // 2][::-1])
+        noise = np.fft.ifft(spectrum).real
+        return noise
+
+
+
     def calculate_state_projection(self, target_state):
         '''
         计算Transmon Qubit处在目标态的投影率
@@ -105,39 +160,56 @@ class TransmonQubit:
         prob = expect(proj, self.state)
         return float(prob.real)
     
-    def qubit_under_mag(self,Phi_signal:Signal):
+    def qubit_under_mag(self,Phi_signal:Signal, is_noise = False):
         '''
         计算Transmon Qubit在外加磁通信号下的频率变化
         :param Phi_signal: 外加磁通信号（Signal对象）
         '''
         qubit = []
+        if is_noise:
+            noise = self.generate_1f_noise(Phi_signal.t_list, amplitude=0.001, f_min=1e-3, f_max=1e3)
         for t in Phi_signal.t_list:
             qubit.append(TransmonQubit(
                 EC=self.EC,
                 EJ=self.EJ_0,
                 T1=self.T1,
                 T2=self.T2,
-                flux=self.flux + Phi_signal.value_at(t),
+                flux=(self.flux + Phi_signal.value_at(t) + noise[t]) if is_noise else (self.flux + Phi_signal.value_at(t)),
                 state=self.state,
                 n_levels=self.n_levels
             ))
         return qubit
+    
+    def change_flux(self, flux):
+        '''
+        改变Transmon Qubit的外加磁通，更新频率和哈密顿量
+        :param flux: 新的外加磁通（单位：Φ0）
+        '''
+        self.flux = flux
+        self.EJ = self.EJ_0 * abs(math.cos(math.pi * flux))
+        self.frequency = self.calculate_frequency()
+        self.anharmonicity = self.calculate_anharmonicity()
+        self.hamiltonian = self.get_hamiltonian()
+
     def sensitivity(self):
         '''
         计算Transmon Qubit的灵敏度
         '''
 
     
-    def sweet_point(self):
+    def optimal_work_point(self):
         '''
-        计算Transmon Qubit的甜点位置
+        计算Transmon Qubit的最优工作位置
+        此处的工作位置意为频率对磁通变化斜率最大的磁通点
         '''
-        return 0
+        Phi = np.arctan(np.sqrt(2))
+        return Phi
 
     def flux_noise(self):
         '''
         计算Transmon Qubit的磁通噪声影响
         '''
+
         pass
     def ideal_gate(self, theta, phi):
         '''

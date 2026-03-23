@@ -26,7 +26,7 @@ class Signal:
         '''
         default_params = {
             'amplitude': 1.0,
-            'frequency': 1.0,   #(GHZ)
+            'frequency': 0.1,   #(GHZ)
             'phase': 0.0,       #(rad)
             'center': 0.0,      #(ns)
             'width': 1.0,       #(ns)
