@@ -50,6 +50,7 @@ class TransmonQubit:
 
         # 计算哈密顿量
         self.hamiltonian = self.get_hamiltonian()
+        self.c_ops = self.get_collapse_operators()
         
         
     def calculate_frequency(self):

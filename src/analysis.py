@@ -226,17 +226,19 @@ def forward_simulation(qubit, control_pulse, b, t_list):
         B += b[k] * phi_k(t_list)
     result = []
     qubit_t = qubit.qubit_under_mag(B)
+    def H_total(t, t_i, args):
+        index = np.searchsorted(t_list, t)
+        index = min(index, len(t_list)-1)  # 确保索引不越界
+        qubit_current = qubit_t[index]
+        H_0_current = qubit_current.get_hamiltonian(qubit.frequency) if control_pulse.frame == 0 else qubit_current.get_hamiltonian_rwa(qubit.frequency)
+        if t_i - 0.5 * control_pulse.t_list[-1] <= t <= t_i + 0.5 * control_pulse.t_list[-1]:
+            return H_0_current + control_pulse.get_hamiltonian(t - t_i + 0.5 * control_pulse.t_list[-1])
+        else:
+            return H_0_current
+        
     for t_i in t_list:
-        def H_total(t, args):
-            index = np.searchsorted(t_list, t)
-            index = min(index, len(t_list)-1)  # 确保索引不越界
-            qubit_current = qubit_t[index]
-            H_0_current = qubit_current.get_hamiltonian(qubit.frequency) if control_pulse.frame == 0 else qubit_current.get_hamiltonian_rwa(qubit.frequency)
-            if t_i - 0.5 * control_pulse.t_list[-1] <= t <= t_i + 0.5 * control_pulse.t_list[-1]:
-                return H_0_current + control_pulse.get_hamiltonian(t - t_i + 0.5 * control_pulse.t_list[-1])
-            else:
-                return H_0_current
-        result.append(mesolve(H_total, qubit.state, t_list, [], e_ops=[basis(qubit.n_levels, 1) * basis(qubit.n_levels, 1).dag()]))
+        H = lambda t, args: H_total(t, t_i, args)
+        result.append(mesolve(H, qubit.state, t_list, [], e_ops=[basis(qubit.n_levels, 1) * basis(qubit.n_levels, 1).dag()]))
     return result
 
 def compute_jacobian(qubit, control_pulse, b, n_basis, t_lists):
@@ -246,13 +248,77 @@ def compute_jacobian(qubit, control_pulse, b, n_basis, t_lists):
     N = len(t_lists)
     M = n_basis
     J = np.zeros((N, M))
+    dim = qubit.state.shape[0]
     
+    B = np.zeros_like(t_lists)
+    for k, phi_k in enumerate(b):
+        B += b[k] * phi_k(t_lists)
+    qubit_t = qubit.qubit_under_mag(B)
+    sensitivity = [qubit_t[n].calculate_sensitivity() for n in range(len(t_lists))]
+    def H_total(t, t_i, args):
+        index = np.searchsorted(t_lists, t)
+        index = min(index, len(t_lists)-1)  # 确保索引不越界
+        qubit_current = qubit_t[index]
+        H_0_current = qubit_current.get_hamiltonian(qubit.frequency) if control_pulse.frame == 0 else qubit_current.get_hamiltonian_rwa(qubit.frequency)
+        if t_i - 0.5 * control_pulse.t_list[-1] <= t <= t_i + 0.5 * control_pulse.t_list[-1]:
+            return H_0_current + control_pulse.get_hamiltonian(t - t_i + 0.5 * control_pulse.t_list[-1])
+        else:    
+            return H_0_current
     # 前向传播
     result = forward_simulation(qubit, control_pulse, b, t_lists)
     states = result.states
+    p_sim = np.array([res.expect[0] for res in result])  # 模拟的测量结果
+
     for i in range(N):
-        t_obs = t_lists[i]
-        index = np.searchsorted(t_lists, t_obs)
+        t_i = t_lists[i]
+        from scipy.integrate import solve_ivp
+
+        def adjoint(s, mu, *args):
+            t_curr = t_i - s
+            H = H_total(t_curr, t_i, args)
+            rhs = 1j * (H @ mu - mu @ H)
+            for k in range(len(qubit.c_ops)):
+                c_k = qubit.c_ops[k]
+                rhs += c_k.dag() @ mu @ c_k - 0.5 * (c_k.dag() @ c_k @ mu + mu @ c_k.dag() @ c_k)
+            return rhs
+        
+        mu_0 = basis(qubit.n_levels, 1) * basis(qubit.n_levels, 1).dag()  # 期望值操作符
+        s_max = t_i
+        s_list = t_i - t_lists[:i+1][::-1]
+        sol = solve_ivp(
+                adjoint,
+                t_span=(0, s_max),
+                y0=mu_0,
+                method='RK45',
+                t_eval=s_list,
+                rtol=1e-9,
+                atol=1e-11,
+                max_step=1e-10
+            )
+        
+        N_s = len(sol.t)
+        lambda_t = np.zeros((i+1, dim, dim), dtype=complex)
+        for n in range(N_s):
+            j = i - n
+            lambda_t[j] = sol.y[:, n].reshape((dim, dim))
+
+        trace_values = np.zeros(i + 1, dtype=complex)
+        for n in range(i + 1):
+            rho_n = states[n]       # ρ(t_n), 前向轨迹
+            lam_n = lambda_t[n]    # λ(t_n), 伴随轨迹
+            G_mat = qubit.n 
+            trace_values[n] = np.trace(lam_n @ (G_mat @ rho_n - rho_n @ G_mat))
+
+        g_values = -1j * sensitivity[:i+1] * trace_values
+        t_int = t_lists[:i+1]  # 积分的时间轴
+        for k in range(M):
+            integrand_k = g_values * phi_k(t_lists[:i+1])
+            integral = np.trapezoid(integrand_k, t_int)
+            J[i, k] = np.real(integral)  # 取实部，虚部应为数值零
+    return J
+
+
+
 
     
 def levenberg_marquardt(qubit, p_meas, t_meas, control_pulse, basis_functions, n_basis, reg, b_init = None, max_iter = 50, tol = 1e-6, mu_init = 1e-3):
