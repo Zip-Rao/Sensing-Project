@@ -138,7 +138,7 @@ class Analysis:
         B_list = omega_lists  # 磁场的时间轴与频率响应的时间轴相同
         return B_list, B
     
-    def numerical_inverse(self, qubit, control_pulse, p_meas, t_meas, basis_type = 'bspline', n_basis=10, lambdas=1.0, max_iter=100, tol=1e-6):
+    def numerical_inverse(self, qubit, control_pulse, p_meas, t_meas, B_guess, basis_type = 'bspline', n_basis=10, lambdas=1.0, max_iter=100, tol=1e-6):
         '''
         基于全密度矩阵模拟的数值反演算法，考虑非线性响应和退相干
         通过优化算法调整输入磁场信号，使得模拟的测量结果与实际测量结果p_meas尽可能接近
@@ -150,6 +150,15 @@ class Analysis:
         :param max_iter: 最大迭代次数
         :param tol: 收敛容忍度
         '''
+        basis_funcs = generate_basis_functions(basis_type, n_basis, t_meas[0], t_meas[-1])
+        b_opt, history = levenberg_marquardt(qubit, B_guess, p_meas, t_meas, control_pulse, basis_funcs, lambdas, max_iter, tol)
+        B_opt = np.zeros_like(t_meas)
+        for k, phi_k in enumerate(basis_funcs):
+            B_opt += b_opt[k] * phi_k(t_meas)
+        return B_opt, history
+    
+    
+    
 
         
 
@@ -189,7 +198,7 @@ def generate_basis_functions(basis_type, n_basis, t_min, t_max):
     else:
         raise ValueError("Unsupported basis type")
 
-def basis_function_decomposition(signal, t_array, basis_functions, n_basis):
+def basis_function_decomposition(signal, t_array, basis_functions):
     '''
     将信号分解到基函数上，得到基函数系数
     :param signal: 待分解的信号 (signal_len)
@@ -198,6 +207,7 @@ def basis_function_decomposition(signal, t_array, basis_functions, n_basis):
     '''
     from scipy.integrate import simpson
     from scipy.interpolate import interp1d
+    n_basis = len(basis_functions)
     f = interp1d(t_array, signal, kind='cubic', fill_value="extrapolate")
     b = np.zeros(n_basis)
     for i in range(n_basis):
@@ -217,12 +227,12 @@ def D(n):
         D[i, i+2] = 1
     return D
 
-def forward_simulation(qubit, control_pulse, b, t_list):
+def forward_simulation(qubit, control_pulse, b, basis_functions, t_list):
     '''
     正向模拟，根据输入的基函数系数b生成磁场信号，并模拟延迟t时刻施加脉冲信号的测量结果
     '''
     B = np.zeros_like(t_list)
-    for k, phi_k in enumerate(b):
+    for k, phi_k in enumerate(basis_functions):
         B += b[k] * phi_k(t_list)
     result = []
     qubit_t = qubit.qubit_under_mag(B)
@@ -241,17 +251,17 @@ def forward_simulation(qubit, control_pulse, b, t_list):
         result.append(mesolve(H, qubit.state, t_list, [], e_ops=[basis(qubit.n_levels, 1) * basis(qubit.n_levels, 1).dag()]))
     return result
 
-def compute_jacobian(qubit, control_pulse, b, n_basis, t_lists):
+def compute_jacobian(qubit, control_pulse, b, basis_functions, t_lists):
     '''
     伴随方法计算雅可比矩阵
     '''
     N = len(t_lists)
-    M = n_basis
+    M = len(basis_functions)
     J = np.zeros((N, M))
     dim = qubit.state.shape[0]
     
     B = np.zeros_like(t_lists)
-    for k, phi_k in enumerate(b):
+    for k, phi_k in enumerate(basis_functions):
         B += b[k] * phi_k(t_lists)
     qubit_t = qubit.qubit_under_mag(B)
     sensitivity = [qubit_t[n].calculate_sensitivity() for n in range(len(t_lists))]
@@ -265,7 +275,7 @@ def compute_jacobian(qubit, control_pulse, b, n_basis, t_lists):
         else:    
             return H_0_current
     # 前向传播
-    result = forward_simulation(qubit, control_pulse, b, t_lists)
+    result = forward_simulation(qubit, control_pulse, b, basis_functions, t_lists)
     states = result.states
     p_sim = np.array([res.expect[0] for res in result])  # 模拟的测量结果
 
@@ -321,22 +331,21 @@ def compute_jacobian(qubit, control_pulse, b, n_basis, t_lists):
 
 
     
-def levenberg_marquardt(qubit, p_meas, t_meas, control_pulse, basis_functions, n_basis, reg, b_init = None, max_iter = 50, tol = 1e-6, mu_init = 1e-3):
+def levenberg_marquardt(qubit, B_guess, p_meas, t_meas, control_pulse, basis_functions, reg, max_iter = 50, tol = 1e-6, mu_init = 1e-3):
     '''
     Levenberg-Marquardt优化算法，用于最小化模拟测量结果与实际测量结果之间的差异
     :param qubit: 量子比特对象
+    :param B_guess: 初始的磁场猜测值
     :param p_meas: 实际测量的概率变化 (signal_len)
     :param t_meas: 实际测量的时间轴 (signal_len)
     :param control_pulse: 控制脉冲对象，用于模拟测量结果
     :param basis_functions: 用于表示输入磁场信号的基函数列表
-    :param b_init: 初始的基函数系数，可以是随机的或基于先验知识的
     :param max_iter: 最大迭代次数
     :param tol: 收敛容忍度
     :param mu_init: 初始的阻尼参数
     '''
-    if b_init is None:
-        # 用wiener反卷积的结果作为初始值
-        b_init = basis_function_decomposition(p_meas, t_meas, basis_functions, n_basis)
+    n_basis = len(basis_functions) 
+    b_init = basis_function_decomposition(B_guess, t_meas, basis_functions, n_basis)
     b = b_init.copy()
     mu = mu_init
     history = {
@@ -347,19 +356,19 @@ def levenberg_marquardt(qubit, p_meas, t_meas, control_pulse, basis_functions, n
     
     for iter in range(max_iter):
         # 正向模拟
-        result = forward_simulation(qubit, control_pulse, b, t_meas)
+        result = forward_simulation(qubit, control_pulse, b, basis_functions,t_meas)
         p_sim = np.array([res.expect[0] for res in result])  # 模拟的测量结果
         # 计算残差
         res = np.linalg.norm(p_meas - p_sim)
         history['res'].append(res)
         # 计算雅可比矩阵
-        J = compute_jacobian(qubit, control_pulse, b, n_basis, t_meas)
+        J = compute_jacobian(qubit, control_pulse, b, basis_functions, t_meas)
 
         A = J.T @ J + mu * np.eye(n_basis) + reg * D(n_basis).T @ D(n_basis) # 正则化的Hessian矩阵
 
         delta_b = np.linalg.solve(A, J.T @ res)  # 计算参数更新
         b_trial = b + delta_b
-        result_trial = forward_simulation(qubit, control_pulse, b_trial, t_meas)
+        result_trial = forward_simulation(qubit, control_pulse, b_trial, basis_functions, t_meas)
         p_sim_trial = np.array([res.expect[0] for res in result_trial])
         res_trial = np.linalg.norm(p_meas - p_sim_trial)
         if res > res_trial:

@@ -91,7 +91,7 @@ class Protocal:
                 analysis = Analysis()
                 t_samples, kernel = analysis.get_kernel(control_pulse, qubit)
                 delta_p = np.array(p_e) - np.array(p_e_base)
-                return t_samples, kernel, scan_list, delta_p
+                return t_samples, kernel, scan_list, delta_p, p_e, Phi, control_pulse
             
     def single_measurement(self, qubit:TransmonQubit, Phi_signal:Signal, control_pulse:CompositePulse, t_delay):
         '''
