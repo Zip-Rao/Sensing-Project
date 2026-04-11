@@ -64,19 +64,19 @@ class TransmonQubit:
         '''
         return -self.EC
 
-    def frequency_sensitivity(self, delta_flux=1e-6):
+    def frequency_sensitivity(self, flux, delta_flux=1e-6):
         '''
         计算Transmon Qubit频率对磁通的敏感度（GHz/Φ0）
         使用中心差分法计算数值导数
         :param delta_flux: 磁通变化量（Φ0），用于有限差分计算
         '''
         # 计算磁通增加delta_flux时的频率
-        flux_plus = self.flux + delta_flux
+        flux_plus = flux + delta_flux
         EJ_plus = self.EJ_0 * abs(math.cos(math.pi * flux_plus))
         f_plus = np.sqrt(8 * EJ_plus * self.EC) - self.EC
 
         # 计算磁通减少delta_flux时的频率
-        flux_minus = self.flux - delta_flux
+        flux_minus = flux - delta_flux
         EJ_minus = self.EJ_0 * abs(math.cos(math.pi * flux_minus))
         f_minus = np.sqrt(8 * EJ_minus * self.EC) - self.EC
 
@@ -92,7 +92,7 @@ class TransmonQubit:
         a = self.a
         a_dag = self.a_dag
         n = self.n
-        H_0 = -self.EJ * qeye(n_levels)
+        H_0 = (-self.EJ + 0.25 * self.EC) * qeye(n_levels)
         H_1 = self.frequency * (n + 0.5 * qeye(n_levels))
         H_2 = (self.anharmonicity / 2) * (n * n - n)
         H = H_0 + H_1 + H_2
@@ -179,8 +179,52 @@ class TransmonQubit:
                 state=self.state,
                 n_levels=self.n_levels
             ))
+        
         return qubit
     
+    def qubit_under_mag_hamiltonian(self, qubit_t, t_list, frame = 0, omega_d = None):
+        '''
+        当qubit处于时变磁场下时，计算qubit的哈密顿量随时间的变化
+        '''
+        H_list = []
+        freq_coeffs = np.zeros(len(t_list))
+
+        for i, t in enumerate(t_list):
+            qubit_current = qubit_t[i]
+            if frame == 0:
+                freq_coeffs[i] = qubit_current.frequency
+            else:
+                freq_coeffs[i] = qubit_current.frequency - omega_d
+
+        H_list.append(qubit_current.anharmonicity * 0.5 * (self.n * self.n - self.n))
+        H_list.append([self.n + 0.5 * qeye(self.n_levels), freq_coeffs])
+        return H_list
+    
+    def qubit_in_mag(self, Phi_signal:Signal, frame = 0, omega_d = None):
+        '''
+        优化后的计算Transmon Qubit在外加磁通信号下的频率变化的方法，直接计算哈密顿量随时间的变化，而不是每个时间点都构建一个新的TransmonQubit对象
+        '''
+        self.isinmag = True
+        self.mag_signal = Phi_signal
+
+        t_list = Phi_signal.t_list
+        H_list = []
+        freq_coeffs = np.zeros(len(t_list))
+        for i, t in enumerate(t_list):
+            flux = self.flux + Phi_signal.value_at(t)
+            EJ = self.EJ_0 * abs(math.cos(math.pi * flux))
+            frequency = np.sqrt(8 * EJ * self.EC) - self.EC
+            if frame == 0:
+                freq_coeffs[i] = frequency
+            else:
+                freq_coeffs[i] = frequency - omega_d
+        self.freq_coeffs = freq_coeffs
+        H_list.append(self.anharmonicity * 0.5 * (self.n * self.n - self.n))
+        H_list.append([self.n + 0.5 * qeye(self.n_levels), freq_coeffs])
+        self.H_list = H_list
+
+
+
     def change_flux(self, flux):
         '''
         改变Transmon Qubit的外加磁通，更新频率和哈密顿量

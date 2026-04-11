@@ -1,7 +1,6 @@
 '''
 创建脉冲类，定义传感中的虚拟脉冲，可用于构建脉冲序列及其哈密顿量
 支持旋转系和实验系的脉冲定义，支持控制旋转角度
-TODO:给脉冲类加一个kernel属性，表示该脉冲的控制核函数，未来可以直接用来做卷积和反卷积
 '''
 
 import numpy as np
@@ -31,6 +30,9 @@ class Pulse:
         else:
             self.n_levels = 2  # 默认两能级，向后兼容
 
+        self.hamiltonian, self.t_list = self.get_hamiltonian()
+
+
     def get_Rabi_frequency(self, t):
         '''
         获取脉冲在时间t处的Rabi频率
@@ -42,7 +44,7 @@ class Pulse:
         elif isinstance(self.Omega, (int, float)):
             return self.Omega
     
-    def get_hamiltonian(self, t):
+    def get_hamiltonian_at(self, t):
         '''
         获取脉冲在时间t处的哈密顿量，使用湮灭算符a和产生算符a^†表示
         :param t: 时间点（ns）
@@ -64,6 +66,37 @@ class Pulse:
                 phase_cr = 2 * self.omega_d * t + self.phase
                 H_cr = Omega_t / 2 * (a * np.exp(-1j * phase_cr) + adag * np.exp(1j * phase_cr))
                 return H_rwa + H_cr
+    
+    def get_hamiltonian(self):
+        '''
+        获取脉冲在时间t处的哈密顿量，使用湮灭算符a和产生算符a^†表示
+        返回qutip列表格式
+        :param t: 时间点（ns）
+        '''
+        n = self.n_levels
+        a = destroy(n)  # 湮灭算符
+        adag = create(n)  # 产生算符
+        t_list = np.asarray(self.Omega.t_list)
+        Omega = np.array([self.get_Rabi_frequency(t) for t in self.Omega.t_list]) if isinstance(self.Omega, Signal) else self.Omega
+        
+        if self.frame == 0:  # 实验系
+            coeff = Omega * np.cos(self.omega_d * t_list + self.phase)
+            H = [[a + adag,  coeff]]
+
+        else:  # 旋转系
+            # rwa
+            H1 = 0.5 * (a * np.exp(1j * self.phase) + adag * np.exp(-1j * self.phase))
+            coeff_rwa = Omega
+            if self.is_rwa:
+                H = [[H1,  coeff_rwa]]
+            else:
+                # cr
+                H_cr1 = 0.5 * a * np.exp(-1j * self.phase)
+                H_cr2 = 0.5 * adag * np.exp(1j * self.phase)
+                coeff_cr1 = Omega * np.exp(-2j * self.omega_d * t_list)
+                coeff_cr2 = Omega * np.exp(2j * self.omega_d * t_list)
+                H = [[H1, coeff_rwa], [H_cr1,  coeff_cr1], [H_cr2,  coeff_cr2]]
+        return H, t_list
     
     def get_angle(self, qubit:TransmonQubit=None):
         '''
@@ -135,11 +168,12 @@ class Pulse:
         psi_e = basis(qubit.n_levels, 1)
 
         if self.frame == 0:
-            H_0 = qubit.get_hamiltonian(qubit.frequency)
+            H_0 = QobjEvo(qubit.get_hamiltonian(qubit.frequency))
         else:
-            H_0 = qubit.get_hamiltonian_rwa(qubit.frequency)
-        H_pulse = lambda t: self.get_hamiltonian(t)
-        H_base = lambda t, args: H_0 + H_pulse(t)
+            H_0 = QobjEvo(qubit.get_hamiltonian_rwa(qubit.frequency))
+        H_pulse = QobjEvo(self.hamiltonian, tlist = t_list, order = 1)
+        H_base = H_0 + H_pulse    
+
         result_base = mesolve(H_base, qubit.state, t_list, [], e_ops=[psi_e * psi_e.dag()])
         p_e_base = result_base.expect[0][-1]
         for i in samples:
@@ -151,9 +185,10 @@ class Pulse:
                 center = t_i,
                 width = 2  # 待完善：自动调整宽度，足够窄
             )
-            H_stim = [sigmaz(), stim_pulse]  # 待完善，支持更多能级
+            H_stim = QobjEvo([sigmaz(), stim_pulse.signal], tlist = stim_pulse.t_list, order = 1)  # TODO，支持更多能级
             stim_area = stim_pulse.params['amplitude'] * stim_pulse.params['width'] / 4 * np.sqrt(2 * np.pi)
-            H_total = lambda t, args: H_0 + H_pulse(t) + H_stim[0] * H_stim[1].value_at(t)
+            H_total = H_0 + H_pulse + H_stim
+            # H_total = lambda t, args: H_0 + H_pulse(t) + H_stim[0] * H_stim[1].value_at(t)
             result_stim = mesolve(H_total, qubit.state, t_list, [], e_ops=[psi_e * psi_e.dag()])
             p_e_stim = result_stim.expect[0][-1]
             kernel.append((p_e_stim-p_e_base) / stim_area)
@@ -172,6 +207,8 @@ class CompositePulse:
         self.t_list = self.get_t_list()
         self.frame = pulses[0].frame 
         self.omega_d = pulses[0].omega_d
+        self.hamiltonian, _ = self.get_hamiltonian()
+
     def get_t_list(self):
         '''
         获取复合脉冲的时间列表，返回list形式
@@ -179,10 +216,11 @@ class CompositePulse:
         t_list = []
         curr = 0.0
         for pulse in self.pulses:
-            pulse_list = [t + curr for t in pulse.Omega.t_list]
+            pulse_list = [t + curr for t in pulse.Omega.t_list]  # 避免重复时间点
             t_list.extend(pulse_list)
             if pulse_list:
-                curr = pulse_list[-1]
+                # 保证t_list没有重复的时间点
+                curr = pulse_list[-1] + 1e-9  # 在最后一个时间点基础上加一个小的时间间隔，避免重复，同时两个脉冲之间有一个小的间隔，从而避开coeff边界的处理
         return t_list
     
     def get_Omega(self,t):
@@ -196,17 +234,40 @@ class CompositePulse:
             curr += pulse.Omega.t_list[-1]
 
 
-    def get_hamiltonian(self, t):
+    def get_hamiltonian_at(self, t):
         '''
         获取复合脉冲在时间t处的哈密顿量
         '''
         curr = 0.0
         for pulse in self.pulses:
             if t >= curr and t <= curr + pulse.Omega.t_list[-1]:
-                return pulse.get_hamiltonian(t - curr)
+                return pulse.get_hamiltonian_at(t - curr)
             curr += pulse.Omega.t_list[-1]
 
         return Qobj(np.zeros((pulse.n_levels, pulse.n_levels)))  # 超出范围返回零哈密顿量
+    
+    def get_hamiltonian(self):
+        '''
+        获取复合脉冲的哈密顿量，返回qutip列表格式
+        '''
+        t_global = np.asarray(self.t_list)
+        N = len(t_global)
+        hamiltonian = []
+        curr = 0.0
+        for pulse in self.pulses:
+            term_curr, t_local = pulse.hamiltonian, pulse.t_list
+            duration = t_local[-1] - t_local[0]
+            for op, coeff_local in term_curr:
+                coeff_global = np.zeros(N, dtype = complex)
+                for j, t in enumerate(t_global):
+                    t_loc = t - curr
+                    if t_loc >= t_local[0] and t_loc <= t_local[-1]:
+                        index = np.clip(np.searchsorted(t_local, t_loc) - 1, 0, len(coeff_local) - 1)
+                        coeff_global[j] = coeff_local[index]
+                hamiltonian.append([op, coeff_global])
+            curr += duration
+        return hamiltonian, t_global
+    
     def plot(self):
         '''
         绘制复合脉冲的Rabi频率包络线
@@ -229,16 +290,19 @@ class CompositePulse:
         '''
         kernel = []
         t_list = self.t_list
+        for i in range(len(t_list)-1):
+            if t_list[i] == t_list[i+1]:
+                print(f"Warning: Duplicate time points at index {i} and {i+1} with time {t_list[i]}. This may cause issues in kernel calculation.")
         samples = range(0,len(t_list),1)
         t_samples = t_list[::1]
         psi_e = basis(qubit.n_levels, 1)
 
         if self.frame == 0:
-            H_0 = qubit.get_hamiltonian(qubit.frequency)
+            H_0 = QobjEvo(qubit.get_hamiltonian(qubit.frequency))
         else:
-            H_0 = qubit.get_hamiltonian_rwa(qubit.frequency)
-        H_pulse = lambda t: self.get_hamiltonian(t)
-        H_base = lambda t, args: H_0 + H_pulse(t)
+            H_0 = QobjEvo(qubit.get_hamiltonian_rwa(qubit.frequency))
+        H_pulse = QobjEvo(self.hamiltonian, tlist = t_list, order = 1)
+        H_base = H_0 + H_pulse
         result_base = mesolve(H_base, qubit.state, t_list, [], e_ops=[psi_e * psi_e.dag()])
         p_e_base = result_base.expect[0][-1]
         for i in samples:
@@ -246,13 +310,14 @@ class CompositePulse:
             stim_pulse = Signal(
                 type = 3,
                 t_list = t_list,
-                amplitude = 1,  # 待完善：自动调整幅度，远大于脉冲幅度
+                amplitude = 0.0215,  # 待完善：自动调整幅度，远大于脉冲幅度
                 center = t_i,
-                width = 2  # 待完善：自动调整宽度，足够窄
+                width = 3  # 待完善：自动调整宽度，足够窄
             )
-            H_stim = [sigmaz(), stim_pulse]  # 待完善，支持更多能级
-            stim_area = stim_pulse.params['amplitude'] * stim_pulse.params['width'] / 4 * np.sqrt(2 * np.pi)
-            H_total = lambda t, args: H_0 + H_pulse(t) + H_stim[0] * H_stim[1].value_at(t)
+            stim_area = np.trapezoid(stim_pulse.signal, stim_pulse.t_list)
+            qubit_t = qubit.qubit_under_mag(stim_pulse)
+            H_stim = QobjEvo(qubit.qubit_under_mag_hamiltonian(qubit_t, stim_pulse.t_list, self.frame, self.omega_d), tlist = stim_pulse.t_list, order = 1)
+            H_total = H_0 + H_pulse + H_stim
             result_stim = mesolve(H_total, qubit.state, t_list, [], e_ops=[psi_e * psi_e.dag()])
             p_e_stim = result_stim.expect[0][-1]
             kernel.append((p_e_stim-p_e_base) / stim_area)
@@ -282,12 +347,12 @@ def create_pulse(qubit:TransmonQubit, frame, type, t_list, omega_d, phase, angle
     kwargs['amplitude'] = Omega_signal.params['amplitude']
     signal = Signal(type=type, t_list=t_list, **kwargs)
     pulse = Pulse(frame, omega_d, phase, Omega=signal, is_rwa=True, qubit=qubit)
-    H_t = lambda t: pulse.get_hamiltonian(t)
-    return H_t
+    H_t = pulse.hamiltonian
+    return QobjEvo(H_t, tlist = t_list)
 
 
 
-def create_ramsey_pulse(t_rabi, tau, omega_d=0.0):
+def create_ramsey_pulse(t_rabi, tau, omega_d = 0.0, phase1 = np.pi/2, phase2=0.0):
     '''
     创建Ramsey序列的复合脉冲对象，包含两个π/2脉冲和一个等待时间tau
     :param t_rabi: π/2脉冲的时间列表（ns）
@@ -309,7 +374,7 @@ def create_ramsey_pulse(t_rabi, tau, omega_d=0.0):
     pulses.append(Pulse(
         frame = 1,
         omega_d = omega_d,
-        phase = np.pi / 2.0,
+        phase = phase1,
         Omega = Omega_1,
         is_rwa = True
     ))
@@ -324,10 +389,161 @@ def create_ramsey_pulse(t_rabi, tau, omega_d=0.0):
     pulses.append(Pulse(
         frame = 1,
         omega_d = omega_d,
-        phase = 0.0,
+        phase = phase2,
         Omega = Omega_1,
         is_rwa = True
     ))
     composite_pulse = CompositePulse(pulses)
     return composite_pulse
 
+def create_echo_pulse(t_rabi, tau, omega_d = 0.0, phase1 = 0.0, phase2 = 0.0, phase3 = 0.0):
+    '''
+    
+    创建Spin Echo序列的复合脉冲对象，包含两个π/2脉冲和一个π脉冲，以及等待时间tau
+    :param t_rabi: π/2脉冲的时间列表（ns）
+    :param tau: 等待时间（ns）
+    :param phase1: 第一个π/2脉冲的相位（rad），一般沿x轴
+    :param phase2: π脉冲的相位（rad），一般沿y轴
+    :param phase3: 分析脉冲的相位（rad），可以取x或y轴，或者直接扫描相位以得到Ramsey干涉图
+    '''
+    Omega_0 = Signal(
+        type = 0,
+        t_list = np.linspace(0, tau, 100)  # ns
+    )
+    Omega_1 = Signal(
+        type = 1,
+        t_list = t_rabi,
+        amplitude = ( np.pi / 2.0 ) / ( t_rabi[-1] - t_rabi[0] )  # GHz
+    )
+    Omega_2 = Signal(
+        type = 1,
+        t_list = t_rabi,
+        amplitude = ( np.pi ) / ( t_rabi[-1] - t_rabi[0] )  # GHz
+    )
+    pulses = []
+    # pi/2
+    pulses.append(Pulse(
+        frame = 1,
+        omega_d = omega_d,
+        phase = phase1,
+        Omega = Omega_1,
+        is_rwa = True
+    ))
+    # tau
+    pulses.append(Pulse(
+        frame = 1,
+        omega_d = omega_d,
+        phase = 0.0,
+        Omega = Omega_0,
+        is_rwa = True
+    ))
+    # pi
+    pulses.append(Pulse(
+        frame = 1,
+        omega_d = omega_d,
+        phase = phase2,
+        Omega = Omega_2,
+        is_rwa = True
+    ))
+    # tau
+    pulses.append(Pulse(
+        frame = 1,
+        omega_d = omega_d,
+        phase = 0.0,
+        Omega = Omega_0,
+        is_rwa = True
+    ))
+    # pi/2
+    pulses.append(Pulse(
+        frame = 1,
+        omega_d = omega_d,
+        phase = phase3,
+        Omega = Omega_1,
+        is_rwa = True
+    ))
+    composite_pulse = CompositePulse(pulses)
+    return composite_pulse
+
+def create_cpmg_pulse(t_rabi, tau, n, omega_d, phase1, phase2, phase3):
+    '''
+    创建CPMG序列的复合脉冲对象，包含两个π/2脉冲和n个π脉冲，以及等待时间tau
+    :param t_rabi: π/2脉冲的时间列表（ns）
+    :param tau: 等待时间（ns）
+    :param n: π脉冲的数量
+    :param phase1: 第一个π/2脉冲的相位（rad），一般沿x轴
+    :param phase2: π脉冲的相位（rad），一般沿y轴
+    :param phase3: 分析脉冲的相位（rad），可以取x或y轴，或者直接扫描相位以得到Ramsey干涉图
+    '''
+    # tau/2
+    Omega_0 = Signal(
+        type = 0,
+        t_list = np.linspace(0, tau/2, 100)  # ns
+    )
+    # tau
+    Omega_1 = Signal(
+        type = 0,
+        t_list = np.linspace(0, tau, 100)  # ns
+    )
+    # pi/2
+    Omega_2 = Signal(
+        type = 1,
+        t_list = t_rabi,
+        amplitude = ( np.pi / 2.0 ) / ( t_rabi[-1] - t_rabi[0] )  # GHz
+    )
+    # pi
+    Omega_3 = Signal(
+        type = 1,
+        t_list = t_rabi,
+        amplitude = ( np.pi ) / ( t_rabi[-1] - t_rabi[0] )  # GHz
+    )
+    pulses = []
+    # pi/2
+    pulses.append(Pulse(
+        frame = 1,
+        omega_d = omega_d,
+        phase = phase1,
+        Omega = Omega_2,
+        is_rwa = True
+    ))
+    pulses.append(Pulse(
+        frame = 1,
+        omega_d = omega_d,
+        phase = 0.0,
+        Omega = Omega_0,
+        is_rwa = True
+    ))
+    for i in range(n):
+        # pi
+        pulses.append(Pulse(
+            frame = 1,
+            omega_d = omega_d,
+            phase = phase2,
+            Omega = Omega_3,
+            is_rwa = True
+        ))
+        # tau
+        pulses.append(Pulse(
+            frame = 1,
+            omega_d = omega_d,
+            phase = 0.0,
+            Omega = Omega_1,
+            is_rwa = True
+        ))
+    # tau/2
+    pulses.append(Pulse(
+        frame = 1,
+        omega_d = omega_d,
+        phase = 0.0,
+        Omega = Omega_0,
+        is_rwa = True   
+    ))
+    # pi/2
+    pulses.append(Pulse(
+        frame = 1,
+        omega_d = omega_d,
+        phase = phase3,
+        Omega = Omega_2,
+        is_rwa = True
+    ))
+    composite_pulse = CompositePulse(pulses)
+    return composite_pulse

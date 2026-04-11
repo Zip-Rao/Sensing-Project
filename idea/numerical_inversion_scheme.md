@@ -51,6 +51,7 @@ $$
    a. 前向模拟：计算 $p_{\text{sim}}(t_i;\mathbf{b}^{(n)})$ 和残差 $\mathbf{r}^{(n)} = \mathbf{p}_{\text{meas}} - \mathbf{p}_{\text{sim}}(\mathbf{b}^{(n)})$
 
    b. 计算Jacobian矩阵：$J_{ik}^{(n)} = \frac{\partial p_{\text{sim}}(t_i)}{\partial b_k} \bigg|_{\mathbf{b}=\mathbf{b}^{(n)}}$
+   Jacobian矩阵表示第k个参数对第i个测量点的敏感度
 
    c. 更新方程：$(\mathbf{J}^{(n)T}\mathbf{J}^{(n)} + \mu^{(n)}\mathbf{I} + \lambda\mathbf{D}^T\mathbf{D}) \delta\mathbf{b} = \mathbf{J}^{(n)T} \mathbf{r}^{(n)}$
 
@@ -60,28 +61,30 @@ $$
 
 3. **收敛判断**：当 $\|\delta\mathbf{b}\|/\|\mathbf{b}\| < \epsilon_{\text{tol}}$ 或 $\|\mathbf{r}\| < \epsilon_{\text{data}}$ 时停止
 
+
 ### Jacobian计算
 
 采用伴随法（adjoint method）高效计算Jacobian矩阵$$J_{ik} = \frac{\partial p_{\text{sim}}(t_i)}{\partial b_k}$$
 
-1. 前向传播：密度矩阵 $\rho(t)$满足$$\frac{d\rho}{dt} = \mathcal{L}[\rho]=-i[H(t;\mathbf{b}), \rho] + \sum_k \gamma_k(L_k\rho L_k^\dagger - \frac{1}{2} \{L_k^\dagger L_k, \rho\})$$
-初始条件为 $\rho(0) = |0\rangle\langle 0|$，观测量为$p(t_i) = \text{Tr}[\rho(t_i) \cdot |e\rangle\langle e|]$。
-2. 反向传播：为了得到雅可比矩阵，需要计算方程$$\frac{\partial p(t_i)}{\partial b_k} = \text{Tr} [\frac{\partial \rho(t)}{\partial b_k} \ket{1}\bra{1}] = \text{Tr}[\sigma_{k}(t_i)\ket{1}\bra{1}]$$
+1. 前向传播：密度矩阵 $\rho(t)$满足$$\frac{d\rho_i}{dt} = \mathcal{L^i}[\rho]=-i[H_i(t;\mathbf{b}), \rho] + \sum_k \gamma_k(L_k\rho L_k^\dagger - \frac{1}{2} \{L_k^\dagger L_k, \rho\})$$
+设脉冲的起点为$\delta_i = t_i - T_{pulse}/2$，演化时间范围为$t_m = min(0, \delta_i), t_M = max(T_{field}, t_i + T_{pulse}/2)$，初始条件为 $\rho_i(t_m) = \rho_0$，观测量为$p(t_i) = \text{Tr}[\rho_i(t_M) \cdot |1\rangle\langle 1|]$。
+2. 反向传播：为了得到雅可比矩阵，需要计算方程$$\frac{\partial p(t_i, t)}{\partial b_k} = \text{Tr} [\frac{\partial \rho(t_i, t)}{\partial b_k} \ket{1}\bra{1}] = \text{Tr}[\sigma_{k}^i(t)\ket{1}\bra{1}]$$
 
-$\sigma_k(t)$满足方程$$ \frac{d\sigma_k}{dt} = \frac{\partial }{\partial b_k}\frac{\partial }{\partial t}\rho = \frac{\partial \mathcal{L}}{\partial b_k}[\rho] + \mathcal{L}[\sigma_k] = \mathcal{L}[\sigma_k] + \mathcal{S_k}[\rho] $$
+$\sigma_k^i(t)$满足方程$$ \frac{d\sigma_k^i}{dt} = \frac{\partial }{\partial b_k}\frac{\partial }{\partial t}\rho = \frac{\partial \mathcal{L}}{\partial b_k}[\rho] + \mathcal{L}[\sigma_k] = \mathcal{L}[\sigma_k] + \mathcal{S_k}[\rho] $$
 其中，$\mathcal{S_k}[\rho]$为源项，当耗散超算符与$b_k$无关时，$\mathcal{S_k}[\rho] = -i[\frac{\partial H(t)}{\partial b_k},\rho]$。
 
-$\sigma_k$满足$\sigma_{k}(0) = 0$，利用这个性质，
-引入函数$\lambda(t)$，有$$\begin{aligned}\text{Tr}[\ket{1}\bra{1}\sigma_{k}(t_i)] &= \text{Tr}[\lambda(t_i)\sigma_k(t_i)] - \text{Tr}[\lambda(0)\sigma_k(0)]\\ &= \int_0^{t_i} \frac{d}{dt}\bigg\{\text{Tr}\left[\lambda(t) \sigma_k(t)\right]\bigg\} dt \\ &= \int_0^{t_i} \text{Tr}\bigg[\dot\lambda\sigma_k + \lambda \dot\sigma_k \bigg]dt \\ &= \int_0^{t_i} \text{Tr}(\dot\lambda\sigma_{k} ) + \text{Tr}(\lambda\mathcal{L[\sigma_k]}) -i \ \text{Tr}(\lambda[\frac{\partial H}{\partial b_k},\rho])dt \\ &= \int_0^{t_i} \text{Tr}\left[(\dot\lambda(t) + \mathcal{L}^\dagger[\lambda])\sigma_k\right] -i\  \text{Tr}(\lambda[\frac{\partial H}{\partial b_k},\rho])dt \\ &=-i\  \text{Tr}(\lambda[\frac{\partial H}{\partial b_k},\rho])dt \end{aligned}$$
-其中，$\lambda(t) $满足：$$\frac{d\lambda}{dt} = -\mathcal{L}^\dagger[\lambda], \quad \lambda(t_i) = |e\rangle\langle e|$$
+$\sigma_k$满足$\sigma_{k}^i(t_m) = 0$，利用这个性质，
+引入函数$\lambda(t)$，有$$\begin{aligned}\text{Tr}[\ket{1}\bra{1}\sigma_{k}^i(t_M)] &= \text{Tr}[\lambda(t_M)\sigma_k(t_M)] - \text{Tr}[\lambda(t_m)\sigma_k(t_m)]\\ &= \int_{t_m}^{t_M} \frac{d}{dt}\bigg\{\text{Tr}\left[\lambda(t) \sigma_k(t)\right]\bigg\} dt \\ &= \int_{t_m}^{t_M} \text{Tr}\bigg[\dot\lambda\sigma_k + \lambda \dot\sigma_k \bigg]dt \\ &= \int_{t_m}^{t_M} \text{Tr}(\dot\lambda\sigma_{k} ) + \text{Tr}(\lambda\mathcal{L[\sigma_k]}) -i \ \text{Tr}(\lambda[\frac{\partial H}{\partial b_k},\rho])dt \\ &= \int_{t_m}^{t_M} \text{Tr}\left[(\dot\lambda(t) + \mathcal{L}^\dagger[\lambda])\sigma_k\right] -i\  \text{Tr}(\lambda[\frac{\partial H}{\partial b_k},\rho])dt \\ &=-i\int_{t_m}^{t_M}  \text{Tr}(\lambda[\frac{\partial H}{\partial b_k},\rho])dt \end{aligned}$$
+其中，$\lambda(t) $满足：$$\frac{d\lambda}{dt} = -\mathcal{L}^\dagger[\lambda], \quad \lambda(t_M) = |e\rangle\langle e|$$
 上述推导利用了超算符的性质：$$\text{Tr}[\lambda \mathcal{L}[\sigma_k]] = \text{Tr}[\mathcal{L}^\dagger[\lambda]\sigma_k]$$
 
 于是得到了完整的伴随方程：$$\dot\lambda = -i[H, \lambda] + \sum_k \gamma_k(L_k^\dagger \lambda L_k - \frac{1}{2} \{L_k^\dagger L_k, \lambda\})$$
 
-作变量替换$s = t_i - t, \mu(s) = \lambda(t) =  \lambda(t_i - s) $，则$$\frac{d\mu}{ds} = i[H(t_i - s), \mu] + \sum_k \gamma_k(L_k^\dagger \mu L_k - \frac{1}{2} \{L_k^\dagger L_k, \mu\}), \quad \mu(0) = |e\rangle\langle e|$$
+作变量替换$s = t_M - t, \mu(s) = \lambda(t) =  \lambda(t_M - s) $，则$$\frac{d\mu}{ds} = i[H(t_M - s), \mu] + \sum_k \gamma_k(L_k^\dagger \mu L_k - \frac{1}{2} \{L_k^\dagger L_k, \mu\}), \quad \mu(0) = |e\rangle\langle e|$$
+上式将终值条件问题转换为初值问题，数值求解更为稳定。
+求得$\lambda(t)$后，雅可比矩阵为$$J_{ik} = \int_{t_m}^{t_M} \text{Tr}\left[\lambda^i(t) \mathcal{S}_k^i[\rho_i(t)]\right] dt$$
 
-
-3. 梯度计算：$\frac{\partial p_{\text{sim}}(t_i)}{\partial b_k} = \text{Re} \bigg\{-i\int_0^{t_i} \text{Tr}\left[\lambda(t) [\frac{\partial H(t)}{\partial b_k}, \rho(t)]\right] dt\bigg\}$
+3. 梯度计算：$\frac{\partial p_{\text{sim}}(t_i)}{\partial b_k} = \text{Re} \bigg\{-i\int_{t_m}^{t_M} \text{Tr}\left[\lambda(t) [\frac{\partial H(t)}{\partial b_k}, \rho(t)]\right] dt\bigg\}$
 
 旋转坐标系下，Transmon qubit的哈密顿量为$$ H(t, b) = \frac{\Delta(B)}{2}G + H_{drive}(t)$$
 其中，$G$为z方向的旋转算符，二能级时为$\sigma_z$。
@@ -237,6 +240,265 @@ class NumericalInversion:
 
         return J
 
+
+
+    # ================================================================
+    #  主方法: 伴随法Jacobian
+    # ================================================================
+    def compute_jacobian_adjoint(self, b, t_points):
+        """
+        使用伴随法计算Jacobian矩阵 J_{ik} = ∂p(t_i)/∂b_k
+
+        数学基础
+        ========
+        正向方程:  dρ/dt = L[ρ] = -i[H,ρ] + D[ρ]
+        伴随方程:  dλ/dt = -L†[λ] = -i[H,λ] - D†[λ]
+
+        其中 D†[λ] = Σ_k γ_k(L_k† λ L_k - ½{L_k†L_k, λ})
+
+        梯度公式:
+          ∂p(t_i)/∂b_k = Re{ -i ∫₀^{t_i} Tr[λ(t) [∂H/∂b_k, ρ(t)]] dt }
+
+        其中: ∂H/∂b_k = (∂Δω/∂B · φ_k(t)) · Ĝ
+              Ĝ = σ_z/2 (二能级) 或 diag(0,1,...) (多能级)
+
+        算法流程
+        ========
+        1. 前向传播: ρ(0) → ρ(T), 保存 ρ(t), B(t) 在所有时间步
+        2. 对每个观测点 t_i:
+           a. 后向传播: λ(t_i)=Ô → λ(0)
+           b. 预计算: f(t) = Tr[λ(t)·[Ĝ, ρ(t)]] (不依赖k)
+           c. 梯度: J[i,k] = Re{-i ∫ (∂Δω/∂B · φ_k(t)) · f(t) dt}
+
+        计算量: 2×N_t 次ODE积分 + N_t×M 次标量积分 (不含额外ODE)
+
+        参数
+        ====
+          b : array (M,)
+              基函数系数向量
+          t_points : array (N_t,)
+              观测时间点
+
+        返回
+        ====
+          J : array (N_t, M)
+              Jacobian矩阵
+        """
+        N_t = len(t_points)
+        M = self.M
+        J = np.zeros((N_t, M))
+
+        # ==============================================================
+        # 第一步: 构建细密时间网格 + 前向传播
+        # ==============================================================
+
+        # 时间范围 (在观测窗口前后留余量)
+        t_margin = getattr(self, 'tau_pulse', 5e-9) * 1.5
+        t_start = t_points[0] - t_margin
+        t_end = t_points[-1] + t_margin
+        dt_fine = getattr(self, 'dt_sim', 0.01e-9)  # 默认10ps
+        t_fine = np.arange(t_start, t_end + dt_fine / 2, dt_fine)
+        N_fine = len(t_fine)
+
+        # 计算 B(t) 和基函数值
+        B_fine, phi_vals = self._evaluate_field_and_basis(b, t_fine)
+        # B_fine:  shape (N_fine,)  — 各时间步的磁场值
+        # phi_vals: shape (M, N_fine) — 各基函数在各时间步的值
+
+        # 前向传播 (使用QuTiP的mesolve)
+        H_total = self._build_hamiltonian_with_field(B_fine, t_fine)
+        c_ops = self.qubit.get_collapse_operators()
+        rho_0 = self.qubit.state
+
+        opts = dict(store_states=True, nsteps=50000, max_step=dt_fine * 10)
+        result = mesolve(H_total, rho_0, t_fine, c_ops, options=opts)
+
+        # 转换为numpy数组轨迹
+        dim = rho_0.shape[0]
+        rho_traj = np.zeros((N_fine, dim, dim), dtype=complex)
+        for n in range(N_fine):
+            rho_traj[n] = result.states[n].full()
+
+        # 测量算符 (numpy矩阵)
+        O_mat = self.qubit.excited_state_projector().full()
+
+        # ==============================================================
+        # 第二步: 预计算不依赖于k和i的量
+        # ==============================================================
+
+        # ∂Δω/∂B 在每个时间步的值
+        dw_dB_array = np.array([self._compute_dw_dB(B_fine[n])
+                                for n in range(N_fine)])
+
+        # Ĝ算符: ∂H/∂(Δω) 中的算符部分
+        G_mat = self._get_dH_dbk_operator(dim)
+
+        # collapse算符的numpy矩阵形式 (后向传播用)
+        c_mats = [c.full() for c in c_ops]
+        c_dag_mats = [c.dag().full() for c in c_ops]     # L†
+        cdc_mats = [cd @ c for c, cd in zip(c_mats, c_dag_mats)]  # L†L
+
+        # B(t) 插值器 (后向传播中在任意时间获取B值)
+        B_interp = interp1d(t_fine, B_fine, kind='linear',
+                            fill_value=(B_fine[0], B_fine[-1]),
+                            bounds_error=False)
+
+        # ==============================================================
+        # 第三步: 对每个观测点——后向传播 + 梯度积分
+        # ==============================================================
+
+        for i in range(N_t):
+            t_obs = t_points[i]
+
+            # 找到 t_obs 在 t_fine 中的最近索引
+            idx_obs = np.argmin(np.abs(t_fine - t_obs))
+            # 后向传播覆盖 t_fine[0] 到 t_fine[idx_obs]
+            N_bwd = idx_obs + 1
+
+            if N_bwd < 2:
+                # 观测点过早,跳过
+                continue
+
+            # ──────────────────────────────────────────────
+            #  3a. 后向传播伴随态
+            # ──────────────────────────────────────────────
+            #
+            # 变量替换: s = t_obs - t,  μ(s) = λ(t_obs - s)
+            #
+            # dμ/ds = +i[H(t_obs-s), μ] + D†(t_obs-s)[μ]
+            #
+            # 其中 D†[μ] = Σ_k γ_k (L_k† μ L_k - ½{L_k†L_k, μ})
+            #
+            # 初始条件: μ(0) = λ(t_obs) = Ô
+            #
+            # s从0积分到 (t_obs - t_fine[0])
+
+            t_obs_actual = t_fine[idx_obs]  # 对齐到网格
+            s_max = t_obs_actual - t_fine[0]
+
+            # s网格: 对应原始时间从 t_obs 到 t_fine[0]
+            # s_n = t_obs - t_fine[idx_obs - n], n = 0,1,...,idx_obs
+            s_eval = t_obs_actual - t_fine[:N_bwd][::-1]
+            # s_eval[0] = 0 (对应t=t_obs)
+            # s_eval[-1] = t_obs - t_fine[0] (对应t=t_fine[0])
+
+            def adjoint_rhs(s, mu_flat, *args):
+                """
+                伴随方程右端项 (s变量):
+                  dμ/ds = +i[H(t_obs-s), μ]
+                        + Σ_k γ_k (L_k† μ L_k - ½{L_k†L_k, μ})
+                """
+                mu = mu_flat.reshape(dim, dim)
+                t_curr = t_obs_actual - s
+
+                # 获取当前时刻的Hamiltonian
+                B_curr = float(B_interp(t_curr))
+                H_curr = self._get_hamiltonian_matrix(t_curr, B_curr)
+
+                # ── 酉部分: +i[H, μ] ──
+                dmu = 1j * (H_curr @ mu - mu @ H_curr)
+
+                # ── Lindblad伴随部分: Σ γ_k(L†μL - ½{L†L, μ}) ──
+                for c_mat, cd_mat, cdc_mat in zip(c_mats, c_dag_mats, cdc_mats):
+                    dmu += (cd_mat @ mu @ c_mat
+                            - 0.5 * (cdc_mat @ mu + mu @ cdc_mat))
+
+                return dmu.flatten()
+
+            # 初始条件
+            mu_0 = O_mat.copy().flatten()
+
+            # 使用scipy积分
+            sol = solve_ivp(
+                adjoint_rhs,
+                t_span=(0, s_max),
+                y0=mu_0,
+                method='RK45',
+                t_eval=s_eval,
+                rtol=1e-9,
+                atol=1e-11,
+                max_step=dt_fine * 5
+            )
+
+            # 检查积分是否成功
+            if not sol.success:
+                print(f"  警告: 观测点{i} (t={t_obs*1e9:.2f}ns) "
+                      f"后向积分失败: {sol.message}")
+                continue
+
+            # ──────────────────────────────────────────────
+            #  3b. 将μ(s)转换回λ(t), 对齐到t_fine网格
+            # ──────────────────────────────────────────────
+            #
+            # sol.t 中的 s_n 对应 t = t_obs - s_n
+            # s_n 从小到大 → t 从大到小
+            # 需要反转以对齐 t_fine[0:N_bwd]
+
+            N_sol = len(sol.t)
+            lambda_traj = np.zeros((N_bwd, dim, dim), dtype=complex)
+
+            for n in range(N_sol):
+                s_n = sol.t[n]
+                # s_n 对应原始时间 t_obs - s_n
+                # 在t_fine中的索引 (从后往前)
+                j = N_bwd - 1 - n
+                if 0 <= j < N_bwd:
+                    lambda_traj[j] = sol.y[:, n].reshape(dim, dim)
+
+            # 对缺失点做插值 (如果sol.t和s_eval不完全对齐)
+            # 通常如果t_eval给得正确, 应该没有缺失
+
+            # ──────────────────────────────────────────────
+            #  3c. 计算梯度积分
+            # ──────────────────────────────────────────────
+            #
+            # ∂p(t_i)/∂b_k = Re{ -i ∫₀^{t_obs} Tr[λ(t)·[∂H/∂b_k, ρ(t)]] dt }
+            #
+            # ∂H/∂b_k = (∂Δω/∂B)(t) · φ_k(t) · Ĝ
+            #
+            # 所以:
+            # ∂p/∂b_k = Re{ -i ∫ (∂Δω/∂B)·φ_k(t) · Tr[λ(t)·[Ĝ, ρ(t)]] dt }
+            #
+            # 关键优化: Tr[λ·[Ĝ,ρ]] 不依赖于k, 可预计算一次
+
+            # 预计算 f(t) = Tr[λ(t) · [Ĝ, ρ(t)]]
+            trace_values = np.zeros(N_bwd, dtype=complex)
+
+            for n in range(N_bwd):
+                rho_n = rho_traj[n]       # ρ(t_n), 前向轨迹
+                lam_n = lambda_traj[n]    # λ(t_n), 伴随轨迹
+
+                # [Ĝ, ρ] = Ĝρ - ρĜ
+                comm_G_rho = G_mat @ rho_n - rho_n @ G_mat
+
+                # Tr[λ · [Ĝ, ρ]]
+                trace_values[n] = np.trace(lam_n @ comm_G_rho)
+
+            # 被积函数 (不含φ_k): g(t) = -i · (∂Δω/∂B)(t) · f(t)
+            g_values = -1j * dw_dB_array[:N_bwd] * trace_values
+
+            # 对每个参数k, 乘以φ_k(t)并积分
+            t_bwd = t_fine[:N_bwd]  # 积分的时间网格
+
+            for k in range(M):
+                # 被积函数 = g(t) · φ_k(t)
+                integrand_k = g_values * phi_vals[k, :N_bwd]
+
+                # 梯形法则积分
+                integral = np.trapz(integrand_k, t_bwd)
+
+                # 取实部 (虚部应为数值零)
+                J[i, k] = np.real(integral)
+
+            # 进度报告
+            if (i + 1) % max(1, N_t // 10) == 0 or i == N_t - 1:
+                p_i = np.real(np.trace(O_mat @ rho_traj[idx_obs]))
+                print(f"  伴随法进度: {i+1}/{N_t}, "
+                      f"p({t_obs*1e9:.1f}ns) = {p_i:.4f}")
+
+        return J
+
+        
     def levenberg_marquardt(self, p_meas, t_meas, b_init=None, max_iter=50,
                            tol=1e-6, mu_init=1.0):
         """

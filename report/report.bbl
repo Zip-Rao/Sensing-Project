@@ -1,0 +1,48 @@
+\begin{thebibliography}{8}
+\providecommand{\natexlab}[1]{#1}
+\providecommand{\url}[1]{\texttt{#1}}
+\expandafter\ifx\csname urlstyle\endcsname\relax
+  \providecommand{\doi}[1]{doi: #1}\else
+  \providecommand{\doi}{doi: \begingroup \urlstyle{rm}\Url}\fi
+
+\bibitem[Bal et~al.(2012)Bal, Deng, Orgiazzi, Ong, and Lupascu]{bal2012ultrasensitive}
+Mustafa Bal, Chunqing Deng, Jean-Luc Orgiazzi, FR~Ong, and Adrian Lupascu.
+\newblock Ultrasensitive magnetic field detection using a single artificial atom.
+\newblock \emph{Nature Communications}, 3\penalty0 (1):\penalty0 1324, 2012.
+
+\bibitem[Bennett and DiVincenzo(2000)]{bennett2000quantum}
+Charles~H Bennett and David~P DiVincenzo.
+\newblock Quantum information and computation.
+\newblock \emph{Nature}, 404\penalty0 (6775):\penalty0 247--255, 2000.
+
+\bibitem[Blais et~al.(2021)Blais, Grimsmo, Girvin, and Wallraff]{blais2021circuit}
+Alexandre Blais, Arne~L Grimsmo, Steven~M Girvin, and Andreas Wallraff.
+\newblock Circuit quantum electrodynamics.
+\newblock \emph{Reviews of Modern Physics}, 93\penalty0 (2):\penalty0 025005, 2021.
+
+\bibitem[Clarke and Wilhelm(2008)]{clarke2008superconducting}
+John Clarke and Frank~K. Wilhelm.
+\newblock Superconducting quantum bits.
+\newblock \emph{Nature}, 453\penalty0 (7198):\penalty0 1031, 2008.
+
+\bibitem[Deffner and Campbell(2017)]{deffner2017quantum}
+Sebastian Deffner and Steve Campbell.
+\newblock Quantum speed limits: From heisenberg’s uncertainty principle to optimal quantum control.
+\newblock \emph{Journal of Physics A: Mathematical and Theoretical}, 50\penalty0 (45):\penalty0 453001, 2017.
+
+\bibitem[Degen et~al.(2017)Degen, Reinhard, and Cappellaro]{degen2017quantum}
+Christian~L. Degen, Florian Reinhard, and Paola Cappellaro.
+\newblock Quantum sensing.
+\newblock \emph{Reviews of Modern Physics}, 89\penalty0 (3):\penalty0 035002, 2017.
+
+\bibitem[Herb and Degen(2024)]{herb2024quantum}
+Kevin Herb and Christian~L. Degen.
+\newblock Quantum speed limit in quantum sensing.
+\newblock \emph{Physical Review Letters}, 133\penalty0 (21):\penalty0 210802, 2024.
+
+\bibitem[Herb et~al.(2025)Herb, V{\"o}lker, Abendroth, Meinhardt, van Schie, Gambardella, and Degen]{herb2025magnetometry}
+Kevin Herb, Lukas~A. V{\"o}lker, Johannes~M. Abendroth, Nils Meinhardt, Luc van Schie, Patrik Gambardella, and Christian~L. Degen.
+\newblock Quantum magnetometry of transient signals with a time resolution of 1.1 nanoseconds.
+\newblock \emph{Nature Communications}, 16\penalty0 (1):\penalty0 822, 2025.
+
+\end{thebibliography}
