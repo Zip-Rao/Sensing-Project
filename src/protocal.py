@@ -5,15 +5,15 @@
 import numpy as np
 from qutip import *
 from src.qubit import TransmonQubit
-from src.signal import Signal
+from src.signal import Signal, CompositeSignal
 from src.pulse import Pulse, CompositePulse
-from src.pulse import create_pulse, create_ramsey_pulse, create_echo_pulse
+from src.pulse import create_pulse, create_ramsey_pulse, create_diff_echo_pulse, create_cpmg_pulse, create_cryoscope_pulse
 from src.analysis import Analysis
 class Protocal:
     def __init__(self, type = 0, **kwargs):
         '''
         初始化Protocal对象
-        :param type: 协议类型，0-拉比振荡测量，1-Ramsey测量，2-自旋回波测量，3-CPMG测量 4-瞬态磁场测量协议
+        :param type: 协议类型，0-拉比振荡测量，1-Ramsey测量，2-差分回波测量，3-CPMG作为带通滤波器测量 4-瞬态磁场测量协议 5-cryoscope协议
         :param kwargs: 协议参数，例如脉冲序列，时间间隔等
         '''
         self.type = type
@@ -33,6 +33,7 @@ class Protocal:
             qubit.state = state.unit()
 
         default_params = {
+            't_global': np.linspace(-50, 300, 700),  # 全局时间列表（ns），用于演化和测量
             't_list': np.linspace(0, 100, 1000),  # 时间列表（ns）
             'tau_list': np.linspace(0, 100, 100),  # 时间间隔列表（ns）
             't_rabi': np.linspace(0, 40, 100),  # 拉比振荡时间列表（ns）
@@ -58,20 +59,37 @@ class Protocal:
                 return result
 
             case 1: # Ramsey测量
-                Phi = Signal(type = 1, t_list = np.linspace(0, 250, 500), amplitude = 0.01)
+                # 创建测试信号
+                Phi = Signal(type = 2, t_list = np.linspace(0, 250, 500), amplitude = 0.001, frequency = 0.01, rise = 10, fall = 10, center = 100, noise_level = 0.000)
+                #Phi = Signal(type = 4, t_list = np.linspace(0, 250, 500), amplitude = 0.01, frequency = 0.004, rise = 10, fall = 10, center = 100, noise_level = 0.0001)
+                Phi.plot()
                 omega_d = qubit.frequency
                 #detuning = qubit.frequency * 0.01  # 失谐频率（GHz）
                 qubit.qubit_in_mag(Phi, frame = 1, omega_d = omega_d)
                 t_rabi = np.linspace(0, 20, 40)
-                tau_list = np.linspace(0, 200, 400)
+                tau_list = np.linspace(0, 250, 500)
                 p_e_list = []
                 psi_e = basis(qubit.n_levels, 1)
                 for tau in tau_list:
+                    # 执行IQ调制，生成Ramsey脉冲序列
                     control_pulse =create_ramsey_pulse(t_rabi, tau, omega_d = omega_d, phase1 = 0.0, phase2 = 0.0)
-                    
+                    # 对其时间轴，时间轴0点为第一个pi/2脉冲的结尾
+                    control_pulse.t_list = control_pulse.t_list - t_rabi[-1]
+
                     H = QobjEvo(qubit.H_list, tlist = qubit.mag_signal.t_list, order = 1) + QobjEvo(control_pulse.hamiltonian, tlist = control_pulse.t_list, order = 1)
-                    result = mesolve(H, qubit.state, control_pulse.t_list, [], e_ops = [psi_e * psi_e.dag()])
+                    result = mesolve(H, qubit.state, self.params['t_global'], [], e_ops = [psi_e * psi_e.dag()])
                     p_e_list.append(result.expect[0][-1])
+                return Phi, tau_list, p_e_list
+                varphi = np.unwrap(np.arccos(2 * np.array(p_e_list) - 1))
+                B = np.zeros_like(varphi)
+                for i, tau in enumerate(tau_list):
+                    if 0 < i < len(varphi) - 1:
+                        B[i] = (varphi[i + 1] - varphi[i - 1]) / (2 * (tau_list[1] - tau_list[0]))
+                    elif i == 0:
+                        B[i] = (varphi[i + 1] - varphi[i]) / (tau_list[1] - tau_list[0])
+                    else:
+                        B[i] = (varphi[i] - varphi[i - 1]) / (tau_list[1] - tau_list[0])
+                return tau_list, p_e_list, varphi, B
                 def pe(t, C, Delta, phase):
                     return 0.5 * (1 + C * np.cos(Delta * t + phase))
                 import scipy.optimize as optimize
@@ -97,27 +115,34 @@ class Protocal:
 
                     # 处理result，计算Ramsey fringes等
             case 2: # spin echo测量
-                Phi = Signal(type = 2, t_list = np.linspace(0, 250, 500), amplitude = 0.01, noise_level = 0.001)
+                # 创建测试信号
+                k = 5
+                t_list = np.linspace(0, 100, 200)
+                Phi = Signal(type = 3, t_list = t_list, amplitude = 0.01, frequency = 0.01, rise = 10, fall = 10, center = 50, noise_level = 0.0001)
+                Phi_list = [Phi.copy() for _ in range(2*k)]
+                composite_phi = CompositeSignal(Phi_list)
+                composite_phi.plot()
                 omega_d = qubit.frequency
-                qubit.qubit_in_mag(Phi, frame = 1, omega_d = omega_d)
-                t_rabi = np.linspace(0, 20, 40)
-                tau_list = np.linspace(0, 200, 400)
+                qubit.qubit_in_mag(composite_phi, frame = 1, omega_d = omega_d)
+                t_rabi = np.linspace(0, 10, 20)
+                t_int = (t_rabi[-1] - t_rabi[0]) * 0.5
+                t_rep = Phi.t_list[-1] - Phi.t_list[0]
+                tau_list = Phi.t_list.copy()
                 psi_e = basis(qubit.n_levels, 1)
-                p_e_list = [[], []]  # 分别存储两种不同相位的自旋回波测量结果
+                p_e_list = []
+                t_global = np.linspace(-10, 1010, 2020)
                 for tau in tau_list:
-                    control_pulse1 = create_echo_pulse(t_rabi, tau, omega_d = omega_d)
-                    control_pulse2 = create_echo_pulse(t_rabi, tau, omega_d = omega_d, phase3 = np.pi/2)
-                    H_1 = QobjEvo(qubit.H_list, tlist = qubit.mag_signal.t_list, order = 1) + QobjEvo(control_pulse1.hamiltonian, tlist = control_pulse1.t_list, order = 1)
-                    H_2 = QobjEvo(qubit.H_list, tlist = qubit.mag_signal.t_list, order = 1) + QobjEvo(control_pulse2.hamiltonian, tlist = control_pulse2.t_list, order = 1)
-                    result1 = mesolve(H_1, qubit.state, control_pulse1.t_list, [], e_ops = [psi_e * psi_e.dag()])
-                    result2 = mesolve(H_2, qubit.state, control_pulse2.t_list, [], e_ops = [psi_e * psi_e.dag()])
-                    p_e_list[0].append(result1.expect[0][-1])
-                    p_e_list[1].append(result2.expect[0][-1])
-                return tau_list, p_e_list
+                    control_pulse = create_diff_echo_pulse(t_rabi, tau, t_int, t_rep, k = k, omega_d = omega_d)
+                    control_pulse.t_list = control_pulse.t_list - t_rabi[-1]
+                    H = QobjEvo(qubit.H_list, tlist = qubit.mag_signal.t_list, order = 1) + QobjEvo(control_pulse.hamiltonian, tlist = control_pulse.t_list, order = 1)
+                    result = mesolve(H, qubit.state, t_global, [], e_ops = [psi_e * psi_e.dag()])
+                    p_e = result.expect[0][-1]
+                    p_e_list.append(p_e)
+                return Phi, tau_list, p_e_list, k, t_int
             case 3: # CPMG测量
                 pass
-            #TODO：区分正信号和负信号
             case 4: # 瞬态磁场测量协议
+                # 创建测试信号
                 #Phi = Signal(type = 1, t_list = np.linspace(0, 200, 400), amplitude = 0.01)
                 t_list = np.linspace(0,200, 400)
                 Phi = Signal(type = 4, t_list = t_list, amplitude = 0.06, rise = 10, fall = 10, center = 100, noise_level = 0.0001)
@@ -136,6 +161,28 @@ class Protocal:
                 #t_samples, kernel = analysis.get_kernel(control_pulse, qubit)
                 delta_p = np.array(p_e) - np.array(p_e_base)
                 return t_samples, kernel, scan_list, delta_p, p_e, Phi, control_pulse
+            case 5: # cryoscope协议
+                # 测试信号
+                Phi = Signal(type = 2, t_list = np.linspace(0, 80, 160), amplitude = 0.01)
+                Phi.plot()
+                trunc_list = Phi.t_list[140:20:-1]  # 从后往前截取，模拟不同的时间延迟
+                t_rabi = np.linspace(0, 10, 20)
+                dt = trunc_list[0] - trunc_list[1]
+                tau = 100
+                psi_e = basis(qubit.n_levels, 1)
+                p_e_list = [[], []]  # 分别存储I和Q分量的结果
+                # 从后往前截取Phi，从而避免每次重构Phi
+                for trunc in trunc_list:
+                    Phi.truncate(0, trunc)
+                    qubit.qubit_in_mag(Phi, frame = 1, omega_d = qubit.frequency)
+                    p_e_I, p_e_Q = IQ_readout(qubit, type = 3, tau = tau)
+                    p_e_list[0].append(p_e_I)
+                    p_e_list[1].append(p_e_Q)
+                varphi_list = np.arctan2(np.array(p_e_list[1]) - 0.5, np.array(p_e_list[0]) - 0.5)
+                varphi_list = varphi_list[::-1]  # 对齐时间轴，去掉最后一个点
+                return trunc_list, varphi_list, Phi, p_e_list
+
+
             
     def single_measurement(self, qubit:TransmonQubit, Phi_signal:Signal, control_pulse:CompositePulse, t_delay, qubit_t=None, H=None, t_evole=None, index = None):
         '''
@@ -276,4 +323,81 @@ class Protocal:
 
         
 
+class Calibration:
+    def __init__(self, qubit, type = 0, **kwargs):
+        '''
+        初始化Calibration对象
+        :param type: 校准类型， 频率f_01标定：0-Ramsey标定  频率-磁通f(Phi)标定：1-ramsey标定 2-瞬态磁场测量协议校准 3-cryoscope协议校准
+        :param kwargs: 校准参数，例如扫描范围，扫描步长等
+        '''
+        self.qubit = qubit
+        self.type = type
+        self.params = kwargs
+
+
+    def calibrate(self):
+        match self.type:
+            case 0: # 频率f_01标定：Ramsey标定
+                pass
+            case 1: # 频率-磁通f(Phi)标定：Ramsey标定
+                pass
+            case 2: # 瞬态磁场测量协议校准
+                pass
+            case 3: # 相位-磁通varphi(h)标定：cryoscope协议校准
+                qubit = self.qubit
+                h_list = np.linspace(-0.03, 0.03, 21)
+                varphi_list = []
+                tau = 100
+                def signals(h):
+                    # 设计一个信号，确保在两个脉冲之间有一个持续时间为tau的平坦区域，且该区域内磁场强度为h
+                    t_list = np.linspace(0, tau + 20, 240)
+                    signal = np.zeros_like(t_list)
+                    signal[(t_list >= 10) & (t_list <= tau + 10)] = h
+                    return signal
+                # z轴磁场应该在两个脉冲之间
+                Phi = Signal(type = 8, t_list = np.linspace(0, tau + 20, 240), signal = signals(0))
+                for h in h_list:
+                    Phi.update_signal(signal = signals(h))
+                    qubit.qubit_in_mag(Phi, frame = 1, omega_d = qubit.frequency)
+                    p_e_I, p_e_Q = IQ_readout(qubit, type = 2, tau = tau, h = h)
+                    varphi = np.arctan2(p_e_Q - 0.5, p_e_I - 0.5)
+                    varphi_list.append(varphi)
+                varphi_list = np.unwrap(varphi_list, period = np.pi)
+                return h_list, varphi_list, tau
+
+
+def IQ_readout(qubit, type, **kwargs):
+    '''
+    根据协议类型进行IQ读出
+    :param qubit: 作用的Qubit对象，要求已经包含磁场信号
+    :param Phi_signal: 作用的磁场信号
+    :param type: 协议类型，0-rasmey 测量 1-echo测量，2-cryoscope标定 3-cryoscope测量
+    '''
+    # 创建脉冲
+    match type:
+        case 0: # Ramsey测量
+            pass
+        case 1: # echo测量
+            pass
+        case 2: # cryoscope标定
+            tau = 20 if 'tau' not in kwargs else kwargs['tau']
+            h = 0.01 if 'h' not in kwargs else kwargs['h']
+            t_rabi = np.linspace(0, 10, 20)
+            control_pulse_I = create_ramsey_pulse(t_rabi, tau, omega_d = qubit.frequency, phase1 = np.pi/2, phase2 = 0.0)
+            control_pulse_Q = create_ramsey_pulse(t_rabi, tau, omega_d = qubit.frequency, phase1 = np.pi/2, phase2 = np.pi/2)
+            t_evolve = control_pulse_I.t_list
+        case 3: # cryoscope测量
+            tau = 20 if 'tau' not in kwargs else kwargs['tau']
+            t_rabi = np.linspace(0, 10, 20) if 't_rabi' not in kwargs else kwargs['t_rabi']
+            control_pulse_I = create_ramsey_pulse(t_rabi, tau, omega_d = qubit.frequency, phase1 = np.pi/2, phase2 = 0.0)
+            control_pulse_Q = create_ramsey_pulse(t_rabi, tau, omega_d = qubit.frequency, phase1 = np.pi/2, phase2 = np.pi/2)
+            t_evolve = control_pulse_I.t_list
+    H_I = QobjEvo(control_pulse_I.hamiltonian, tlist = control_pulse_I.t_list, order = 1) + QobjEvo(qubit.H_list, tlist = qubit.mag_signal.t_list, order = 1)
+    H_Q = QobjEvo(control_pulse_Q.hamiltonian, tlist = control_pulse_Q.t_list, order = 1) + QobjEvo(qubit.H_list, tlist = qubit.mag_signal.t_list, order = 1)
         
+    result_I = mesolve(H_I, qubit.state, t_evolve, [], e_ops = [basis(qubit.n_levels, 1) * basis(qubit.n_levels, 1).dag()],options={"store_states": True})
+    result_Q = mesolve(H_Q, qubit.state, t_evolve, [], e_ops = [basis(qubit.n_levels, 1) * basis(qubit.n_levels, 1).dag()],options={"store_states": True})
+    index = np.searchsorted(t_evolve, 10)
+
+    print(f"State at t={t_evolve[index]:.2f} ns: {result_I.states[index]}")
+    return result_I.expect[0][-1], result_Q.expect[0][-1]

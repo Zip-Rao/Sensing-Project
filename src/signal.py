@@ -9,7 +9,7 @@ class Signal:
     def __init__(self, type = 0, t_list=None, **kwargs):
         '''
         初始化Signal对象
-        :param type: 信号类型，0-零信号，1-恒定信号，2-正弦信号，3-高斯脉冲信号 ，4-非对称脉冲信号 , 5-双峰信号 ， 6-基展开信号 7-复杂信号
+        :param type: 信号类型，0-零信号，1-恒定信号，2-正弦信号，3-高斯脉冲信号 ，4-非对称脉冲信号 , 5-双峰信号 ， 6-基展开信号 7-复杂信号 8-用户自定义信号
         :param t_list: 时间列表（ns），用于生成信号序列
         :param kwargs: 信号参数，可以包括幅度，频率，相位，中心位置，宽度，直流偏置等
         '''
@@ -126,7 +126,18 @@ class Signal:
                 p3 = wave_packet(tlist, A=15, t0=120, w=20, f=0.02, phi=np.pi/2)
                 signal += p1  + p2  + p3
                 return signal+self.params['offset']
-
+            case 8: # 用户自定义信号
+                if "signal" not in self.params:
+                    raise ValueError("Custom signal not provided.")
+                return self.params["signal"] + self.params['offset']
+    def truncate(self, t_start, t_end):
+        '''
+        截取信号在[t_start, t_end]时间范围内的部分，其他部分暂置零，未来可以考虑振铃等边界效应
+        '''
+        t_array = np.array(self.t_list)
+        signal = self.signal.copy()
+        signal[(t_array < t_start) | (t_array > t_end)] = 0.0
+        self.signal = signal
 
 
     
@@ -226,3 +237,47 @@ class Signal:
         plt.show()
         
 
+class CompositeSignal(Signal):
+    def __init__(self, signals):
+        '''
+        初始化CompositeSignal对象
+        :param signals: Signal对象列表，表示要叠加的多个信号
+        '''
+        self.signals = signals
+        self.t_list = self.get_t_list()
+        self.signal = self.get_signal()
+
+    def get_t_list(self):
+        '''
+        获取所有信号的时间列表的并集，并排序
+        '''
+        t_list = []
+        curr = 0.0
+        for signal in self.signals:
+            pulse_list = [t + curr for t in signal.t_list]
+            t_list.extend(pulse_list)
+            if pulse_list:
+                # 保证t_list没有重复的时间点
+                curr = pulse_list[-1] + 1e-9  # 在最后一个时间点基础上加一个小的时间间隔，避免重复，同时两个脉冲之间有一个小的间隔，从而避开coeff边界的处理
+        return np.array(t_list)
+    
+    def get_signal(self):
+        '''
+        在CompositeSignal的时间列表上叠加所有子信号的值
+        '''
+        signal = np.concatenate([signal.signal for signal in self.signals])
+        return np.array(signal)
+    
+    def plot(self):
+        '''
+        绘制复合信号波形
+        '''
+        import matplotlib.pyplot as plt
+
+        plt.figure(figsize=(10,4))
+        plt.plot(self.t_list, self.signal)
+        plt.xlabel('Time (ns)')
+        plt.ylabel('Composite Signal Amplitude')
+        plt.title('Composite Signal Waveform')
+        plt.grid(True)
+        plt.show()

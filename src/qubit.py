@@ -200,7 +200,7 @@ class TransmonQubit:
         H_list.append([self.n + 0.5 * qeye(self.n_levels), freq_coeffs])
         return H_list
     
-    def qubit_in_mag(self, Phi_signal:Signal, frame = 0, omega_d = None):
+    def qubit_in_mag(self, Phi_signal, frame = 0, omega_d = None):
         '''
         优化后的计算Transmon Qubit在外加磁通信号下的频率变化的方法，直接计算哈密顿量随时间的变化，而不是每个时间点都构建一个新的TransmonQubit对象
         '''
@@ -211,7 +211,8 @@ class TransmonQubit:
         H_list = []
         freq_coeffs = np.zeros(len(t_list))
         for i, t in enumerate(t_list):
-            flux = self.flux + Phi_signal.value_at(t)
+            #flux = self.flux + Phi_signal.value_at(t)
+            flux = self.flux + Phi_signal.signal[i]
             EJ = self.EJ_0 * abs(math.cos(math.pi * flux))
             frequency = np.sqrt(8 * EJ * self.EC) - self.EC
             if frame == 0:

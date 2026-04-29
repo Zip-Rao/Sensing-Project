@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Bash(python3 -m py_compile plot_signal_comparison_panel.py)"
+      "Bash(python3 -m py_compile plot_signal_comparison_panel.py)",
+      "WebSearch"
     ]
   }
 }

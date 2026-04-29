@@ -1,6 +1,14 @@
 '''
-创建分析类，返回各种数值分析结果，以及图表
-包括对mesolve结果的分析
+analysis.py — 量子传感数据分析模块
+
+提供从量子测量结果（mesolve 输出）中提取物理量的完整工具链：
+  - 期望值 / 布居数提取
+  - Ramsey 相位解缠绕与磁场反演（Viterbi DP）
+  - 控制核函数计算
+  - Wiener / Hammerstein-Wiener 反卷积
+  - 基于全密度矩阵模拟的 Levenberg-Marquardt 数值反演
+
+辅助函数包括基函数生成、正则化矩阵、正向模拟、伴随法 / 有限差分雅可比矩阵计算等。
 '''
 
 import numpy as np
@@ -38,7 +46,99 @@ class Analysis:
                 pop = expect(proj, state)
                 populations.append(pop)
             return np.array(populations)
-        
+    # Ramsey协议部分
+    def get_signal_from_ramsey_by_iq(self, qubit, tau_list, p_e_list_I, p_e_list_Q):
+        '''
+        从Ramsey测量结果提取磁场信号。
+        p_e(τ) = 0.5*(1 - cos(φ(τ)))，通过IQ调制得到两组测量结果 p_e_I 和 p_e_Q，
+        分别对应 φ 和 φ+π/2，从而直接解出 φ(τ)，再微分得 B(τ)。
+        '''
+        C_I = np.max(p_e_list_I) - np.min(p_e_list_I)
+        C_Q = np.max(p_e_list_Q) - np.min(p_e_list_Q)
+        print(f"C_I: {C_I}, C_Q: {C_Q}")
+        cosphi = (1 - 2 * np.array(p_e_list_I, dtype=float)) / C_I
+        sinphi = (1 - 2 * np.array(p_e_list_Q, dtype=float)) / C_Q
+        import matplotlib.pyplot as plt
+        plt.figure(figsize=(6, 6))
+        plt.plot(tau_list, sinphi, 'o-', label='IQ Data')
+        plt.plot(tau_list, cosphi, 'x-', label='IQ Data')
+        plt.xlabel('Delay Time $\\tau$ (ns)')
+        plt.ylabel('Normalized Signal')
+        plt.legend()
+        plt.grid()
+        plt.show()
+        phi = np.unwrap(np.arctan2(sinphi, cosphi))  # 直接通过 arctan2 解出 φ(τ)，并进行相位解缠绕
+        B = np.gradient(phi, tau_list)
+        kappa = qubit.frequency_sensitivity(qubit.flux)
+        B /= kappa
+        return B
+    def get_signal_from_ramsey_by_unwrap(self, qubit, tau_list, p_e_list,
+                               k_span=3):
+        '''
+        从Ramsey测量结果提取磁场信号。
+        p_e(τ) = 0.5*(1 - cos(φ(τ)))
+        利用 φ(0)=0 先验，在候选分支 {2kπ ± arccos(cosφ)} 中贪心追踪最平滑路径，
+        再微分得 B(τ)。
+        '''
+        p_e = np.array(p_e_list, dtype=float)
+        tau = np.array(tau_list, dtype=float)
+        import matplotlib.pyplot as plt
+        plt.figure(figsize=(8, 5))
+        plt.plot(tau, p_e, 'o-', label='Measured $p_e(\\tau)$')
+        plt.xlabel('Delay Time $\\tau$ (ns)')
+        plt.ylabel('Excited State Probability $p_e$')
+        plt.legend()
+        plt.grid()
+        plt.show()
+        N = len(p_e)
+
+        # cos(φ) = 1 - 2*p_e
+        cos_phi = 1 - 2 * p_e
+        theta = np.arccos(np.clip(cos_phi, -1, 1))  # θ ∈ [0, π]
+
+        # 候选分支: φ = 2kπ ± θ
+        ks = np.arange(-k_span, k_span + 1)
+
+        def _candidates(i):
+            return np.array([2*k*np.pi + s*theta[i] for k in ks for s in [1, -1]])
+
+        phi = np.zeros(N)
+
+        # 步骤0: Ramsey在τ=0时φ=0，选最接近0的候选
+        cands = _candidates(0)
+        phi[0] = cands[np.argmin(np.abs(cands))]
+
+        # 步骤1: 选最接近phi[0]的候选（最小一阶变化）
+        cands = _candidates(1)
+        phi[1] = cands[np.argmin(np.abs(cands - phi[0]))]
+
+        # 步骤2..N-1: 线性外推选最近候选
+        for i in range(2, N):
+            cands = _candidates(i)
+            expected = 2 * phi[i-1] - phi[i-2]  # 线性外推
+            phi[i] = cands[np.argmin(np.abs(cands - expected))]
+
+        plt.figure(figsize=(8, 5))
+        plt.plot(tau, phi, 'o-', label='Unwrapped Phase $\\phi(\\tau)$')
+        plt.xlabel('Delay Time $\\tau$ (ns)')
+        plt.ylabel('Phase $\\phi$ (rad)')
+        plt.legend()
+        plt.grid()
+        plt.show()
+        B = np.gradient(phi, tau) / qubit.frequency_sensitivity(qubit.flux)
+        return B
+    
+    # 差分回波协议部分
+    def get_signal_from_diff_echo(self, qubit, p_e_list, t_int, k):
+        '''
+        从差分回波测量结果提取磁场信号。
+        '''
+        varphi = np.arcsin(2 * np.array(p_e_list) - 1)  # varphi(τ) = arcsin(2*p_e - 1)
+        kappa = qubit.frequency_sensitivity(qubit.flux)
+        B = -varphi / (2 * k * kappa * t_int)  # B(τ) = varphi(τ) / (2 * kappa * τ)
+
+        return B
+    # 瞬态磁场协议部分
     def get_kernel(self, control_pulse : CompositePulse, qubit:TransmonQubit):
         '''
         获取脉冲的控制核函数
@@ -197,7 +297,28 @@ class Analysis:
         return B_opt, history
     
     
-    
+    # cryoscope协议部分
+    def get_h_from_phi(self, h_list, phi_list):
+        '''
+        从相位标定关系phi(h)中提取反函数h(phi)，并进行插值，得到任意phi对应的h值
+        '''
+        from scipy.interpolate import interp1d
+        phi_of_h = interp1d(h_list, phi_list, kind='cubic', fill_value='extrapolate')
+        index = np.argsort(phi_list)
+        h_sorted = np.array(h_list)[index]
+        phi_sorted = np.array(phi_list)[index]
+        mask = np.diff(phi_sorted, prepend=-np.inf) > 1e-12  # 只保留φ单调递增的部分
+        h_of_phi = interp1d(phi_sorted[mask], h_sorted[mask], kind='cubic', fill_value='extrapolate')
+        return phi_of_h, h_of_phi
+    def get_signal_from_cryoscope(self, qubit, trunc_list, varphi_meas, h_of_phi, tau, dt):
+        '''
+        从测量的相位变化phi_meas中提取磁场信号
+        tau为标定时的方波长度，dt为测量时的截断时间间隔
+        '''
+        delta_phi = np.diff(varphi_meas, prepend=0)  # phi_meas已经是相位变化了
+        delta_phi_norm = delta_phi * tau / dt  # 根据方波长度和测量时间间隔进行缩放
+        h_meas = h_of_phi(delta_phi_norm)  # 通过h(phi)的反函数得到磁场值
+        return trunc_list, h_meas
 
         
 
@@ -625,52 +746,52 @@ def levenberg_marquardt(qubit, p_meas, t_list, control_pulse, b_init, B_init, re
         # 计算雅可比矩阵
         J = compute_jacobian(qubit, control_pulse, B_curr, t_meas, results, H_curr_list, t_evolve_list)
         #J = compute_jacobian_finite_difference(qubit, control_pulse, B_curr, t_meas, p_sim, H_curr_list, t_evolve_list)
-                # ===== 分离调试：检查 sensitivity * phi_k 是否匹配频率变化的有限差分 =====
-        eps = 1e-5
-        k_test = 0
-        phi_k = B_curr.basis_functions[k_test]
+        #         # ===== 分离调试：检查 sensitivity * phi_k 是否匹配频率变化的有限差分 =====
+        # eps = 1e-5
+        # k_test = 0
+        # phi_k = B_curr.basis_functions[k_test]
 
-        # 当前频率
-        freq_orig = qubit.freq_coeffs.copy()
+        # # 当前频率
+        # freq_orig = qubit.freq_coeffs.copy()
 
-        # 扰动后频率
-        b_plus = b.copy(); b_plus[k_test] += eps
-        B_plus = B_curr.copy(); B_plus.update_signal(b=b_plus)
-        qubit.qubit_in_mag(B_plus)
-        freq_plus = qubit.freq_coeffs.copy()
-        qubit.qubit_in_mag(B_curr)  # 恢复
+        # # 扰动后频率
+        # b_plus = b.copy(); b_plus[k_test] += eps
+        # B_plus = B_curr.copy(); B_plus.update_signal(b=b_plus)
+        # qubit.qubit_in_mag(B_plus)
+        # freq_plus = qubit.freq_coeffs.copy()
+        # qubit.qubit_in_mag(B_curr)  # 恢复
 
-        # 有限差分：频率对 b_k 的导数
-        dfreq_fd = (freq_plus - freq_orig) / eps  # 长度 = len(t_list)
+        # # 有限差分：频率对 b_k 的导数
+        # dfreq_fd = (freq_plus - freq_orig) / eps  # 长度 = len(t_list)
 
-        # adjoint chain rule：sensitivity * phi_k(t_list)
-        tB = B_curr.t_list
-        sensitivity_arr = np.array([
-            qubit.frequency_sensitivity(qubit.flux + B_curr.value_at(t)) for t in tB
-        ])
-        dfreq_adj = sensitivity_arr * phi_k(np.array(tB))
+        # # adjoint chain rule：sensitivity * phi_k(t_list)
+        # tB = B_curr.t_list
+        # sensitivity_arr = np.array([
+        #     qubit.frequency_sensitivity(qubit.flux + B_curr.value_at(t)) for t in tB
+        # ])
+        # dfreq_adj = sensitivity_arr * phi_k(np.array(tB))
 
-        print("=== Chain Rule 验证 ===")
-        for idx in [0, len(tB)//4, len(tB)//2, 3*len(tB)//4, len(tB)-1]:
-            print(f"  t={tB[idx]:.2f}: fd={dfreq_fd[idx]:.6f}, adj={dfreq_adj[idx]:.6f}, ratio={dfreq_adj[idx]/(dfreq_fd[idx]+1e-30):.4f}")
+        # print("=== Chain Rule 验证 ===")
+        # for idx in [0, len(tB)//4, len(tB)//2, 3*len(tB)//4, len(tB)-1]:
+        #     print(f"  t={tB[idx]:.2f}: fd={dfreq_fd[idx]:.6f}, adj={dfreq_adj[idx]:.6f}, ratio={dfreq_adj[idx]/(dfreq_fd[idx]+1e-30):.4f}")
                 
-        # ===== 有限差分验证（调试完删掉）=====
-        eps = 1e-5
-        k_test = 0  # 测试第 0 列
-        b_plus = b.copy(); b_plus[k_test] += eps
-        B_plus = B_curr.copy(); 
-        B_plus.update_signal(b=b_plus)
-        qubit.qubit_in_mag(B_plus)
-        H_plus, t_ev_plus = H(qubit)
-        res_plus = forward_simulation(qubit, control_pulse, B_plus, t_meas, H_plus, t_ev_plus)
-        p_plus = np.array([r.expect[0][-1] for r in res_plus])
-        J_fd = (p_plus - p_sim) / eps
-        qubit.qubit_in_mag(B_curr)  # 恢复
-        print("dimension check: ", J.shape, J_fd.shape)
-        print(f"Adjoint J[:,{k_test}] = {J[:5, k_test]}")
-        print(f"FinDiff J[:,{k_test}] = {J_fd[:5]}")
-        print(f"Ratio: {J[:5, k_test] / (J_fd[:5] + 1e-30)}")
-        # ===== 验证结束 =====
+        # # ===== 有限差分验证（调试完删掉）=====
+        # eps = 1e-5
+        # k_test = 0  # 测试第 0 列
+        # b_plus = b.copy(); b_plus[k_test] += eps
+        # B_plus = B_curr.copy(); 
+        # B_plus.update_signal(b=b_plus)
+        # qubit.qubit_in_mag(B_plus)
+        # H_plus, t_ev_plus = H(qubit)
+        # res_plus = forward_simulation(qubit, control_pulse, B_plus, t_meas, H_plus, t_ev_plus)
+        # p_plus = np.array([r.expect[0][-1] for r in res_plus])
+        # J_fd = (p_plus - p_sim) / eps
+        # qubit.qubit_in_mag(B_curr)  # 恢复
+        # print("dimension check: ", J.shape, J_fd.shape)
+        # print(f"Adjoint J[:,{k_test}] = {J[:5, k_test]}")
+        # print(f"FinDiff J[:,{k_test}] = {J_fd[:5]}")
+        # print(f"Ratio: {J[:5, k_test] / (J_fd[:5] + 1e-30)}")
+        # # ===== 验证结束 =====
         A = J.T @ J + mu * np.eye(n_basis) + reg * R(n_basis, basis_type)  # 正则化的Hessian矩阵
 
         delta_b = np.linalg.solve(A, J.T @ res)  # 计算参数更新

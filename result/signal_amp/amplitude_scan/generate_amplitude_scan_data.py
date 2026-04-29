@@ -124,10 +124,11 @@ def run_amplitude_experiment(amplitude, output_dir='result/amplitude_scan'):
     start_time = time.time()
     try:
         # 使用Wiener结果作为初始猜测
-        Phi_guess = Signal(type=1, t_list=B_lists_wiener, amplitude=0.01, rise=10, fall=10, center=100)
+        #Phi_guess = Signal(type=1, t_list=B_lists_wiener, amplitude=0.01, rise=10, fall=10, center=100)
+        Phi_guess = B_recon_wiener.copy()  # 直接使用Wiener重建结果作为初始猜测
         B_opt_lm, history = analysis.numerical_inverse(
             qubit, control_pulse, p_e, B_lists_wiener, Phi_guess,
-            basis_type='fourier', n_basis=100, lambdas=100.0, max_iter=25, tol=1e-4
+            basis_type='fourier', n_basis=100, lambdas=100.0, max_iter=150, tol=1e-4
         )
         lm_time = time.time() - start_time
         print(f"LM优化完成，耗时 {lm_time:.2f} 秒，残差范数: {np.linalg.norm(history['res'][-1]):.6f}")

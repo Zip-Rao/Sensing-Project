@@ -1,6 +1,6 @@
-# 基于全密度矩阵模拟的数值反演方案
+# LM优化重建
 
-## 概述
+
 
 本方案旨在实现一个基于全密度矩阵模拟的数值反演算法，用于从量子测量数据中高精度重建瞬态磁场信号。该算法针对非线性响应较强的Transmon量子比特系统，克服传统线性反卷积方法的局限性，提供更准确的重建结果。
 
@@ -40,6 +40,7 @@ $$
 
 其中 $\lambda$ 为正则化参数，$\mathbf{D}$ 为平滑算子（通常为二阶差分矩阵）。
 
+
 ### Levenberg-Marquardt算法
 
 采用带正则化的Levenberg-Marquardt算法迭代求解：
@@ -49,17 +50,65 @@ $$
 2. **迭代步骤**（$n=0,1,2,...$）：
 
    a. 前向模拟：计算 $p_{\text{sim}}(t_i;\mathbf{b}^{(n)})$ 和残差 $\mathbf{r}^{(n)} = \mathbf{p}_{\text{meas}} - \mathbf{p}_{\text{sim}}(\mathbf{b}^{(n)})$
-
+   
    b. 计算Jacobian矩阵：$J_{ik}^{(n)} = \frac{\partial p_{\text{sim}}(t_i)}{\partial b_k} \bigg|_{\mathbf{b}=\mathbf{b}^{(n)}}$
    Jacobian矩阵表示第k个参数对第i个测量点的敏感度
 
-   c. 更新方程：$(\mathbf{J}^{(n)T}\mathbf{J}^{(n)} + \mu^{(n)}\mathbf{I} + \lambda\mathbf{D}^T\mathbf{D}) \delta\mathbf{b} = \mathbf{J}^{(n)T} \mathbf{r}^{(n)}$
-
+   c. 更新方程：
+   $(\mathbf{J}^{(n)T}\mathbf{J}^{(n)} + \mu^{(n)}\mathbf{I} + \lambda\mathbf{D}^T\mathbf{D}) \delta\mathbf{b} = \mathbf{J}^{(n)T} \mathbf{r}^{(n)}$
+ 
    d. 参数更新：$\mathbf{b}^{(n+1)} = \mathbf{b}^{(n)} + \delta\mathbf{b}$
    
    e. 阻尼调整：若 $\|\mathbf{r}^{(n+1)}\| < \|\mathbf{r}^{(n)}\|$，则 $\mu^{(n+1)} = \mu^{(n)}/2$；否则 $\mu^{(n+1)} = 2\mu^{(n)}$ 并拒绝更新
 
 3. **收敛判断**：当 $\|\delta\mathbf{b}\|/\|\mathbf{b}\| < \epsilon_{\text{tol}}$ 或 $\|\mathbf{r}\| < \epsilon_{\text{data}}$ 时停止
+
+### 更新方程推导
+目标函数为$S = \frac{1}{2}\|\mathbf{r}\|_2^2, \mathbf{r} = p_{meas} - p_{sim}(\mathbf{b}), r_i = p_{meas}(t_i) - p_{sim}(t_i, \mathbf{b})$
+
+残差对参数的导数为
+$$
+\frac{\partial r_i}{\partial b_k} = -\frac{\partial p_{sim}(t_i, \mathbf{b})}{\partial b_k} = -J_{ik}
+$$
+则
+$$
+\frac{\partial S}{\partial b_k} = \sum_i r_i \frac{\partial r_i}{\partial b_k} = -\sum_i r_i J_{ik} = -(\mathbf{J}^T \mathbf{r})_k = g_k
+$$
+$$
+\frac{\partial^2 S}{\partial b_k \partial b_l} = \sum_i \frac{\partial r_i}{\partial b_k} \frac{\partial r_i}{\partial b_l} + r_i\frac{\partial^2 p_{sim}}{\partial b_k \partial b_l} = \sum_i J_{ik} J_{il} + r_i \frac{\partial^2 p_{sim}}{\partial b_k \partial b_l} = (J^T J)_{kl} + \sum_i r_i \frac{\partial^2 p_{sim}}{\partial b_k \partial b_l} = H_{kl}
+$$
+目标函数在第$n$个迭代点的展开为
+$$
+S(b^{(n)} + \delta b) = S(b^{(n)}) + g^T \delta b + \frac{1}{2} \delta b^T H \delta b
+$$
+将$S(b^{(n)} + \delta b)$看做$\delta b$的二次函数，则极小值点满足
+$$
+g^T + \delta b^T H = 0 \Rightarrow H \delta b = -g
+$$
+对于梯度下降法，其忽略了hesse矩阵，根据上式，$\delta b$的方向为$-g$，步长趋于无穷，为了避免发散，引入有限步长$\alpha$，也成学习率，其收敛速度为线性。
+
+牛顿法保留了Hesse矩阵，$\delta b = -H^{-1}g$，实际计算中，由于Hesse矩阵包含$p$的二阶导数项，计算成本高，且对噪声敏感。
+
+高斯牛顿法忽略了二阶导数项，近似为$J^TJ\delta b = -g = J^Tr$，在残差较大时，由于二阶导数项较大，可能导致更新方向错误，甚至发散。并且由于忽略了二阶导数项，Hesse矩阵可能奇异。
+
+为了解决上述问题，在目标函数中引入阻尼项$\mu\|\delta b\|^2$，得到修正的更新方程：
+$$
+(J^TJ + \mu I)\delta b = -J^Tr
+$$
+阻尼项的引入解决了奇异问题，同时可以控制步长，避免矩阵病态导致步长过大，从而引起发散。因此，在算法中自适应调整阻尼系数，可以动态平衡梯度下降和牛顿法的优缺点，实现更快的收敛。
+
+另外，为了解决实际问题中的高频噪声问题引入了正则项$\frac{\lambda}{2} b^T D^T D b$，其中$D$为惩罚矩阵，取决于基函数。对于fourier基，$D$满足
+$$
+D^TD = diag(0, 1^2, 2^2, ..., (M-1)^2)
+$$
+频率越高，惩罚系数越大，相当于一个低通滤波器，惩罚高频分量。
+
+对于B样条基，$D$为二阶差分矩阵，惩罚信号的二阶导数，从而使得信号更平滑。
+
+引入正则化项后，更新方程变为
+$$
+(J^TJ + \mu I + \lambda D^TD)\delta b = -J^Tr
+$$
 
 
 ### Jacobian计算

@@ -285,6 +285,7 @@ def create_amplitude_scan_figure(amplitudes, rmse_wiener, rmse_lm,
 
     # 找到交叉点并标记
     crossover_amp, crossover_idx = find_crossover_point(amplitudes, rmse_wiener, rmse_lm)
+    crossover_amp = None
     if crossover_amp is not None:
         ax1.axvline(x=crossover_amp, color=crossover_color, linestyle='--',
                    alpha=0.7, linewidth=1.5, label=f'Crossover: {crossover_amp:.4f}')

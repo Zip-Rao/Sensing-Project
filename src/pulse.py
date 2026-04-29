@@ -77,8 +77,9 @@ class Pulse:
         a = destroy(n)  # 湮灭算符
         adag = create(n)  # 产生算符
         t_list = np.asarray(self.Omega.t_list)
-        Omega = np.array([self.get_Rabi_frequency(t) for t in self.Omega.t_list]) if isinstance(self.Omega, Signal) else self.Omega
-        
+        #Omega = np.array([self.get_Rabi_frequency(t) for t in self.Omega.t_list]) if isinstance(self.Omega, Signal) else self.Omega
+        # 直接访问Omega.signal，计算复杂度从O(N^2)降到O(N)，大幅提升效率
+        Omega = np.array(self.Omega.signal, dtype=float) if isinstance(self.Omega, Signal) else self.Omega
         if self.frame == 0:  # 实验系
             coeff = Omega * np.cos(self.omega_d * t_list + self.phase)
             H = [[a + adag,  coeff]]
@@ -211,7 +212,7 @@ class CompositePulse:
 
     def get_t_list(self):
         '''
-        获取复合脉冲的时间列表，返回list形式
+        获取复合脉冲的时间列表，返回数组形式
         '''
         t_list = []
         curr = 0.0
@@ -221,7 +222,7 @@ class CompositePulse:
             if pulse_list:
                 # 保证t_list没有重复的时间点
                 curr = pulse_list[-1] + 1e-9  # 在最后一个时间点基础上加一个小的时间间隔，避免重复，同时两个脉冲之间有一个小的间隔，从而避开coeff边界的处理
-        return t_list
+        return np.array(t_list)
     
     def get_Omega(self,t):
         '''
@@ -259,11 +260,16 @@ class CompositePulse:
             duration = t_local[-1] - t_local[0]
             for op, coeff_local in term_curr:
                 coeff_global = np.zeros(N, dtype = complex)
-                for j, t in enumerate(t_global):
-                    t_loc = t - curr
-                    if t_loc >= t_local[0] and t_loc <= t_local[-1]:
-                        index = np.clip(np.searchsorted(t_local, t_loc) - 1, 0, len(coeff_local) - 1)
-                        coeff_global[j] = coeff_local[index]
+                t_loc = t_global - curr
+                mask = (t_loc >= t_local[0]) & (t_loc <= t_local[-1])
+                # 一次searchsort
+                indices = np.clip(np.searchsorted(t_local, t_loc[mask]) - 1, 0, len(coeff_local) - 1)
+                coeff_global[mask] = coeff_local[indices]
+                # for j, t in enumerate(t_global):
+                #     t_loc = t - curr
+                #     if t_loc >= t_local[0] and t_loc <= t_local[-1]:
+                #         index = np.clip(np.searchsorted(t_local, t_loc) - 1, 0, len(coeff_local) - 1)
+                #         coeff_global[j] = coeff_local[index]
                 hamiltonian.append([op, coeff_global])
             curr += duration
         return hamiltonian, t_global
@@ -396,6 +402,99 @@ def create_ramsey_pulse(t_rabi, tau, omega_d = 0.0, phase1 = np.pi/2, phase2=0.0
     composite_pulse = CompositePulse(pulses)
     return composite_pulse
 
+def create_diff_echo_pulse(t_rabi, tau, t_int, t_rep, k, omega_d, phase1 = 0.0, phase2 = np.pi/2, phase3 = np.pi/2):
+    '''
+    创建差分回波序列：pi/2 - [tau - pi - tau' - (tau + t_int) - pi - tau'']^k - pi/2
+    其中，pi脉冲长度与pi/2脉冲相同，phase1, phase2, phase3分别为第一个pi/2脉冲，默认朝x轴，pi脉冲，默认朝y轴，和第二个pi/2脉冲，，默认朝y轴，tau'和tau''由总周期t_rep和其他参数自动计算
+    '''
+    
+    # 自由演化波形
+    Omega_0 = Signal(
+        type = 0,
+        t_list = np.linspace(0, tau, 100)  # ns
+    )
+    Omega_01 = Signal(
+        type = 0,
+        t_list = np.linspace(0, t_rep + t_int - t_rabi[-1] + t_rabi[0], 100)  # ns
+    )
+    Omega_02 = Signal(
+        type = 0,   
+        t_list = np.linspace(0, t_rep - tau - t_int - (t_rabi[-1] - t_rabi[0]), 100)  # ns
+    )
+    # pi/2
+    Omega_1 = Signal(
+        type = 1,   
+        t_list = t_rabi,
+        amplitude = ( np.pi / 2.0 ) / ( t_rabi[-1] - t_rabi[0] )  # GHz
+    )
+    # pi
+    Omega_2 = Signal(
+        type = 1,
+        t_list = t_rabi,
+        amplitude = ( np.pi ) / ( t_rabi[-1] - t_rabi[0] )  # GHz
+    )
+    pulses = []
+    # pi/2
+    pulses.append(Pulse(
+        frame = 1,
+        omega_d = omega_d,
+        phase = phase1,
+        Omega = Omega_1,
+        is_rwa = True
+    ))
+    for _ in range(k):
+        # tau
+        pulses.append(Pulse(
+            frame = 1,
+            omega_d = omega_d,
+            phase = 0.0,
+            Omega = Omega_0,
+            is_rwa = True
+        ))
+        # pi
+        pulses.append(Pulse(
+            frame = 1,
+            omega_d = omega_d,
+            phase = phase2,
+            Omega = Omega_2,
+            is_rwa = True
+        ))
+        # tau' + tau + t_int
+        pulses.append(Pulse(
+            frame = 1,
+            omega_d = omega_d,
+            phase = 0.0,
+            Omega = Omega_01,
+            is_rwa = True
+        ))
+        # pi
+        pulses.append(Pulse(
+            frame = 1,
+            omega_d = omega_d,
+            phase = phase2,
+            Omega = Omega_2,
+            is_rwa = True
+        ))
+        # tau''
+        pulses.append(Pulse(
+            frame = 1,
+            omega_d = omega_d,
+            phase = 0.0,
+            Omega = Omega_02,
+            is_rwa = True
+        ))
+    # pi/2
+    pulses.append(Pulse(
+        frame = 1,
+        omega_d = omega_d,
+        phase = phase3,
+        Omega = Omega_1,
+        is_rwa = True
+    ))
+    composite_pulse = CompositePulse(pulses)
+    return composite_pulse
+
+
 def create_echo_pulse(t_rabi, tau, omega_d = 0.0, phase1 = 0.0, phase2 = 0.0, phase3 = 0.0):
     '''
     
@@ -464,7 +563,7 @@ def create_echo_pulse(t_rabi, tau, omega_d = 0.0, phase1 = 0.0, phase2 = 0.0, ph
     composite_pulse = CompositePulse(pulses)
     return composite_pulse
 
-def create_cpmg_pulse(t_rabi, tau, n, omega_d, phase1, phase2, phase3):
+def create_cpmg_pulse(t_rabi, tau, n, omega_d, phase1 = 0.0, phase2 = np.pi/2, phase3 = np.pi/2):
     '''
     创建CPMG序列的复合脉冲对象，包含两个π/2脉冲和n个π脉冲，以及等待时间tau
     :param t_rabi: π/2脉冲的时间列表（ns）
@@ -512,7 +611,7 @@ def create_cpmg_pulse(t_rabi, tau, n, omega_d, phase1, phase2, phase3):
         Omega = Omega_0,
         is_rwa = True
     ))
-    for i in range(n):
+    for _ in range(n):
         # pi
         pulses.append(Pulse(
             frame = 1,
@@ -546,4 +645,48 @@ def create_cpmg_pulse(t_rabi, tau, n, omega_d, phase1, phase2, phase3):
         is_rwa = True
     ))
     composite_pulse = CompositePulse(pulses)
+    return composite_pulse
+
+def create_cryoscope_pulse(t_rabi, tau, omega_d, phase1 = np.pi/2, phase2 = 0.0):
+    '''
+    创建cryoscope测量协议的复合脉冲对象，包含一个长方形脉冲和一个短脉冲，长方形脉冲用于模拟系统的响应，短脉冲用于刺激系统并测量响应
+    '''
+    Omega_0 = Signal(
+        type = 1,
+        t_list = np.linspace(0, tau, 100),  # ns
+        amplitude = 0.0  # GHz
+    )
+    Omega_1 = Signal(
+        type = 1,
+        t_list = t_rabi,
+        amplitude = ( np.pi / 2.0 ) / ( t_rabi[-1] - t_rabi[0] )  # GHz
+    )
+    pulses = []
+
+    # pi/2-Y
+    pulses.append(Pulse(
+        frame = 1,
+        omega_d = omega_d,
+        phase = phase1,
+        Omega = Omega_1,
+        is_rwa = True
+    ))
+    # tau
+    pulses.append(Pulse(
+        frame = 1,
+        omega_d = omega_d,
+        phase = 0.0,
+        Omega = Omega_0,
+        is_rwa = True
+    ))
+    # pi/2
+    pulses.append(Pulse(
+        frame = 1,
+        omega_d = omega_d,
+        phase = phase2,
+        Omega = Omega_1,
+        is_rwa = True
+    ))
+    composite_pulse = CompositePulse(pulses)
+
     return composite_pulse
