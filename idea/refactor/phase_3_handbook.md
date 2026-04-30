@@ -1,6 +1,7 @@
 # Phase 3 Handbook — Track B 成果内化:LM/Cryoscope/瞬态频率标定
 
-> 前置阅读:[_refactor_plan.md](_refactor_plan.md) §6.5–§6.7、§7.4–§7.5、[phase_2_handbook.md](phase_2_handbook.md)  
+> 前置阅读:[_refactor_plan.md](_refactor_plan.md) §6.5–§6.7、§7.4–§7.5、§15.5(标定层物理对应),[phase_2_handbook.md](phase_2_handbook.md)  
+> 物理参考:Gao 2021 §V.A(spectroscopy)、§V.E 残余 ZZ 测量、Eq. (75-85)  
 > 估计工时:5–7 天(取决于 Track B 完成度)  
 > 触发条件:Track B 已完成 _TODO_master.md 阶段 0+1(LM 修复 + Cryoscope + 瞬态标定 + 失真模型)中**至少**:0.3 (LM 修复)、1.1 (Cryoscope)、1.2 (瞬态标定)
 > 完成标志:`LMReconstruction` / `CryoscopeExperiment` / `TransientFrequencyCalibration` / `FluxResponseCalibration` / `CryoscopeReconstruction` 全部实现并通过对应 baseline
@@ -735,7 +736,61 @@ def levenberg_marquardt(*args, **kwargs):
     return _levenberg_marquardt(*args, **kwargs)
 ```
 
-### 3.10 更新 src/protocal.py:Calibration 为 facade
+### 3.10 (推荐增强) 实现 Readout 表征 — Fidelity F 与 QND-ness Q
+
+参考 Gao 2021 §V.C.2 + Fig. 13。在 cQED 中,读出质量由两个核心指标刻画:
+- **Fidelity** $\mathcal{F} = 1 - [P(m=0||1\rangle_i) + P(m=1||0\rangle_i)]/2$ (Eq. 60)
+- **QND-ness** $\mathcal{Q} = 1 - [P(|0\rangle_o||1\rangle_i) + P(|1\rangle_o||0\rangle_i)]/2$ (Eq. 61)
+
+测量协议是 **butterfly experiment**(论文 Fig. 13a):
+
+```
+qubit_init → M0 (postselect to |0>) → optional π → M1 (probe) → M2 (verify)
+```
+
+通过两次连续测量 $M_1, M_2$ 提取 $\Lambda_M$ 矩阵(Eq. 62),进而计算 $\mathcal{F}$ 和 $\mathcal{Q}$。
+
+```python
+# sqc/calibration/readout.py (P3 推荐增强;若 Track B 未实现可延到 P5)
+from __future__ import annotations
+from dataclasses import dataclass
+import numpy as np
+
+from sqc.devices.transmon import TransmonQubit
+from sqc.hardware.readout import ReadoutModel, IdealProjectiveReadout
+from sqc.calibration.base import Calibration, CalibrationTable
+
+
+@dataclass
+class ReadoutCharacterization(Calibration):
+    """Butterfly experiment to extract Fidelity F and QND-ness Q.
+    
+    Replicates Gao 2021 §V.C.2 protocol. Useful for evaluating
+    custom readout pulse shapes or amplifier configurations.
+    """
+    qubit: TransmonQubit
+    readout: ReadoutModel
+    n_shots: int = 10000
+    
+    def calibrate(self) -> CalibrationTable:
+        # 1. Prepare |0>: pi pulse + post-select on M0
+        # 2. Run M1, M2 for both initial states |0> and |1>
+        # 3. Compute Lambda_M (Eq. 62), invert to get conditional probs
+        # 4. Plug into Eq. 60-61 to get F and Q
+        ...
+        return CalibrationTable(
+            qubit_name=self.qubit.spec().name,
+            kind="readout_FQ",
+            inputs=np.array(["F", "Q"]),
+            outputs=np.array([F_value, Q_value]),
+            fit_params={"Lambda_M": Lambda_M},
+            metadata={"readout_class": type(self.readout).__name__},
+        )
+```
+
+**注**:本项目核心是磁通传感(`IQReadoutModel.measure` 输出 phase),不是 qubit 状态读出,所以 F 和 Q 不是关键指标。但若未来扩展到 logical qubit 实验,这个工具立等可用。**P3 仅留接口 + 占位实现**,完整实现可延到 P5+。
+
+### 3.11 更新 src/protocal.py:Calibration 为 facade
 
 ```python
 # src/protocal.py 中的 Calibration 类 (P3)

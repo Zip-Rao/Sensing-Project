@@ -1,9 +1,10 @@
-# Phase 5 Handbook — 多 qubit Z-crosstalk 论文级 demo
+# Phase 5 Handbook — 多 qubit Z-crosstalk + Cavity 表征 论文级 demo
 
-> 前置阅读:[_refactor_plan.md](_refactor_plan.md) §1.3、§4–§6、[phase_4_handbook.md](phase_4_handbook.md)  
-> 估计工时:5–7 天  
+> 前置阅读:[_refactor_plan.md](_refactor_plan.md) §1.3、§4–§6、§15.4、§15.5,[phase_4_handbook.md](phase_4_handbook.md)  
+> 物理参考:Gao 2021 §V.D(双比特门)、§V.E Eq. (75-85)(残余 ZZ)、§V.F + Fig. 17(cavity 表征)  
+> 估计工时:5–7 天(基础)+ 3–5 天(可选 cavity 表征扩展)  
 > 触发条件:Phase 4 完成,DistortionModel + ControlLine + PredistortionDesigner 已稳定  
-> 完成标志:`TransferMatrix` 完整实现 + 双 qubit `ChipTopology` + Z-crosstalk demo workflow + 双 qubit baseline
+> 完成标志:`TransferMatrix` 完整实现 + 双 qubit `ChipTopology` + Z-crosstalk demo workflow + 双 qubit baseline;**(可选)** Cavity number splitting / Ramsey revival / Wigner tomography 三件套
 
 ---
 
@@ -325,7 +326,94 @@ class ZCrosstalkWorkflow(Workflow):
 2. 跑 ZCrosstalkWorkflow。
 3. 画图:phi_A、phi_B(真实)、phi_B(重建)、H_BA(频域真 vs 估)、补偿前后的寄生相位。
 
-### 3.5 (可选) Coupled_System 兼容包装
+### 3.5 (可选扩展) Cavity 表征三件套 — 对应 Gao 2021 §V.F
+
+如果未来要把项目扩展到 cavity-based bosonic qubit(论文 §VI.B),P5 可顺手实现 cavity 表征三件套。**这部分与磁通传感主线正交,优先级低,但实现门槛低,且物理上漂亮。**
+
+#### 3.5.1 NumberSplittingExperiment
+
+参考论文 §V.F + Fig. 17(b)。在 cavity 中位移到 |β⟩,然后用 transmon 的 spectroscopy 看到一系列等间距 χ 峰(每个对应一个 Fock 态)。物理:由色散耦合 $H_{int} = -(\chi/2) a^\dagger a \sigma_z$,transmon 频率被偏移 $-n \chi$,$n$ 是 cavity photon 数。
+
+```python
+# sqc/experiments/cavity_spectroscopy.py
+@dataclass
+class NumberSplittingExperiment(Experiment):
+    """Probe transmon spectrum when cavity is displaced; reveals
+    photon-number-resolved peaks separated by chi.
+    
+    Replicates Gao 2021 §V.F Fig. 17(b).
+    """
+    qubit: TransmonQubit
+    cavity: Resonator
+    g: float                         # cavity-qubit coupling (rad/ns)
+    beta: complex = 1.0              # displacement amplitude
+    omega_scan: np.ndarray | None = None
+    
+    def run(self) -> ExperimentResult:
+        # 1. Displace cavity to |beta>
+        # 2. Spectroscopy on transmon while measuring P_e
+        # 3. Output: spectrum showing peaks at omega_q - n*chi for n=0,1,2,...
+        ...
+```
+
+**验收**:输出谱中相邻峰间距 ≈ $\chi = 2 E_C (g/\Delta)^2$(Gao 2021 Eq. 35),误差 < 5%。
+
+#### 3.5.2 RamseyRevivalExperiment
+
+参考论文 §V.F Eq. (87) $P_e = \frac{1}{2}\{1 + e^{-2|\beta|^2 \sin^2(\chi t/2)} \cos(|\beta|^2 \sin\chi t)\}$。在 transmon 上做 Ramsey,但 cavity 被显式放在大相干态。$P_e$ 随时间出现 revival(在 $t = 2n\pi/\chi$ 处)。
+
+```python
+@dataclass
+class RamseyRevivalExperiment(Experiment):
+    """Transmon Ramsey with cavity in coherent state |beta>.
+    Revival times reveal chi precisely.
+    
+    Replicates Gao 2021 §V.F Fig. 17(d).
+    """
+    qubit: TransmonQubit
+    cavity: Resonator
+    beta: float = 2.0                # |beta|, "large" coherent state
+    t_max: float = 1000.0            # ns, scan range
+    n_t: int = 200
+    
+    def run(self) -> ExperimentResult: ...
+```
+
+**验收**:revival 峰间距 = $2\pi/\chi$,提取的 $\chi$ 与 number splitting 一致(误差 < 5%)。
+
+#### 3.5.3 WignerTomographyWorkflow
+
+参考论文 §V.F Eq. (89) $W(\alpha) = (2/\pi) \mathrm{Tr}[D_\alpha^\dagger \rho D_\alpha P]$。通过对 cavity 做扫描位移 $D_\alpha$ + 奇偶测量(用 transmon 作 ancilla),得到 Wigner 函数。
+
+```python
+# sqc/workflows/wigner_tomography.py
+@dataclass
+class WignerTomographyWorkflow(Workflow):
+    """Wigner-function tomography via parity measurement.
+    
+    Implements Gao 2021 §V.F Fig. 17(e):
+    1. Prepare cavity state (e.g., Fock |1> via SNAP/OCT)
+    2. Displace cavity by alpha (scan grid)
+    3. Map photon-parity onto transmon Y/2 - C_phi(t=π/χ) - Y/2
+    4. Single-shot transmon readout → P(even) - P(odd) = parity
+    5. W(alpha) = (2/π) parity
+    """
+    qubit: TransmonQubit
+    cavity: Resonator
+    initial_cavity_state: Qobj         # e.g., Fock |1> or coherent
+    alpha_grid: np.ndarray             # 2D complex grid
+    
+    def run(self) -> dict:
+        # ... per-alpha parity measurement ...
+        # output: 2D Wigner image
+        ...
+```
+
+**验收**:对 |0⟩ 输入,Wigner 函数等于二维高斯;对 |1⟩,中心点为负值(展示 photon Fock 态的非经典性)。
+
+**注**:这三个实验在论文 §V.F 中是 cavity-based logical qubit 的标准表征工具。本项目当前不做 logical qubit,但实现它们的成本低(每个 < 200 行),**是论文级 demo 的天然候选**。如果时间允许,推荐在 P5 完成后立刻做。
+
+### 3.6 (可选) Coupled_System 兼容包装
 
 如果 P5 实质上替代了 `src/qubit.py:Coupled_System`,可在 `sqc/devices/chip.py` 中加:
 

@@ -20,7 +20,7 @@ idea/refactor/
 └── phase_5_handbook.md     ← TransferMatrix + 双 qubit Z-crosstalk demo
 ```
 
-阅读顺序:**先读本文件 §1–§13**(全局认知)→ **再读 phase 0 handbook**(必经先决条件)→ **逐个执行 phase 1–5 handbook**。
+阅读顺序:**先读本文件 §1–§15**(全局认知;§15 是 Gao 2021 物理对应,可选但强烈推荐研究者读)→ **再读 phase 0 handbook**(必经先决条件)→ **逐个执行 phase 1–5 handbook**。
 
 ---
 
@@ -40,18 +40,18 @@ idea/refactor/
 
 ### 1.3 与全栈架构的对应
 
-参考真实 cQED 全栈:
+参考 **Gao, Rol, Touzard, Wang, "Practical Guide for Building Superconducting Quantum Devices", PRX Quantum 2, 040202 (2021)** Fig.1(a) 给出的 cQED 六层栈,本项目按以下方式对应(详细物理理论对应见 §15):
 
-```
-Quantum algorithms              ← 不实现 (留接口)
-Control software                ← 部分实现:experiments/, workflows/
-Control electronics             ← 新增:hardware/electronics.py
-Microwave signal processing     ← 部分实现:control/, hardware/distortion.py
-Cryogenics and interconnects    ← 部分实现:hardware/control_line.py, transfer_matrix.py
-Device                          ← 已有:devices/transmon.py, resonator.py, chip.py
-```
+| Gao 2021 层 | 论文涵盖内容 | 本项目 `sqc/` 对应 | 对应论文章节 |
+|---|---|---|---|
+| **Quantum algorithms** | 算法/编译层 | 不实现(留接口) | §VI |
+| **Control software** | Pulse 标定 + 实验序列 | `sqc/experiments/`、`sqc/calibration/`、`sqc/workflows/` | §V (整章) |
+| **Control electronics** | AWG、ADC、FPGA 控制器 | `sqc/hardware/electronics.py`(P5 stub,抽象 AWG/ADC 接口) | §IV.B |
+| **Microwave signal processing** | IQ mixer、LO、HEMT、放大器、滤波器 | `sqc/hardware/distortion.py`(链路失真)、`sqc/hardware/readout.py`(IQ 解调) | §IV.B |
+| **Cryogenics and interconnects** | DR、控制线、衰减器、屏蔽 | `sqc/hardware/control_line.py`、`sqc/hardware/transfer_matrix.py` | §IV.A |
+| **Device** | Transmon、resonator、JJ、SQUID | `sqc/devices/transmon.py`、`resonator.py`、`coupler.py`、`chip.py` | §II + §III |
 
-本项目**重点落在** Device → Control pulse → Control-line transfer function → Calibration → Waveform reconstruction → Predistortion 这条链路。
+本项目**重点落在** Device → Control-line transfer function → Microwave signal processing → Calibration → Waveform reconstruction → Predistortion 这条链路。Gao 2021 在 Fig.1(b) 描述的"Engineering cycle"(Hamiltonian design → Chip design → Fabrication → Characterization → 反馈)中,本项目仅对应**软件仿真侧**:Hamiltonian design → Simulation → Characterization → 反馈,**不涉及芯片设计、加工、制冷**。
 
 ---
 
@@ -1040,9 +1040,161 @@ def qubit_default():
 | Wiener 反卷积 | [src/analysis.py:221-251](../../src/analysis.py#L221-L251) |
 | LM 数值反演 | [src/analysis.py:272-297](../../src/analysis.py#L272-L297) |
 
-### 14.3 全栈架构参考(已在 §1.3)
+### 14.3 全栈架构参考(已在 §1.3,详见 §15)
 
-按真实 cQED 系统六层栈映射(Quantum algorithms / Control software / Control electronics / Microwave signal processing / Cryogenics and interconnects / Device)。本项目重点实现中间四层。
+按 Gao 2021 Fig.1(a) 六层栈映射(Quantum algorithms / Control software / Control electronics / Microwave signal processing / Cryogenics and interconnects / Device)。本项目重点实现中间四层。
+
+### 14.4 主要文献引用
+
+- **[Gao 2021]** Y. Y. Gao, M. A. Rol, S. Touzard, and C. Wang, "Practical Guide for Building Superconducting Quantum Devices", *PRX Quantum* **2**, 040202 (2021). DOI: 10.1103/PRXQuantum.2.040202. **本项目架构的主要参考。**
+- **[Koch 2007]** J. Koch et al., "Charge-insensitive qubit design derived from the Cooper pair box", *Phys. Rev. A* **76**, 042319 (2007). Transmon 原始论文。
+- **[Motzoi 2009]** F. Motzoi et al., "Simple Pulses for Elimination of Leakage in Weakly Nonlinear Qubits", *Phys. Rev. Lett.* **103**, 110501 (2009). DRAG 脉冲。
+- **[Reed 2010]** M. D. Reed et al., "High-Fidelity Readout in Circuit Quantum Electrodynamics Using the Jaynes-Cummings Nonlinearity", *Phys. Rev. Lett.* **105**, 173601 (2010). 高功率读出。
+
+---
+
+## 15. 与 Gao 2021 cQED 全栈架构的物理对应
+
+本节详细列出 `sqc/` 各模块与 Gao 2021 论文的物理理论、公式、实验协议的对应关系。**目的**:让任何读过该论文的研究者能立即定位 sqc/ 中的实现细节;让重构执行者明白每一行代码背后的物理含义。
+
+### 15.1 Device 层 ↔ Gao 2021 §II 物理基础
+
+| sqc 模块/方法 | 物理量 | Gao 2021 公式 | 对应代码 |
+|---|---|---|---|
+| `QubitSpec.frequency()` | $f_{01}(\Phi) = \sqrt{8 E_J(\Phi) E_C} - E_C$ | Eq. (18) $\hbar \omega_T = \sqrt{8 E_J E_C} - E_C$ | [src/qubit.py:60](../../src/qubit.py#L60) |
+| `QubitSpec.anharmonicity()` | $\alpha = -E_C$ | Eq. (18) $\hbar \alpha = E_C$(注意符号约定) | [src/qubit.py:65](../../src/qubit.py#L65) |
+| `QubitSpec.EJ_at(flux)` | $E_J(\Phi) = E_J^0 \|\cos(\pi \Phi / \Phi_0)\|$ | Eq. (20) $E_J \cos(\varphi_{ex}/2)$ | [src/qubit.py:27](../../src/qubit.py#L27) |
+| `TransmonQubit.get_hamiltonian()` (lab frame) | $H = (-E_J + 0.25 E_C) I + \omega_T (n + 0.5) + (\alpha/2)(n^2-n)$ | Eq. (13) $H = 4 E_C n^2 - E_J \cos(\varphi)$ 经 Eq. (15-17) 二阶展开 | [src/qubit.py:87-99](../../src/qubit.py#L87-L99) |
+| `TransmonQubit.get_hamiltonian_rwa(omega_d)` | $H_{RWA} = \Delta n + (\alpha/2)(n^2-n)$,$\Delta = \omega_T - \omega_d$ | Eq. (17),旋转波近似下消除非共振项 | [src/qubit.py:101-114](../../src/qubit.py#L101-L114) |
+| `QubitSpec.sensitivity()` | $\kappa = df_{01}/d\Phi$,中心差分 | (论文未直接给出,源自 SQUID 通量响应) | [src/qubit.py:67-85](../../src/qubit.py#L67-L85) |
+| `QubitSpec.optimal_work_point()` | $\Phi^* = \arctan(\sqrt{2})/\pi$,最大灵敏度点 | (论文未直接给出,sweet-spot vs flux-sensitive 工作点权衡见 §III.B) | [src/qubit.py:246-252](../../src/qubit.py#L246-L252) |
+| `Resonator` (← Cavity) | 多模 LC 谐振器 | §II.A,Eq. (2-7) | [src/qubit.py:328](../../src/qubit.py#L328) |
+| `CoupledSystem`(← Coupled_System) | Qubit-coupler-cavity 三体耦合 | §II.E 色散耦合,Eq. (33) $H/\hbar = \omega_T q^\dagger q + \omega_R a^\dagger a - (\alpha/2) q^{\dagger 2} q^2 - (K/2) a^{\dagger 2} a^2 - \chi q^\dagger q a^\dagger a$ | [src/qubit.py:383-555](../../src/qubit.py#L383-L555) |
+| `simulate_iSWAP` / `simulate_CZ` | 双比特门(共振交换 / 失谐 ZZ) | §V.D Eq. (75) $\zeta_{ij} = -J^2/2 \cdot [1/(\omega_{20}-\omega_{11}) + 1/(\omega_{02}-\omega_{11})]$ | [src/qubit.py:558-641](../../src/qubit.py#L558-L641) |
+
+**关键单位约定**:论文中 $E_C, E_J$ 单位为 GHz(已除 $\hbar$);本项目代码中 `EC, EJ` 单位为 rad·GHz(乘了 $2\pi$),例如默认 `EC=2π·0.2 GHz`,$E_C/h = 200$ MHz,$E_C/(2\pi\hbar)$ 给出与论文 §II.C 推荐范围 $E_C/h \in [160, 400]$ MHz 一致;`EJ=2π·15 GHz` 对应 $E_J/h = 15$ GHz,在论文推荐 $E_J/h \in [10, 25]$ GHz 范围内;$E_J/E_C \approx 75$ 在论文 §II.C 推荐"近似为 50"附近。
+
+### 15.2 Control 层 ↔ Gao 2021 §V.B 单比特控制 + §IV.B 信号处理
+
+| sqc 模块/方法 | 物理量 | Gao 2021 公式/章节 | 对应代码 |
+|---|---|---|---|
+| `Pulse(frame=0/1, omega_d, phase, Omega, is_rwa)` | 微波驱动哈密顿量,实验系/旋转系 | §IV.B Eq. (10) $H_d/\hbar = \epsilon(t) a^\dagger + \epsilon(t)^* a$ | [src/pulse.py:11-100](../../src/pulse.py#L11-L100) |
+| `Pulse.get_hamiltonian()` lab frame | $H = \Omega(t) \cos(\omega_d t + \phi) (a + a^\dagger)$ | §IV.B IQ 调制驱动 | [src/pulse.py:83-86](../../src/pulse.py#L83-L86) |
+| `Pulse.get_hamiltonian()` rotating frame + RWA | $H = (\Omega/2)(a e^{i\phi} + a^\dagger e^{-i\phi})$ | §IV.B,Rabi 驱动 | [src/pulse.py:88-92](../../src/pulse.py#L88-L92) |
+| `Pulse.get_angle_simple()` | $\theta = \int \Omega(t) dt$,共振 Rabi 角 | §IV.B Eq. (49) $\Theta(t) = -\Omega V_0/\hbar \cdot \int_0^t s(t') dt'$ | [src/pulse.py:144-152](../../src/pulse.py#L144-L152) |
+| `simulate_gate` 中 DRAG | $I(t) = G_{amp} \exp(-(t-\mu)^2/2\sigma^2)$,$Q(t) = -D_{amp} (t-\mu)/\sigma \cdot I(t)$,$\beta = -1/\alpha$ | §V.B.1 Eq. (52) DRAG 脉冲;$D_{amp}$ 即 Motzoi 系数 | [src/qubit.py:278-297](../../src/qubit.py#L278-L297) |
+| `create_ramsey_pulse` | π/2 — τ — π/2 | §V.B.2 Eq. (54) Ramsey 衰减振荡 | [src/pulse.py:361-403](../../src/pulse.py#L361-L403) |
+| `create_echo_pulse` | π/2 — τ — π — τ — π/2 | §V.B.2 Eq. (55) Echo 衰减 | [src/pulse.py:498-564](../../src/pulse.py#L498-L564) |
+| `create_cpmg_pulse` | π/2 — (τ/2 — π — τ — ...)^n — π/2 | §V.B.2 CPMG 序列(降低低频噪声) | [src/pulse.py:566-648](../../src/pulse.py#L566-L648) |
+| `create_cryoscope_pulse` | Y/2 — Z(t) — π/2 | §V.E 通过 phase 反演 flux 波形 | [src/pulse.py:650-692](../../src/pulse.py#L650-L692) |
+| `create_diff_echo_pulse` | π/2 — [Hahn echo]^k — π/2 | (本项目原创差分回波,可视为多次 Hahn echo 累计) | [src/pulse.py:405-495](../../src/pulse.py#L405-L495) |
+
+### 15.3 Hardware 层 ↔ Gao 2021 §IV (Cryogenics + 信号处理)
+
+| sqc 模块 | Gao 2021 对应 | 论文章节 |
+|---|---|---|
+| `ControlLine(kind="z")` | Z 控制线,提供 flux bias | §III.B(SQUID flux 控制)、§IV.A(磁通屏蔽) |
+| `ControlLine(kind="xy")` | XY 控制线,提供微波驱动 | §IV.B Eq. (37) $\Gamma_D \approx \omega_q^2 Z_0 C_c^2 / C_\Sigma$,Purcell 衰减 |
+| `ControlLine(kind="readout")` | 读出线,通过 cavity 读 qubit 态 | §V.C 色散读出 |
+| `DistortionModel.apply()` | $\Phi_{on-chip}(t) = h(t) * V_{AWG}(t)$ | §III.D 控制线传递函数;§II.A.2 输入输出关系 Eq. (8) |
+| `SingleExponentialDistortion(amp, tau)` | 单指数尾巴 | §V.E Cryoscope 标定的典型失真 |
+| `MultiExponentialDistortion` | 多时间常数尾巴 | (论文未细述具体形式,但 §V.E 提及 IIR 拟合) |
+| `FIRDistortion` / `IIRDistortion` | 通用线性滤波 | (经典 DSP 标准模型) |
+| `TransferMatrix.elements[(i,j)]` | $\Phi_j(\omega) = \sum_i H_{ji}(\omega) V_i(\omega)$ | §V.E 多 qubit Z-crosstalk; Eq. (75-85) 残余 ZZ 交互 |
+| `IQReadoutModel.measure()` | IQ 解调读出 qubit 态 | §IV.B IQ mixer + §V.C 色散读出协议 |
+
+### 15.4 Experiments 层 ↔ Gao 2021 §V 表征流程
+
+论文 §V 给出了完整的器件表征工作流(Fig. 9),与 `sqc/experiments/` 对应如下:
+
+| Gao 2021 实验 | sqc 实验类 | 论文章节 |
+|---|---|---|
+| Cavity spectroscopy(单/双/三音) | (用 `MesolveRunner` 扫频实现,P3+ 加 `CavitySpectroscopyExperiment`) | §V.A |
+| Resonator power scan(找 dressed/bare cavity) | (P3+,以 `ReadoutCalibration` 形式) | §V.A,Fig. 10 |
+| Qubit spectroscopy(two-tone) | `RamseyExperiment` 的 free-precession 限制版 | §V.A |
+| Three-tone spectroscopy(找 $f_{12}$,提取 $\alpha$) | (P3+,可作为 `AnharmonicityCalibration`) | §V.A |
+| Rabi 振荡 | `RabiExperiment` | §V.B.1 |
+| DRAG 校准 | (P3+ `DragCalibration`,用论文 §V.B.3 ALLXY 协议) | §V.B.1, §V.B.3 |
+| $T_1$ measurement | (用 `RamseyExperiment` 改 sequence,或新增 `T1Experiment`) | §V.B.2 Eq. (53) |
+| Ramsey ($T_2^*$) | `RamseyExperiment`(本项目主力) | §V.B.2 Eq. (54) |
+| Echo ($T_2^E$) | `EchoExperiment` | §V.B.2 Eq. (55) |
+| ALLXY single-qubit diagnostics | (P3+,见下面"增强建议") | §V.B.3, Fig. 11 |
+| Pulse-train amplitude tune-up | (P3+,易在 sqc 中实现) | §V.B.3 |
+| Repeated Ramsey frequency calibration | (与 `QubitFrequencyCalibration` 等价) | §V.B.3 |
+| Single-shot readout fidelity | (P5+ `SingleShotReadoutExperiment`,涉及 IQ 平面单点散射) | §V.C |
+| Butterfly 实验提取 F、Q | (P5+ `ReadoutCharacterization` workflow) | §V.C.2, Fig. 13, Eq. (60-66) |
+| Two-qubit gate engineering | `simulate_iSWAP`, `simulate_CZ`(已实现);P5 `ZCrosstalkWorkflow` | §V.D |
+| RB / GST / IRB | (本项目当前不做门表征,P5+ 可加) | §V.E |
+| ZZ-echo 测残余串扰 | P5 `ZCrosstalkWorkflow` 实现 | §V.E Eq. (75-85), Fig. 16 |
+| Cavity number splitting | (P5+ 加 `NumberSplittingExperiment`) | §V.F Fig. 17(b) |
+| Cavity Ramsey revival | (P5+ 加 `RamseyRevivalExperiment`,提取 $\chi$) | §V.F Eq. (87) |
+| Cavity $T_1, T_2$ | (P5+,新增 `CavityCoherenceExperiment`) | §V.F Fig. 17(c) |
+| Wigner tomography | (P5+ 加 `WignerTomographyWorkflow`) | §V.F Eq. (89), $W(\alpha) = (2/\pi) \mathrm{Tr}[D_\alpha^\dagger \rho D_\alpha P]$ |
+
+**注**:本项目核心是**磁通传感**,不是 cavity-based logical qubit,所以 cavity 表征(论文 §V.F)在 P5 之后才优先级提升。Phase 5 主要做 Z-crosstalk demo,cavity 测量留作未来扩展。
+
+### 15.5 Calibration 层 ↔ Gao 2021 §V.A–V.C 标定流程
+
+论文 §V Fig. 9 给出的依赖图中,我们对应:
+
+| Gao 2021 标定步骤 | sqc 标定类 |
+|---|---|
+| Readout freq | `ReadoutCalibration`(P5+) |
+| Readout freq vs power | 同上(辅助方法) |
+| Qubit spec | `QubitFrequencyCalibration`(P3) |
+| Anharmonicity | (P3+,可加 `AnharmonicityCalibration`) |
+| Dispersive shift $\chi$ | (P5+,从 number splitting 提取) |
+| Rabi | (隐含在 `create_pulse` 的 amplitude scan 内) |
+| T1 / Ramsey / Echo | 复用 `RamseyExperiment` + `EchoExperiment` |
+| DRAG tune-up | `DragCalibration`(P5+) |
+| Pulse trains | (P3+ 子方法) |
+| ALLXY | (P3+,作为 `SingleQubitDiagnostics`) |
+| Readout optimization | `ReadoutCalibration` + `PredistortionDesigner` 风格的 workflow(P5+) |
+| Gate fidelity (RB/GST/QPT) | (本项目当前不做门表征,P5+ 可选扩展) |
+| **(本项目特有)** Flux response calibration via Cryoscope | `FluxResponseCalibration(method="cryoscope")`(P3) |
+| **(本项目特有)** Frequency response via transient sensing | `TransientFrequencyCalibration`(P3) |
+| **(本项目特有)** Transfer function calibration | `TransferFunctionCalibration`(P4) |
+
+最后三项是本项目相对论文的扩展,因为论文聚焦于 cQED 计算应用,而本项目主线是**磁通传感与重建**,所以增加了"片上 flux 波形"层面的标定。
+
+### 15.6 Reconstruction 层 ↔ 本项目特有
+
+论文 §V.F 提到 cavity Wigner tomography(本质上是状态重建),但论文不涉及"flux 波形重建"。本项目的 reconstruction 层是**研究创新点**,与论文正交。
+
+| sqc 类 | 与论文关系 |
+|---|---|
+| `WienerReconstruction` | 经典线性反卷积,论文未提及 |
+| `HammersteinWienerReconstruction` | 块结构非线性,基于论文 §II.C transmon 频率-磁通色散关系反推 |
+| `LMReconstruction` | 全密度矩阵优化,论文 §V.C 提到但仅用于 cavity 状态重建 |
+| `CryoscopeReconstruction` | 论文 §V.E 简略提及 cryoscope 概念,本项目实现完整反演 |
+| `RamseyIQReconstruction` | 基于论文 §V.B 标准 Ramsey 协议输出 |
+| `DiffEchoReconstruction` | 本项目原创,论文未提及 |
+
+### 15.7 物理参数推荐范围 (来自论文 §III.B)
+
+P0 baseline 参数选取已与论文推荐范围一致。下表用作**参数合理性 sanity check**(任何 PR 引入新参数,应核对是否落在表内):
+
+| 参数 | 论文推荐 | 本项目 baseline |
+|---|---|---|
+| $E_J/h$ | 10–25 GHz | 15 GHz ✓ |
+| $E_C/h$ | 160–400 MHz | 200 MHz ✓ |
+| $E_J/E_C$ | ~50 (charge-noise insensitive) | ~75 ✓ |
+| $f_{01}$ | 4–8 GHz | $\sqrt{8 \cdot 15 \cdot 0.2} - 0.2 \approx 4.7$ GHz ✓ |
+| $\alpha/h$ | 200–300 MHz | 200 MHz ✓ |
+| $T_1$ | 20–100 μs(Transmon 典型) | 10 μs(本项目偏短,仿真便利) |
+| $T_2$ | 接近 $2T_1$(echo 极限) | 8 μs ✓ |
+| Cavity $T_1$ | ms 量级(3D)/100 μs(planar) | (P5+ 配置时按 1 ms) |
+| 单比特门时长 $\tau_g$ | 4σ ≈ 20 ns | $t_{rabi} \in [10, 40]$ ns ✓ |
+
+### 15.8 与论文的差异(本项目特有的简化)
+
+| 项 | 论文做法 | 本项目做法 | 理由 |
+|---|---|---|---|
+| 量子算符表示 | Eq. (5) $a, a^\dagger$ ladder operator | QuTiP 的 `destroy(n_levels)`、`num(n_levels)` | 数值实现等价 |
+| 噪声模型 | §V.B.2 不同 $T_1, T_2, T_\phi$ 渠道 + 论文 Eq. (43) cavity-induced dephasing | `c_ops = [√γ₁ a, √γ_φ n]`,Lindblad 形式 | 标准 QuTiP 接入,后续可加 1/f 噪声 |
+| Readout | §V.C dispersive readout via cavity + IQ | Ramsey-based IQ readout(测 flux 引起的 phase) | 本项目核心是**磁通传感**而非 qubit 状态读出 |
+| Two-qubit gate | §V.D 三类(flux-pulsing/microwave/parametric) | 仅 flux-pulsing iSWAP/CZ | 项目当前单 qubit 为主 |
+| Calibration loop | §V Fig. 9 完整依赖图 | 简化为 frequency / flux response / transfer function 三类 | 聚焦三大主线 |
 
 ---
 

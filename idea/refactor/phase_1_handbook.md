@@ -1,6 +1,7 @@
 # Phase 1 Handbook — sqc/ 骨架 + ABC + 数据结构 + src/ 镜像
 
-> 前置阅读:[_refactor_plan.md](_refactor_plan.md) §4–§8、[phase_0_handbook.md](phase_0_handbook.md)  
+> 前置阅读:[_refactor_plan.md](_refactor_plan.md) §4–§8、§15.1(物理公式对应),[phase_0_handbook.md](phase_0_handbook.md)  
+> 物理参考:Gao 2021 §II.B–C(Transmon)、§II.E(色散耦合)  
 > 估计工时:3–5 天  
 > 触发条件:Phase 0 已完成,baseline 测试全部通过  
 > 完成标志:`sqc/` 完整目录建立,所有 ABC 定义,所有数据结构定义,`src/` 镜像不破坏任何 baseline
@@ -89,6 +90,14 @@ class QubitSpec:
     
     Holds NO experimental state. Methods are pure: they take parameters
     and return values without mutating self.
+    
+    Physical model (cf. Gao 2021 §II.B-C, Eq. 13-20):
+        H = 4 EC n^2 - EJ(Phi) cos(varphi)
+        EJ(Phi) = EJ_0 |cos(pi Phi/Phi_0)|             (SQUID, Eq. 20)
+        omega_T = sqrt(8 EJ EC) - EC                   (Eq. 18)
+        alpha    = -EC                                  (Eq. 18, sign convention)
+    
+    Units: EC, EJ in rad·GHz (i.e., includes 2*pi factor); flux in Phi_0.
     """
     name: str
     EC: float                 # rad·GHz

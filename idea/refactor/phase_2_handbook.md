@@ -1,6 +1,7 @@
 # Phase 2 Handbook — 已实现协议的实验对象化 + KernelEstimator 去重
 
-> 前置阅读:[_refactor_plan.md](_refactor_plan.md) §6.5、§7.4、[phase_1_handbook.md](phase_1_handbook.md)  
+> 前置阅读:[_refactor_plan.md](_refactor_plan.md) §6.5、§7.4、§15.2(单比特控制物理对应)、§15.4(实验对应表),[phase_1_handbook.md](phase_1_handbook.md)  
+> 物理参考:Gao 2021 §V.B(单比特实验),§IV.B(IQ 调制驱动)  
 > 估计工时:4–6 天  
 > 触发条件:Phase 1 完成 + Track B 已修复 LM 收敛(_TODO_master.md 0.1–0.3 完成,**仅 0.3 是硬依赖**)  
 > 完成标志:`RamseyExperiment` / `DiffEchoExperiment` / `TransientSensingExperiment` / `RabiExperiment` 实现并通过 baseline 回归;`KernelEstimator` 在三处 kernel 实现去重
@@ -454,7 +455,102 @@ class RamseyExperiment(Experiment):
 - DiffEchoExperiment 的默认参数与 case 2 完全一致(k=5, t_list=linspace(0,100,200), Phi type=3 amplitude=0.01...)。
 - TransientSensingExperiment 的默认参数与 case 4 完全一致,且**调用 KernelEstimator** 计算 kernel。
 
-### 3.8 改写 src/protocal.py 的 Protocal 类为 facade
+### 3.8 (推荐增强) 实现 ALLXY 单比特门诊断协议
+
+参考 Gao 2021 §V.B.3 + Fig. 11。ALLXY 是单比特门质量诊断的标准协议,通过 21 组 (X/Y, π/π/2) 配对脉冲检查 detuning、amplitude、DRAG 系数等错误。**本项目当前协议(case 0/1/2/4/5)未覆盖此实验**,但实现成本极低(< 100 行),建议在 P2 加入,作为 P3 DRAG 标定的前置工具。
+
+```python
+# sqc/experiments/allxy.py (P2 新增,可选)
+from __future__ import annotations
+from dataclasses import dataclass, field
+import numpy as np
+
+from sqc.devices.transmon import TransmonQubit
+from sqc.control.sequence import create_pulse
+from sqc.simulation.runner import MesolveRunner
+from sqc.simulation.result import ExperimentResult
+from sqc.experiments.base import Experiment
+
+
+# Standard ALLXY pair list (Gao 2021 Fig. 11, Reed thesis Ch. 5).
+# Each entry is (axis1, angle1, axis2, angle2). axis: "I"|"X"|"Y", angle: 0|np.pi/2|np.pi
+ALLXY_PAIRS = [
+    ("I", 0, "I", 0),                   # 0: ground
+    ("X", np.pi, "X", np.pi),           # 1: should return to |0>
+    ("Y", np.pi, "Y", np.pi),           # 2: should return to |0>
+    ("X", np.pi, "Y", np.pi),           # 3
+    ("Y", np.pi, "X", np.pi),           # 4
+    ("X", np.pi/2, "I", 0),             # 5: superposition
+    ("Y", np.pi/2, "I", 0),             # 6
+    ("X", np.pi/2, "Y", np.pi/2),       # 7
+    ("Y", np.pi/2, "X", np.pi/2),       # 8
+    ("X", np.pi/2, "Y", np.pi),         # 9
+    ("Y", np.pi/2, "X", np.pi),         # 10
+    ("X", np.pi, "Y", np.pi/2),         # 11
+    ("Y", np.pi, "X", np.pi/2),         # 12
+    ("X", np.pi/2, "X", np.pi),         # 13
+    ("X", np.pi, "X", np.pi/2),         # 14
+    ("Y", np.pi/2, "Y", np.pi),         # 15
+    ("Y", np.pi, "Y", np.pi/2),         # 16
+    ("X", np.pi, "I", 0),               # 17: should be |1>
+    ("Y", np.pi, "I", 0),               # 18: should be |1>
+    ("X", np.pi/2, "X", np.pi/2),       # 19
+    ("Y", np.pi/2, "Y", np.pi/2),       # 20
+]
+# Ideal p_e for each pair (assuming perfect gates):
+# pairs 0-4: p_e = 0  (ground/double-pi)
+# pairs 5-16: p_e = 0.5 (equal superposition)
+# pairs 17-20: p_e = 1  (excited)
+ALLXY_IDEAL = np.array([0]*5 + [0.5]*12 + [1]*4, dtype=float)
+
+
+@dataclass
+class ALLXYExperiment(Experiment):
+    """ALLXY single-qubit gate diagnostics.
+    
+    Reproduces Gao 2021 §V.B.3 Fig. 11 staircase pattern. Useful for
+    diagnosing detuning, amplitude, and DRAG-coefficient errors.
+    
+    Returns ExperimentResult with:
+      - data["p_e"]: shape (21,)
+      - data["ideal"]: shape (21,)
+      - axes["pair_idx"]: 0..20
+    """
+    qubit: TransmonQubit
+    t_rabi: np.ndarray = field(default_factory=lambda: np.linspace(0, 20, 40))
+    omega_d: float | None = None
+    
+    def __post_init__(self):
+        if self.omega_d is None:
+            self.omega_d = self.qubit.frequency
+    
+    def build_sequence(self):
+        return None  # built per-pair in run()
+    
+    def run(self) -> ExperimentResult:
+        from qutip import QobjEvo, basis
+        psi_e = basis(self.qubit.n_levels, 1)
+        p_e = np.zeros(21)
+        for i, (ax1, ang1, ax2, ang2) in enumerate(ALLXY_PAIRS):
+            # Build pulse sequence: pulse1 -> pulse2
+            # ... (sequential mesolve with two pulses;
+            #      see RabiExperiment for pulse construction template)
+            ...
+            p_e[i] = ...  # fill in
+        return ExperimentResult(
+            data={"p_e": p_e, "ideal": ALLXY_IDEAL},
+            axes={"pair_idx": np.arange(21)},
+            metadata={"experiment": "ALLXYExperiment",
+                      "qubit_spec": self.qubit.spec()},
+            config={"omega_d": self.omega_d, "t_rabi": self.t_rabi.copy()},
+        )
+```
+
+**验收**(可选):detuning ≈ 0 + amplitude 校准 + DRAG=0 时,`max|p_e - ideal| < 0.05`。
+
+**注**:这是 **P2 推荐增强**,不是硬性必须。如时间紧,可以延到 P3 或留作 future work,在 commit message 中标注"未实现 ALLXY,见 phase_2_handbook §3.8"。
+
+### 3.9 改写 src/protocal.py 的 Protocal 类为 facade
 
 ```python
 # src/protocal.py (P2 之后)
@@ -571,7 +667,7 @@ class Calibration:
 
 **必读注释**:`Protocal.evolve` 必须返回与旧版**完全相同**的元组结构(顺序、类型),否则 web_demo.py 和 Notebook 会崩。Phase 2 的 baseline 测试就是验证这一点。
 
-### 3.9 更新 src/analysis.py:Analysis.get_kernel 转发
+### 3.10 更新 src/analysis.py:Analysis.get_kernel 转发
 
 ```python
 # src/analysis.py
