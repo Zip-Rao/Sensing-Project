@@ -168,12 +168,14 @@ class FluxSignal(Waveform):
                 / (2 * sigma**2)
             )
             return signal + offset
-        elif type == 4:  # asymmetric impulse
+        elif type == 4:  # asymmetric impulse (double-exponential)
             rise = params.get("rise", 5.0)
             fall = params.get("fall", 2.0)
             t0 = params.get("center", 0.0)
-            signal += amplitude * (
-                np.exp(-(t_array - t0) / fall)
+            # Matches src/signal.py line 89:
+            # amplitude * exp(-(t-t0)/fall - exp(-(t-t0)/rise))
+            signal += amplitude * np.exp(
+                -(t_array - t0) / fall
                 - np.exp(-(t_array - t0) / rise)
             )
             return signal + offset

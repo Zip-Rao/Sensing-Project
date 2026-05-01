@@ -81,7 +81,12 @@ def create_pulse(
 
 
 def create_ramsey_pulse(
-    t_rabi, tau, omega_d=0.0, phase1=np.pi / 2, phase2=0.0
+    t_rabi,
+    tau,
+    omega_d=0.0,
+    phase1=np.pi / 2,
+    phase2=0.0,
+    qubit=None,
 ):
     """Build Ramsey sequence: pi/2 - tau - pi/2.
 
@@ -97,6 +102,8 @@ def create_ramsey_pulse(
         First pi/2 phase (rad).
     phase2 : float
         Second pi/2 phase (rad).
+    qubit : TransmonQubit or None
+        Qubit for n_levels resolution. If None, defaults to 2-level.
 
     Returns
     -------
@@ -120,6 +127,7 @@ def create_ramsey_pulse(
             phase=phase1,
             Omega=Omega_1,
             is_rwa=True,
+            qubit=qubit,
         )
     )
     if tau != 0.0 and Omega_0 is not None:
@@ -130,6 +138,7 @@ def create_ramsey_pulse(
                 phase=0.0,
                 Omega=Omega_0,
                 is_rwa=True,
+                qubit=qubit,
             )
         )
     pulses.append(
@@ -139,6 +148,7 @@ def create_ramsey_pulse(
             phase=phase2,
             Omega=Omega_1,
             is_rwa=True,
+            qubit=qubit,
         )
     )
     return CompositePulse(pulses)
@@ -154,6 +164,7 @@ def create_diff_echo_pulse(
     phase1=0.0,
     phase2=np.pi / 2,
     phase3=np.pi / 2,
+    qubit=None,
 ):
     """Build differential echo sequence.
 
@@ -212,6 +223,7 @@ def create_diff_echo_pulse(
             phase=phase1,
             Omega=Omega_1,
             is_rwa=True,
+            qubit=qubit,
         )
     )
     for _ in range(k):
@@ -222,6 +234,7 @@ def create_diff_echo_pulse(
                 phase=0.0,
                 Omega=Omega_0,
                 is_rwa=True,
+                qubit=qubit,
             )
         )
         pulses.append(
@@ -231,6 +244,7 @@ def create_diff_echo_pulse(
                 phase=phase2,
                 Omega=Omega_2,
                 is_rwa=True,
+                qubit=qubit,
             )
         )
         pulses.append(
@@ -240,6 +254,7 @@ def create_diff_echo_pulse(
                 phase=0.0,
                 Omega=Omega_01,
                 is_rwa=True,
+                qubit=qubit,
             )
         )
         pulses.append(
@@ -249,6 +264,7 @@ def create_diff_echo_pulse(
                 phase=phase2,
                 Omega=Omega_2,
                 is_rwa=True,
+                qubit=qubit,
             )
         )
         pulses.append(
@@ -258,6 +274,7 @@ def create_diff_echo_pulse(
                 phase=0.0,
                 Omega=Omega_02,
                 is_rwa=True,
+                qubit=qubit,
             )
         )
     # Final pi/2
@@ -268,6 +285,7 @@ def create_diff_echo_pulse(
             phase=phase3,
             Omega=Omega_1,
             is_rwa=True,
+            qubit=qubit,
         )
     )
     return CompositePulse(pulses)

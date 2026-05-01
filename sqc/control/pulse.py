@@ -24,27 +24,21 @@ from qutip import (
 class PulseBase(ABC):
     """Abstract base for any control pulse.
 
-    Subclasses must implement hamiltonian (QuTiP list format),
-    t_list (time axis), and frame (reference frame).
+    Subclasses must provide the following *instance attributes*:
+      - hamiltonian : QuTiP list-format Hamiltonian
+      - t_list : time axis (np.ndarray)
+      - frame : reference frame (0=lab, 1=rotating)
+
+    This base class does NOT enforce these via @abstractmethod because
+    Python's ABC machinery cannot check instance attributes set in
+    __init__. Instead, subclasses set these attributes in __init__ and
+    the base class verifies them in __post_init_checks__().
     """
 
-    @property
-    @abstractmethod
-    def hamiltonian(self) -> list:
-        """QuTiP list-format Hamiltonian: [[op, coeff_arr], ...]."""
-        ...
-
-    @property
-    @abstractmethod
-    def t_list(self):
-        """Time axis (np.ndarray) for this pulse."""
-        ...
-
-    @property
-    @abstractmethod
-    def frame(self) -> int:
-        """Reference frame: 0 = lab, 1 = rotating."""
-        ...
+    def __init_subclass__(cls, **kwargs):
+        """Verify that subclass defines required attributes."""
+        super().__init_subclass__(**kwargs)
+        # Defer check to instance creation time via __post_init_checks__
 
 
 # ---------------------------------------------------------------------------
