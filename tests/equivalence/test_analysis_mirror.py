@@ -212,19 +212,42 @@ def test_analysis_mirror_expectation_and_population():
 def test_analysis_mirror_not_implemented():
     """Methods dependent on Track B raise NotImplementedError.
 
-    numerical_inverse is now implemented in P3b; removed from this list.
+    numerical_inverse implemented in P3b; get_h_from_phi in P3c.
     """
     from src_mirror.analysis import Analysis
 
     ana = Analysis()
 
     for method_name, args in [
-        ("get_h_from_phi", (None, None)),
         ("get_signal_from_cryoscope", (None, None, None, None, None, None)),
         ("get_volterra_kernel", (None, None)),
     ]:
         with pytest.raises(NotImplementedError):
             getattr(ana, method_name)(*args)
+
+
+def test_analysis_mirror_get_h_from_phi():
+    """get_h_from_phi implemented in P3c — pure interpolation, no Track B req."""
+    import numpy as np
+    from src_mirror.analysis import Analysis
+    from src.analysis import Analysis as OldAnalysis
+
+    h_list = np.linspace(-0.03, 0.03, 21)
+    phi_list = 3.0 * h_list + 0.1 * h_list**3  # nonlinear monotonic
+
+    ana_new = Analysis()
+    ana_old = OldAnalysis()
+
+    phi_new, h_new = ana_new.get_h_from_phi(h_list, phi_list)
+    phi_old, h_old = ana_old.get_h_from_phi(h_list, phi_list)
+
+    # Test forward: phi(h) should be close to original
+    h_test = np.linspace(-0.02, 0.02, 11)
+    from tests.conftest import assert_array_close
+    assert_array_close(phi_new(h_test), phi_old(h_test), name="get_h_from_phi_forward")
+    # Test inverse: h(phi) roundtrip
+    phi_test = np.linspace(-0.06, 0.06, 11)
+    assert_array_close(h_new(phi_test), h_old(phi_test), name="get_h_from_phi_inverse")
 
 
 # ---------------------------------------------------------------------------

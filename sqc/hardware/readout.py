@@ -122,10 +122,12 @@ class IQReadoutModel(ReadoutModel):
         ctrl_I = create_ramsey_pulse(
             t_rabi, tau, omega_d=omega_d,
             phase1=np.pi / 2, phase2=0.0,
+            qubit=qubit,
         )
         ctrl_Q = create_ramsey_pulse(
             t_rabi, tau, omega_d=omega_d,
             phase1=np.pi / 2, phase2=np.pi / 2,
+            qubit=qubit,
         )
 
         t_evolve = ctrl_I.t_list

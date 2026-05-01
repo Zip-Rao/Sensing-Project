@@ -48,6 +48,7 @@ from sqc.reconstruction.wiener import (
 )
 from sqc.reconstruction.hammerstein import HammersteinWienerReconstruction
 from sqc.reconstruction.numerical_inverse import LMReconstruction
+from sqc.reconstruction.cryoscope import CryoscopeReconstruction
 from sqc.simulation.result import (
     ExperimentResult,
     extract_expectation,
@@ -444,31 +445,53 @@ class Analysis:
     def get_h_from_phi(self, h_list, phi_list):
         """Build phi(h) and h(phi) interpolation functions.
 
-        Not yet internalised — requires Track B 1.1 (Cryoscope).
+        Pure-data transformation (no qubit interaction). Verbatim port
+        of src/analysis.py:Analysis.get_h_from_phi.
 
-        Raises
-        ------
-        NotImplementedError
-            Always in P3a.
+        Parameters
+        ----------
+        h_list : array-like
+            Flux/height values used in calibration.
+        phi_list : array-like
+            Measured phase for each h.
+
+        Returns
+        -------
+        tuple[callable, callable]
+            (phi_of_h, h_of_phi) — scipy interp1d functions.
         """
-        raise NotImplementedError(
-            "get_h_from_phi: P3c — requires Track B 1.1 (Cryoscope). "
-            "Use src.analysis.Analysis.get_h_from_phi for now."
+        from scipy.interpolate import interp1d
+
+        phi_of_h = interp1d(
+            h_list, phi_list, kind="cubic", fill_value="extrapolate",
         )
+        index = np.argsort(phi_list)
+        h_sorted = np.array(h_list)[index]
+        phi_sorted = np.array(phi_list)[index]
+        mask = np.diff(phi_sorted, prepend=-np.inf) > 1e-12
+        h_of_phi = interp1d(
+            phi_sorted[mask], h_sorted[mask],
+            kind="cubic", fill_value="extrapolate",
+        )
+        return phi_of_h, h_of_phi
 
     def get_signal_from_cryoscope(
         self, qubit, trunc_list, varphi_meas, h_of_phi, tau, dt
     ):
         """Cryoscope waveform reconstruction.
 
-        Not yet internalised — requires Track B 1.1 (Cryoscope).
+        **Requires Track B 1.1** (Cryoscope case 6/7) for the full
+        CryoscopeReconstruction pipeline. The basic data path
+        (case 5) is available via CryoscopeExperiment.
 
         Raises
         ------
         NotImplementedError
-            Always in P3a.
+            Until Track B 1.1 is complete.
         """
         raise NotImplementedError(
-            "get_signal_from_cryoscope: P3c — requires Track B 1.1 (Cryoscope). "
-            "Use src.analysis.Analysis.get_signal_from_cryoscope for now."
+            "get_signal_from_cryoscope: requires Track B 1.1 "
+            "(Cryoscope case 6/7 calibration, see _TODO_master.md 1.1). "
+            "The measurement-only CryoscopeExperiment (case 5) is "
+            "available via Protocal(type=5).evolve() in this mirror layer."
         )

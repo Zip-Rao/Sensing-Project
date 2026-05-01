@@ -30,6 +30,7 @@ from sqc.experiments.rabi import RabiExperiment
 from sqc.experiments.ramsey import RamseyExperiment
 from sqc.experiments.echo import DiffEchoExperiment
 from sqc.experiments.transient import TransientSensingExperiment
+from sqc.experiments.cryoscope import CryoscopeExperiment
 from sqc.reconstruction.kernel import KernelEstimator
 
 
@@ -160,9 +161,26 @@ class Protocal:
                 )
 
             case 5:  # Cryoscope
-                # P3 will internalize; for now, raise NotImplementedError
-                raise NotImplementedError(
-                    "Cryoscope protocol will be internalized in Phase 3"
+                # Ported from src/protocal.py case 5.
+                # Creates CryoscopeExperiment with legacy defaults.
+                # NOTE: Legacy calls Phi.plot() on the flux signal.
+                t_rabi = np.linspace(0, 10, 20)
+                tau = 100.0
+                exp = CryoscopeExperiment(
+                    qubit=qubit,
+                    t_rabi=t_rabi,
+                    tau=tau,
+                )
+                # Pre-plot flux signal (legacy behaviour)
+                exp.flux_signal.plot()
+
+                result = exp.run()
+                # Legacy returns: trunc_list, varphi_list, Phi, p_e_list
+                return (
+                    result.axes["trunc"],
+                    result.data["varphi"],
+                    exp.flux_signal,
+                    [list(result.data["p_e_I"]), list(result.data["p_e_Q"])],
                 )
 
             case _:
@@ -232,14 +250,19 @@ class Protocal:
 
 
 # ---------------------------------------------------------------------------
-# Calibration (verbatim stub, P3 will implement)
+# Calibration facade (P3c) — delegates to sqc.calibration.*
 # ---------------------------------------------------------------------------
 
 class Calibration:
-    """Calibration class (stub for P3).
+    """Legacy calibration class — facade over sqc.calibration.*.
 
-    Currently mirrors src/protocal.py:Calibration interface.
-    Full implementation deferred to Phase 3.
+    API preserved verbatim from src/protocal.py:Calibration.
+
+    Delegation:
+      - type 0 → QubitFrequencyCalibration (Ramsey f_01)
+      - type 1 → FluxResponseCalibration(method="ramsey") (f(Phi) via Ramsey)
+      - type 2 → NOT IMPLEMENTED (requires Track B 1.2)
+      - type 3 → NOT IMPLEMENTED (requires Track B 1.1)
     """
 
     def __init__(self, qubit, type=0, **kwargs):
@@ -248,17 +271,45 @@ class Calibration:
         self.params = kwargs
 
     def calibrate(self):
-        """Execute calibration."""
+        """Execute calibration via sqc/calibration/ classes.
+
+        Returns
+        -------
+        - type 0: CalibrationTable (f01)
+        - type 1: CalibrationTable (f_phi)
+        - type 2/3: raises NotImplementedError
+        """
+        from sqc.calibration.qubit_frequency import QubitFrequencyCalibration
+        from sqc.calibration.flux_response import FluxResponseCalibration
+
         match self.type:
-            case 0:  # Ramsey frequency calib
-                pass
-            case 1:  # f(Phi) via Ramsey
-                pass
-            case 2:  # Transient calib
-                pass
-            case 3:  # Cryoscope calib
-                raise NotImplementedError(
-                    "Cryoscope calibration will be implemented in Phase 3"
+            case 0:  # Ramsey frequency f_01 calibration
+                cal = QubitFrequencyCalibration(
+                    qubit=self.qubit,
                 )
+                return cal.calibrate()
+
+            case 1:  # f(Phi) via Ramsey
+                cal = FluxResponseCalibration(
+                    qubit=self.qubit,
+                    method="ramsey",
+                )
+                return cal.calibrate()
+
+            case 2:  # Transient calib — requires Track B 1.2
+                raise NotImplementedError(
+                    "Calibration type=2 (transient frequency calibration): "
+                    "requires Track B 1.2 (case 8). See _TODO_master.md 1.2."
+                )
+
+            case 3:  # Cryoscope φ(h) calib — requires Track B 1.1
+                raise NotImplementedError(
+                    "Calibration type=3 (cryoscope φ(h) calibration): "
+                    "requires Track B 1.1 (Cryoscope case 6/7). "
+                    "See _TODO_master.md 1.1. "
+                    "The legacy src/protocal.py:Calibration(type=3).calibrate() "
+                    "has a working implementation; use that for now."
+                )
+
             case _:
                 raise ValueError(f"Unknown calibration type {self.type}")
