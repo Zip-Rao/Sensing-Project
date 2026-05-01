@@ -10,11 +10,11 @@
 
 | 字段 | 值 |
 |---|---|
-| 完成 phase | P3a |
+| 完成 phase | P3b |
 | 完成日期 | 2026-05-01 |
-| commit SHA | 2eafda9 |
-| 执行者 (人/agent id) | refactor-phase-executor (P3a run) |
-| 本次 token 实际消耗 | ~150K |
+| commit SHA | 3f37ede |
+| 执行者 (人/agent id) | refactor-phase-executor (P3b run) |
+| 本次 token 实际消耗 | ~200K |
 
 ---
 
@@ -24,7 +24,7 @@
 - [x] **P1** — sqc/ 骨架 + ABC + 数据结构 + src_mirror/ 镜像 (2026-05-01, commit: 0efc938)
 - [x] **P2** — 已实现协议 (case 0/1/2/4) 实验对象化 + KernelEstimator 去重 + src_mirror/protocal.py facade (2026-05-01, commit: cdd32a3)
 - [x] **P3a** — basis 模块 + Wiener / RamseyIQ / DiffEcho / HammersteinWiener 内化 + src_mirror/analysis.py 创建 (2026-05-01, commits: 5488e20, 844e875, 2eafda9)
-- [ ] **P3b** — LMReconstruction 完整内化 (含伴随 Jacobian)
+- [x] **P3b** — LMReconstruction 完整内化 (含伴随 Jacobian) (2026-05-01, commits: 4cd6bc7, 3f37ede)
 - [ ] **P3c** — Cryoscope/Calibration 内化 + src_mirror/protocal.py 中 Calibration 类补全
 - [ ] **P4** — ControlLine + DistortionModel + PredistortionDesigner + workflow
 - [ ] **P5** — TransferMatrix + 双 qubit Z-crosstalk + (可选) Cavity 表征三件套
@@ -36,7 +36,7 @@
 | 字段 | 值 |
 |---|---|
 | 当前分支 | `项目重建-v2` |
-| 最近 commit | `2eafda9` (P3a: add src_mirror/analysis.py facade with equivalence tests) |
+| 最近 commit | `3f37ede` (P3b: LM unit tests + baseline generation + regression test) |
 | `git rev-parse HEAD:src` | `e453019c022eb29d1686188101ef68e2846c7109` |
 | `git diff --quiet master -- 'src/*.py'` 是否返回 0 | ✓ (src/*.py files unchanged; only __pycache__ bytecode differs) |
 | 未合并到 master 的 refactor 分支 | `项目重建-v2` |
@@ -47,11 +47,11 @@
 
 | 测试套件 | 上次结果 | 用时 |
 |---|---|---|
-| `pytest tests/unit -v` | 90 passed, 0 failed | 2.1s |
-| `pytest tests/regression -m regression` | 4 passed, 0 failed | 28s |
-| `pytest tests/equivalence` | 12 passed, 0 failed (4 protocal + 8 analysis) | 50s |
-| `pytest tests/integration` | 6 passed, 0 failed | 95s |
-| `pytest tests/ -v -m "not slow"` | 112 passed, 0 failed | 178s |
+| `pytest tests/unit -v` | 95 passed, 0 failed | 9.3s |
+| `pytest tests/regression -m regression` | 5 passed, 0 failed | 37s |
+| `pytest tests/equivalence` | 12 passed, 0 failed (4 protocal + 8 analysis) | 73s |
+| `pytest tests/integration` | 6 passed, 0 failed | 80s |
+| `pytest tests/ -v -m "not slow"` | 118 passed, 0 failed | ~200s |
 
 baseline pickle 清单(`tests/baselines/` 内):
 - [x] `qubit_static.pkl` (P0)
@@ -59,7 +59,7 @@ baseline pickle 清单(`tests/baselines/` 内):
 - [x] `diff_echo_default.pkl` (P0)
 - [x] `transient_default.pkl` (P0)
 - [ ] `cryoscope_default.pkl` (P3c)
-- [ ] `lm_default.pkl` (P3b)
+- [x] `lm_default.pkl` (P3b)
 - [ ] `transient_calib_default.pkl` (P3c)
 - [ ] `predistortion_default.pkl` (P4)
 - [ ] `z_crosstalk_default.pkl` (P5)
@@ -88,6 +88,10 @@ baseline pickle 清单(`tests/baselines/` 内):
 
 10. **CalibrationTable extended**: `sqc/calibration/base.py:CalibrationTable` now has additional optional fields (`inputs`, `outputs`, `kind`, `qubit_name`, `fit_params`) and `evaluate()`/`inverse()` methods with automatic fallback from cubic to quadratic to linear interpolation depending on the number of data points. Legacy usage (just `name` + dict fields) is fully backward-compatible.
 
+11. **LM baseline signal too weak**: The LM baseline (`lm_default.pkl`) uses a sinusoidal signal with amplitude=0.01 over 11 time points, which produces negligible p_e response (all values near 0.5). As a result, the LM optimization does not significantly move from the initial guess of zeros. The baseline correctly verifies algorithm port fidelity, but a future P3b+ iteration should include a stronger signal (larger amplitude, longer time axis) for a more meaningful functional test of the optimization convergence. This would require regenerating the baseline.
+
+12. **LM adjoint Jacobian sign**: The adjoint Jacobian implementation uses `g_values = -1j * trace_values`, which is verbatim from the original src/analysis.py. The sign convention has not been independently verified against the theoretical adjoint-state derivation; it matches the Track B 0.3 fixed version.
+
 ---
 
 ## Track B 当前进度(供 Track A 决定何时启动 P3)
@@ -98,7 +102,7 @@ baseline pickle 清单(`tests/baselines/` 内):
 |---|---|---|
 | 0.1 case 1 死代码清理 | ○ | P2(无强依赖) |
 | 0.2 kernel 自动校准 | ○ | P2(若完成需重生 transient_default.pkl) |
-| 0.3 LM 收敛修复 | ○ | **P3b(硬依赖)** |
+| 0.3 LM 收敛修复 | ✓ (用户确认) | **P3b(已完成)** |
 | 1.1 Cryoscope (case 6/7) | ○ | **P3c(硬依赖)** |
 | 1.2 瞬态频率标定 (case 8) | ○ | **P3c(硬依赖)** |
 | 1.3 DistortionModel (src/ 内基础实现) | ○ | **P4(硬依赖)** |
@@ -134,8 +138,8 @@ baseline pickle 清单(`tests/baselines/` 内):
 
 ### 启动 P3b 之前
 - [x] P3a 已完成
-- [ ] **Track B 0.3 LM 收敛修复已完成**(硬依赖)
-- [ ] src/analysis.py 中 LM 在 baseline 参数下能稳定收敛(由 Track B 验证)
+- [x] **Track B 0.3 LM 收敛修复已完成**(硬依赖) — 用户确认
+- [x] src/analysis.py 中 LM 在 baseline 参数下能稳定收敛(由 Track B 验证)
 
 ### 启动 P3c 之前
 - [ ] P3a 已完成
@@ -160,6 +164,7 @@ baseline pickle 清单(`tests/baselines/` 内):
 
 | 日期 | Phase | 执行者 | commit SHA | 状态 | token 消耗 (估) | 备注 |
 |---|---|---|---|---|---|---|
+| 2026-05-01 | P3b | refactor-phase-executor | 3f37ede | ✅ DONE | ~200K | LMReconstruction class created in sqc/reconstruction/numerical_inverse.py (exact port of Track B 0.3 code); src_mirror/analysis.py numerical_inverse() now delegates to LMReconstruction; module-level stubs (forward_simulation, compute_jacobian, compute_jacobian_fd, levenberg_marquardt) delegate to private methods; lm_default.pkl baseline generated; 118 total tests pass (95 unit + 5 regression + 12 equivalence + 6 integration) |
 | 2026-05-01 | P3a | refactor-phase-executor | 2eafda9 | ✅ DONE | ~150K | basis.py + wiener.py + hammerstein.py created; CalibrationTable extended with evaluate/inverse; src_mirror/analysis.py facade created; 112 total tests pass (90 unit + 4 regression + 12 equivalence + 6 integration); P3b/P3c methods raise NotImplementedError |
 | 2026-05-01 | P2 | refactor-phase-executor | cdd32a3 | ✅ DONE | ~200K | 4 experiment classes; KernelEstimator; SlidingMeasurementRunner; IQReadoutModel; src_mirror/protocal.py facade; all 4 cases match old code 0/1/2/4; FluxSignal type=4 bug fixed; PulseBase ABC fixed; 77 total tests pass (67 unit + 4 regression + 4 equivalence + 6 integration) |
 | 2026-05-01 | P1 | refactor-phase-executor | 0efc938 | ✅ DONE | ~95K | sqc/ 30+ files created; src/ UNCHANGED; src_mirror/ created; 53 unit + 4 regression all pass |
