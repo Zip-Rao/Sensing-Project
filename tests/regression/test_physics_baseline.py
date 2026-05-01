@@ -86,3 +86,45 @@ def test_transient_default_baseline():
     assert_array_close(kernel, bl["kernel"], name="kernel")
     assert_array_close(np.asarray(delta_p), bl["delta_p"], name="delta_p")
     assert_array_close(np.asarray(p_e), bl["p_e"], name="p_e")
+
+
+def test_lm_default_baseline():
+    """LM numerical inversion: b_opt matches frozen baseline."""
+    from src.qubit import TransmonQubit
+    from src.pulse import create_ramsey_pulse
+
+    bl = load_baseline("lm_default")
+
+    q = TransmonQubit(
+        EC=2*np.pi*0.2, EJ=2*np.pi*15, T1=10000, T2=8000,
+        flux=0.0, state=0, n_levels=2,
+    )
+    cp = create_ramsey_pulse(
+        t_rabi=np.linspace(0, 5, 6), tau=5.0, omega_d=q.frequency,
+    )
+
+    from sqc.reconstruction.numerical_inverse import LMReconstruction
+    from sqc.simulation.result import ExperimentResult
+
+    recon = LMReconstruction(
+        qubit=q,
+        control_pulse=cp,
+        basis_type=bl["basis_type"],
+        n_basis=bl["n_basis"],
+        lambda_reg=100.0,
+        max_iter=2,
+        tol=1e-3,
+    )
+    meas = ExperimentResult(
+        data={"p_meas": bl["p_meas"]},
+        axes={"t_signal": bl["t_list"]},
+    )
+    B_opt_flux, history = recon.reconstruct(meas)
+    b_new = B_opt_flux.params["b"]
+
+    assert_array_close(b_new, bl["b_opt"], name="lm_b_opt")
+    assert_array_close(
+        np.asarray(history["res"][-1]),
+        bl["history_res_final"],
+        name="lm_res_final",
+    )
