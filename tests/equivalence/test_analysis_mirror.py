@@ -210,13 +210,15 @@ def test_analysis_mirror_expectation_and_population():
 # ---------------------------------------------------------------------------
 
 def test_analysis_mirror_not_implemented():
-    """Methods dependent on Track B raise NotImplementedError."""
+    """Methods dependent on Track B raise NotImplementedError.
+
+    numerical_inverse is now implemented in P3b; removed from this list.
+    """
     from src_mirror.analysis import Analysis
 
     ana = Analysis()
 
     for method_name, args in [
-        ("numerical_inverse", (None, None, None, None, None)),
         ("get_h_from_phi", (None, None)),
         ("get_signal_from_cryoscope", (None, None, None, None, None, None)),
         ("get_volterra_kernel", (None, None)),
@@ -230,7 +232,11 @@ def test_analysis_mirror_not_implemented():
 # ---------------------------------------------------------------------------
 
 def test_analysis_mirror_module_stubs():
-    """Module-level LM helpers raise NotImplementedError."""
+    """Module-level LM helpers are no longer stubs (P3b implemented).
+
+    Verify they are callable (need actual arguments — just check
+    they are defined and not raising NotImplementedError on import).
+    """
     from src_mirror.analysis import (
         forward_simulation,
         compute_jacobian,
@@ -244,8 +250,7 @@ def test_analysis_mirror_module_stubs():
         compute_jacobian_finite_difference,
         levenberg_marquardt,
     ]:
-        with pytest.raises(NotImplementedError):
-            fn()
+        assert callable(fn), f"{fn.__name__} is not callable"
 
 
 # ---------------------------------------------------------------------------

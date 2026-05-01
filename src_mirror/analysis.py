@@ -47,6 +47,7 @@ from sqc.reconstruction.wiener import (
     DiffEchoReconstruction,
 )
 from sqc.reconstruction.hammerstein import HammersteinWienerReconstruction
+from sqc.reconstruction.numerical_inverse import LMReconstruction
 from sqc.simulation.result import (
     ExperimentResult,
     extract_expectation,
@@ -70,32 +71,62 @@ __all__ = [
 ]
 
 
-def forward_simulation(*args, **kwargs):
-    """Stub — requires Track B 0.3 (LM convergence fix)."""
-    raise NotImplementedError(
-        "forward_simulation: P3b — requires Track B 0.3 (LM convergence fix)"
+def forward_simulation(qubit, control_pulse, B_curr, t_meas, H_list, t_evolve_list):
+    """Module-level forward_simulation facade.
+
+    Creates a temporary LMReconstruction instance and delegates to
+    _forward_simulation. For direct use in new code, prefer
+    LMReconstruction._forward_simulation.
+    """
+    recon = LMReconstruction(qubit=qubit, control_pulse=control_pulse)
+    return recon._forward_simulation(B_curr, t_meas, H_list, t_evolve_list)
+
+
+def compute_jacobian(qubit, control_pulse, B_curr, t_meas, results,
+                     H_list, t_evolve_list):
+    """Module-level compute_jacobian (adjoint) facade.
+
+    Creates a temporary LMReconstruction instance and delegates to
+    _compute_jacobian_adjoint. For direct use in new code, prefer
+    LMReconstruction._compute_jacobian_adjoint.
+    """
+    recon = LMReconstruction(qubit=qubit, control_pulse=control_pulse)
+    return recon._compute_jacobian_adjoint(
+        B_curr, t_meas, results, H_list, t_evolve_list
     )
 
 
-def compute_jacobian(*args, **kwargs):
-    """Stub — requires Track B 0.3 (LM convergence fix)."""
-    raise NotImplementedError(
-        "compute_jacobian: P3b — requires Track B 0.3 (LM convergence fix)"
+def compute_jacobian_finite_difference(qubit, control_pulse, B_curr,
+                                       t_meas, p_sim, H_list,
+                                       t_evolve_list, epsilon=1e-6):
+    """Module-level compute_jacobian_finite_difference facade.
+
+    Creates a temporary LMReconstruction instance and delegates to
+    _compute_jacobian_fd. For direct use in new code, prefer
+    LMReconstruction._compute_jacobian_fd.
+    """
+    recon = LMReconstruction(qubit=qubit, control_pulse=control_pulse)
+    return recon._compute_jacobian_fd(
+        B_curr, t_meas, p_sim, H_list, t_evolve_list, epsilon=epsilon
     )
 
 
-def compute_jacobian_finite_difference(*args, **kwargs):
-    """Stub — requires Track B 0.3 (LM convergence fix)."""
-    raise NotImplementedError(
-        "compute_jacobian_finite_difference: P3b — "
-        "requires Track B 0.3 (LM convergence fix)"
+def levenberg_marquardt(qubit, p_meas, t_list, control_pulse,
+                        b_init, B_init, reg, max_iter=50, tol=1e-6,
+                        mu_init=1e-3):
+    """Module-level levenberg_marquardt facade.
+
+    Creates a temporary LMReconstruction instance and delegates to
+    _levenberg_marquardt. For direct use in new code, prefer
+    LMReconstruction._levenberg_marquardt.
+    """
+    recon = LMReconstruction(
+        qubit=qubit, control_pulse=control_pulse,
+        lambda_reg=reg, max_iter=int(max_iter), tol=tol,
+        mu_init=mu_init,
     )
-
-
-def levenberg_marquardt(*args, **kwargs):
-    """Stub — requires Track B 0.3 (LM convergence fix)."""
-    raise NotImplementedError(
-        "levenberg_marquardt: P3b — requires Track B 0.3 (LM convergence fix)"
+    return recon._levenberg_marquardt(
+        p_meas, t_list, b_init, B_init
     )
 
 
@@ -360,17 +391,51 @@ class Analysis:
     ):
         """Levenberg-Marquardt numerical inversion.
 
-        Not yet internalised — requires Track B 0.3 (LM convergence fix).
+        Delegates to LMReconstruction.
 
-        Raises
-        ------
-        NotImplementedError
-            Always in P3a.
+        Parameters
+        ----------
+        qubit : TransmonQubit
+        control_pulse : CompositePulse
+        p_meas : array-like
+            Measured p_e values at each delay time.
+        t_list : array-like
+            Signal time axis.
+        B_guess : array-like
+            Initial guess for B(t).
+        basis_type : str
+            Basis type ("bspline", "fourier", "legendre").
+        n_basis : int
+            Number of basis functions.
+        lambdas : float
+            Regularisation strength.
+        max_iter : int
+            Maximum LM iterations.
+        tol : float
+            Convergence tolerance.
+
+        Returns
+        -------
+        tuple[np.ndarray, dict]
+            (B_opt, history) — reconstructed B(t) and iteration history.
         """
-        raise NotImplementedError(
-            "numerical_inverse: P3b — requires Track B 0.3 (LM convergence fix). "
-            "Use src.analysis.Analysis.numerical_inverse for now."
+        recon = LMReconstruction(
+            qubit=qubit,
+            control_pulse=control_pulse,
+            basis_type=basis_type,
+            n_basis=n_basis,
+            lambda_reg=lambdas,
+            max_iter=max_iter,
+            tol=tol,
         )
+        meas = ExperimentResult(
+            data={"p_meas": np.asarray(p_meas, dtype=float)},
+            axes={"t_signal": np.asarray(t_list, dtype=float)},
+        )
+        B_opt_flux, history = recon.reconstruct(
+            meas, initial_guess=np.asarray(B_guess, dtype=float),
+        )
+        return B_opt_flux.signal, history
 
     # ------------------------------------------------------------------
     # Cryoscope (P3c)
