@@ -220,12 +220,12 @@ def run_simulation(ec, ej, t1, t2, flux, n_levels, initial_state, protocol_type,
             """
 
         elif protocol_type == 1:  # Ramsey测量
-            # results应该是概率列表
-            tau_list = protocol_params['tau_list']
+            # legacy Protocal returns (Phi, tau_list, p_e_list)
+            _phi, tau_list, p_e_list = results
 
             # 创建图表
             fig, ax = plt.subplots(figsize=(10, 6))
-            ax.plot(tau_list, results, 'g-', linewidth=2, label='激发态概率')
+            ax.plot(tau_list, p_e_list, 'g-', linewidth=2, label='激发态概率')
             ax.set_xlabel('延迟时间 τ (ns)', fontsize=12)
             ax.set_ylabel('激发态概率', fontsize=12)
             ax.set_title('Ramsey干涉条纹', fontsize=14)
@@ -251,8 +251,9 @@ def run_simulation(ec, ej, t1, t2, flux, n_levels, initial_state, protocol_type,
             """
 
         elif protocol_type == 4:  # 瞬态磁场测量
-            # results应该是元组: (t_samples, kernel, scan_list, delta_p)
-            t_samples, kernel, scan_list, delta_p = results
+            # legacy Protocal returns
+            # (t_samples, kernel, scan_list, delta_p, p_e, Phi, control_pulse)
+            t_samples, kernel, scan_list, delta_p, _p_e, _phi, _ctrl = results
 
             # 执行维纳反卷积
             dt = scan_list[1] - scan_list[0]
