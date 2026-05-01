@@ -1,16 +1,18 @@
 # Phase 3 Handbook — Track B 成果内化:LM/Cryoscope/瞬态频率标定
 
-> 前置阅读:[_refactor_plan.md](_refactor_plan.md) §6.5–§6.7、§7.4–§7.5、§15.5(标定层物理对应),[phase_2_handbook.md](phase_2_handbook.md)  
-> 物理参考:Gao 2021 §V.A(spectroscopy)、§V.E 残余 ZZ 测量、Eq. (75-85)  
+> 前置阅读:[_refactor_plan.md](_refactor_plan.md) §6.5–§6.7、§7.4–§7.5、§8(v1.1 兼容层)、§15.5(标定层物理对应),[phase_2_handbook.md](phase_2_handbook.md)  
+> 物理参考(本地 PDF):[`./Gao 等 - 2021 - Practical Guide for Building Superconducting Quantum Devices.pdf`](./Gao%20%E7%AD%89%20-%202021%20-%20Practical%20Guide%20for%20Building%20Superconducting%20Quantum%20Devices.pdf) §V.A(spectroscopy 三层协议)、§V.B.2(T1/Ramsey/Echo Eq. 53–55)、§V.C.2(读出表征 Butterfly 实验,Eq. 60–66)、§V.E(残余 ZZ 测量 Eq. 75–85, Fig. 16)  
 > 估计工时:5–7 天(取决于 Track B 完成度)  
 > 触发条件:Track B 已完成 _TODO_master.md 阶段 0+1(LM 修复 + Cryoscope + 瞬态标定 + 失真模型)中**至少**:0.3 (LM 修复)、1.1 (Cryoscope)、1.2 (瞬态标定)
-> 完成标志:`LMReconstruction` / `CryoscopeExperiment` / `TransientFrequencyCalibration` / `FluxResponseCalibration` / `CryoscopeReconstruction` 全部实现并通过对应 baseline
+> 完成标志:`LMReconstruction` / `CryoscopeExperiment` / `TransientFrequencyCalibration` / `FluxResponseCalibration` / `CryoscopeReconstruction` 全部实现并通过对应 baseline;**`src_mirror/analysis.py` 已创建**;**`src/` 仍未被 Track A 修改**
 
 ---
 
 ## 1. 目标
 
-把 Track B 在 src/ 内已完成的功能,**内化**到 sqc/ 的对应位置。本 phase 是"功能性重构"的核心:从 src/ 把代码搬过来,清理设计债务,加测试。
+把 Track B 在 src/ 内已完成的功能,**内化**到 sqc/ 的对应位置。本 phase 是"功能性重构"的核心:从 src/ 把代码**复制**到 sqc/(`src/` 不动!),清理设计债务,加测试。
+
+**v1.1 关键提醒**:`src/` 永远不修改;所有 facade 类 (`Analysis`、`Calibration`) 写在 `src_mirror/` 目录下。`src/analysis.py` 和 `src/protocal.py` 中的 `Analysis`、`Calibration` 类原样保留,Track B 可以继续在其中添加新方法。
 
 涉及的功能模块:
 1. **CryoscopeExperiment**(case 5/6/7 内化)
@@ -87,9 +89,9 @@ def regularization_matrix(n: int, basis_type: BasisType) -> np.ndarray:
 R = regularization_matrix
 ```
 
-`src/analysis.py` 镜像层重新导出:
+`src_mirror/analysis.py` (v1.1:**`src/analysis.py` 不动**) 中重新导出:
 ```python
-# (P3 之后 src/analysis.py 顶部新增)
+# src_mirror/analysis.py 顶部
 from sqc.reconstruction.basis import (
     generate_basis_functions, basis_function_decomposition, R,
 )
@@ -601,18 +603,20 @@ class TransientFrequencyCalibration(Calibration):
         ...
 ```
 
-### 3.9 内化 RamseyIQ Reconstruction 与 Analysis 类的 facade
+### 3.9 创建 src_mirror/analysis.py — Analysis facade(v1.1 — 不修改 src/)
 
-**文件修改**:`src/analysis.py`
+⚠️ **v1.1 修订**:原 v1.0 计划"改写 `src/analysis.py:Analysis` 为 facade",已废弃。
 
-把 `Analysis` 类改为 facade:
+新策略:**新建 `src_mirror/analysis.py`**,内部包含 `Analysis` 类的 facade 实现。`src/analysis.py` **绝对不动**。
+
+**文件**:`src_mirror/analysis.py`(P3 新建)
 
 ```python
-# src/analysis.py (P3 之后)
-"""src.analysis — facade over sqc.reconstruction.
+# src_mirror/analysis.py
+"""src_mirror.analysis — Analysis API mirror, backed by sqc.reconstruction.*
 
-Internally delegates to sqc/reconstruction/* classes. Legacy method names
-preserved to keep Simulation.ipynb and other historical code working.
+API 与 src.analysis 一一对应,底层走 sqc/。
+本文件不含业务逻辑。
 """
 from __future__ import annotations
 
@@ -790,10 +794,14 @@ class ReadoutCharacterization(Calibration):
 
 **注**:本项目核心是磁通传感(`IQReadoutModel.measure` 输出 phase),不是 qubit 状态读出,所以 F 和 Q 不是关键指标。但若未来扩展到 logical qubit 实验,这个工具立等可用。**P3 仅留接口 + 占位实现**,完整实现可延到 P5+。
 
-### 3.11 更新 src/protocal.py:Calibration 为 facade
+### 3.11 在 src_mirror/protocal.py 中扩展 Calibration facade(v1.1 — 不修改 src/)
+
+⚠️ **v1.1 修订**:`src/protocal.py` 不动。`Calibration` 类的 facade 写在已存在的 `src_mirror/protocal.py`(P2 创建)中,在 P3 阶段补全 `Calibration` 类的实现(P2 时只是 stub)。**同时 `src_mirror/protocal.Protocal.evolve` 的 case 5/6/7/8 也在此时启用**(P2 时 raise NotImplementedError)。
+
+**修改**:`src_mirror/protocal.py` 中的 `Calibration` 类(P2 已存在 stub):
 
 ```python
-# src/protocal.py 中的 Calibration 类 (P3)
+# src_mirror/protocal.py 中的 Calibration 类 (P3 实现)
 class Calibration:
     """Legacy facade over sqc.calibration.* classes."""
     
@@ -951,13 +959,26 @@ tests/baselines/lm_default.pkl                   (新增)
 tests/baselines/transient_calib_default.pkl     (新增)
 ```
 
-### 7.2 文件清单(修改)
+### 7.2 文件清单(新增 — v1.1)
 
 ```
-src/analysis.py                                  (Analysis 改为 facade)
-src/protocal.py                                  (Calibration 改为 facade,case 5 改为 facade)
+src_mirror/analysis.py                           (Analysis facade,P3 新建)
+```
+
+### 7.3 文件清单(修改)
+
+```
 sqc/calibration/base.py                          (CalibrationTable.evaluate / inverse 实现)
+src_mirror/protocal.py                           (P2 已有 stub,P3 补全 Calibration 类 + 启用 case 5/6/7/8)
 tests/regression/generate_baselines.py           (加 cryoscope/lm/transient_calib 三个 baseline)
+```
+
+### 7.4 文件清单(永久不动 — v1.1 硬约束)
+
+```
+src/analysis.py                                  ⚠️ 不动 (facade 在 src_mirror/analysis.py)
+src/protocal.py                                  ⚠️ 不动 (facade 在 src_mirror/protocal.py)
+src/qubit.py / signal.py / pulse.py             ⚠️ 不动
 ```
 
 ### 7.3 接口快照
@@ -987,9 +1008,9 @@ tests/regression/generate_baselines.py           (加 cryoscope/lm/transient_cal
 - [ ] sqc/calibration/{qubit_frequency,flux_response}.py 完整实现
 - [ ] sqc/calibration/base.py:CalibrationTable.evaluate/inverse 实现
 - [ ] sqc/experiments/cryoscope.py 完整实现
-- [ ] src/analysis.py:Analysis 改为 facade
-- [ ] src/protocal.py:Calibration 改为 facade
-- [ ] src/protocal.py case 5 改为转发 CryoscopeExperiment
+- [ ] **新建 src_mirror/analysis.py(Analysis facade)**
+- [ ] **src_mirror/protocal.py 补全 Calibration 类 + 启用 case 5/6/7/8**(P2 已有 Protocal stub)
+- [ ] **`git diff master -- src/` 为空**(硬约束:src/ 仍未被 Track A 修改)
 - [ ] tests/baselines/ 新增 3 个 pkl
 - [ ] tests/regression/generate_baselines.py 包含 cryoscope/lm/transient_calib
 - [ ] tests/integration/ 至少新增 4 个文件

@@ -1,9 +1,22 @@
 # Sensing-Project 全栈化重构方案 — 主方案
 
-> 版本:v1.0  
-> 撰写日期:2026-04-30  
+> 版本:v1.1  
+> 撰写日期:2026-04-30(v1.1 修订:2026-05-01)  
 > 目标读者:具备 Python/QuTiP/超导量子计算基础的工程师或 AI agent  
 > 目标:任何读者按本方案 + 6 份 phase handbook 可独立完成重构,无需进一步澄清
+
+---
+
+> ## ⚠️ 不可违反的硬约束(v1.1 新增)
+>
+> **`src/` 目录下的任何文件,Track A(重构)永远不修改、不删除、不重命名。**
+>
+> - `src/qubit.py`、`src/signal.py`、`src/pulse.py`、`src/protocal.py`、`src/analysis.py` 在整个重构期间保持原样。
+> - 所有"兼容镜像""facade""转发"代码,**一律放在新建的 `src_mirror/` 目录下**,与 `src/` 平级共存。
+> - `Track B`(功能开发)可以继续在 `src/` 内增量开发(例如实现 Cryoscope case 6/7、瞬态标定 case 8 等);这是项目原有开发活动,不属于本重构方案的工作范围。
+> - 任何 PR 中出现 `src/*.py` 的修改 diff(不论是 import 改写、facade 转发、删除函数还是改注释),**必须立即拒绝合并**。
+>
+> **判定标准**:执行完整个重构(Phase 0–5)后,`git diff master -- src/` 应当**只包含 Track B 的功能开发新增内容**(若有),**不包含任何 Track A 的重构改动**。理想情况下,Track A 的所有 PR 中 `src/` 的 diff 为空。
 
 ---
 
@@ -11,16 +24,35 @@
 
 ```
 idea/refactor/
-├── _refactor_plan.md       ← 本文件:主方案 (single source of truth)
-├── phase_0_handbook.md     ← 测试基线 + 工具基础设施
-├── phase_1_handbook.md     ← sqc/ 骨架 + ABC + 数据结构 + src/ 镜像
-├── phase_2_handbook.md     ← 已实现协议 (case 1/2/4) 反向 wrapper + 实验对象化
-├── phase_3_handbook.md     ← Track B 成果 (LM/Cryoscope/瞬态) 内化到 sqc/
-├── phase_4_handbook.md     ← ControlLine + DistortionModel + Predistortion
-└── phase_5_handbook.md     ← TransferMatrix + 双 qubit Z-crosstalk demo
+├── Gao 等 - 2021 - Practical Guide for Building Superconducting Quantum Devices.pdf
+│                              ← 物理参考文献,本地副本 (PRX Quantum 2, 040202)
+├── _refactor_plan.md          ← 本文件:主方案 (single source of truth)
+├── phase_0_handbook.md        ← 测试基线 + 工具基础设施
+├── phase_1_handbook.md        ← sqc/ 骨架 + ABC + 数据结构 + src_mirror/ 镜像
+├── phase_2_handbook.md        ← 已实现协议 (case 1/2/4) 实验对象化 + src_mirror/protocal.py facade
+├── phase_3_handbook.md        ← Track B 成果 (LM/Cryoscope/瞬态) 内化到 sqc/ + src_mirror/analysis.py
+├── phase_4_handbook.md        ← ControlLine + DistortionModel + Predistortion
+└── phase_5_handbook.md        ← TransferMatrix + 双 qubit Z-crosstalk demo + Cavity 表征
 ```
 
-阅读顺序:**先读本文件 §1–§15**(全局认知;§15 是 Gao 2021 物理对应,可选但强烈推荐研究者读)→ **再读 phase 0 handbook**(必经先决条件)→ **逐个执行 phase 1–5 handbook**。
+### 0.1 本地物理参考文献
+
+🔖 **`idea/refactor/Gao 等 - 2021 - Practical Guide for Building Superconducting Quantum Devices.pdf`**
+
+这是项目所有者放在 refactor 目录下的本地 PDF 副本(原始来源:Gao, Rol, Touzard, Wang, *PRX Quantum* **2**, 040202 (2021), DOI: 10.1103/PRXQuantum.2.040202)。
+
+**何时查阅本 PDF**:
+- 重构前**必读**:论文 §I.A(全文导览)、§I 全栈架构图(Fig. 1a)、§II.B–C(Transmon 物理)、§V Fig. 9(标定依赖图)
+- 实施 Phase 1 时:论文 §II.B–C、§II.E(色散耦合)→ 对应本主方案 §15.1
+- 实施 Phase 2 时:论文 §V.B(单比特实验)、§V.B.3(ALLXY 协议、Fig. 11)→ 对应本主方案 §15.2、§15.4
+- 实施 Phase 3 时:论文 §V.A(spectroscopy)、§V.E ZZ 串扰公式 Eq. (75-85)→ 对应本主方案 §15.5
+- 实施 Phase 4 时:论文 §III.D(coherence design)、§IV.A(cryogenics)→ 对应失真传递函数建模
+- 实施 Phase 5 时:论文 §V.E(Fig. 16 Z-crosstalk)、§V.F + Fig. 17(cavity 表征)→ 对应主方案 §15.4 cavity 三件套
+- 任何疑问"为什么这样建模/这样命名":先翻论文 §II–§V,大多数答案在那里;翻不到再回到本主方案 §15
+
+**阅读策略**:论文共 48 页含大量参考文献;实施者**不必通读**。按需查阅本主方案 §15 给出的章节定位即可,例如 "Eq. (18)" 指论文 Eq. 18,"§V.C.2" 指论文 Section V.C subsection 2。
+
+阅读顺序:**先读本文件 §1–§15**(全局认知;§15 是 Gao 2021 物理对应,可选但强烈推荐研究者读)→ **再读 phase 0 handbook**(必经先决条件)→ **逐个执行 phase 1–5 handbook**(每个 handbook 在前言列出该 phase 涉及的论文章节,可以拿着 PDF 边读边做)。
 
 ---
 
@@ -231,13 +263,21 @@ Sensing-Project/
 │       ├── predistortion_validation.py
 │       └── z_crosstalk.py          ← P5
 │
-├── src/                            ← 旧目录,永久镜像导出 (见 §8)
-│   ├── __init__.py
-│   ├── qubit.py
-│   ├── signal.py
-│   ├── pulse.py
-│   ├── protocal.py
-│   └── analysis.py
+├── src/                            ← 项目原始代码,Track A 永远不修改 (见 §8)
+│   ├── __init__.py                 (原样不动)
+│   ├── qubit.py                    (原样不动;Track B 可在内部增量开发)
+│   ├── signal.py                   (原样不动)
+│   ├── pulse.py                    (原样不动)
+│   ├── protocal.py                 (原样不动;Track B 可加 case 5/6/7/8)
+│   └── analysis.py                 (原样不动;Track B 可加新方法)
+│
+├── src_mirror/                     ← v1.1 新增:src/ 的 API 镜像,底层走 sqc/(见 §8.3)
+│   ├── __init__.py                 (空)
+│   ├── qubit.py                    ← P1:re-export sqc.devices.* + sqc.control.gates.*
+│   ├── signal.py                   ← P1:re-export sqc.control.flux_signal.*
+│   ├── pulse.py                    ← P1:re-export sqc.control.pulse + sqc.control.sequence
+│   ├── protocal.py                 ← P2:Protocal/IQ_readout facade;P3 加 Calibration
+│   └── analysis.py                 ← P3:Analysis facade
 │
 ├── tests/                          ← P0 新建
 │   ├── __init__.py
@@ -658,9 +698,11 @@ class Workflow(ABC):
 
 ## 7. 函数级新旧映射表
 
-下表按 src/ 文件分组,列出每个公共符号迁移到 sqc/ 的位置。**所有迁移在 P1–P3 完成,P4–P5 仅新增**。
+下表按 `src/` 文件分组,列出每个公共符号在 `sqc/` 中的对应位置。**所有迁移在 P1–P3 完成,P4–P5 仅新增**。
 
-### 7.1 src/qubit.py → sqc/
+⚠️ **`src/` 中的所有代码原样保留,本表的"新位置"指 sqc/ 中的 canonical 实现位置**。`src_mirror/` 文件名与 `src/` 一一对应,内部仅 re-export 这些 sqc 符号(见 §8.3)。
+
+### 7.1 src/qubit.py(只读) → sqc/(canonical 实现)
 
 | 旧符号 | 新位置 | 备注 |
 |---|---|---|
@@ -688,7 +730,7 @@ class Workflow(ABC):
 | `ideal_CZ` | `sqc/control/gates.py: ideal_CZ` | |
 | `simulate_CZ` (模块级) | `sqc/control/gates.py: simulate_CZ` | |
 
-### 7.2 src/signal.py → sqc/
+### 7.2 src/signal.py(只读) → sqc/(canonical 实现)
 
 | 旧符号 | 新位置 | 备注 |
 |---|---|---|
@@ -715,7 +757,7 @@ class Workflow(ABC):
 | 7 | `"wavepacket"` |
 | 8 | `"custom"` |
 
-### 7.3 src/pulse.py → sqc/
+### 7.3 src/pulse.py(只读) → sqc/(canonical 实现)
 
 | 旧符号 | 新位置 | 备注 |
 |---|---|---|
@@ -729,7 +771,7 @@ class Workflow(ABC):
 | `create_cpmg_pulse` | `sqc/control/sequence.py: create_cpmg_pulse` | |
 | `create_cryoscope_pulse` | `sqc/control/sequence.py: create_cryoscope_pulse` | |
 
-### 7.4 src/protocal.py → sqc/
+### 7.4 src/protocal.py(只读) → sqc/(canonical 实现)
 
 | 旧符号 | 新位置 | 备注 |
 |---|---|---|
@@ -748,9 +790,9 @@ class Workflow(ABC):
 | `Calibration.calibrate` case 3 | `sqc/calibration/flux_response.py: FluxResponseCalibration(method='cryoscope')` (P3) | |
 | `IQ_readout` | `sqc/hardware/readout.py: IQReadoutModel.measure` | 类化 |
 
-**`Protocal` 类名保留**(D3 债务在新代码中通过 `Experiment` 解决,旧 src/ 中不改名)。
+**`Protocal` 类名保留**(D3 债务在新代码中通过 `Experiment` 解决;`src/protocal.py` 中保持原样,`src_mirror/protocal.py` 同样用 `Protocal` 拼写以保 API 一致)。
 
-### 7.5 src/analysis.py → sqc/
+### 7.5 src/analysis.py(只读) → sqc/(canonical 实现)
 
 | 旧符号 | 新位置 | 备注 |
 |---|---|---|
@@ -775,30 +817,55 @@ class Workflow(ABC):
 
 ---
 
-## 8. 兼容层契约
+## 8. 兼容层契约 (v1.1 重写 — `src/` 不动)
 
-### 8.1 永久镜像策略
+### 8.1 三个并存目录的角色划分
 
-`src/` 目录**永久存在**,作为 `sqc/` 的**镜像导出**。Notebook 和 web_demo.py 可以无限期使用旧 import,不强制弃用。
+重构完成后,项目根有三个**互不干扰**的代码目录:
 
-### 8.2 实现模式
+| 目录 | 谁可写 | 内容 | 何时存在 |
+|---|---|---|---|
+| **`src/`** | **仅 Track B**(功能开发) | 项目原始代码 + Track B 新增功能(Cryoscope、瞬态标定等) | 自项目诞生起 |
+| **`sqc/`** | **仅 Track A**(重构) | 全栈架构新实现(Phase 1 起逐步建立) | Phase 1 起 |
+| **`src_mirror/`** | **仅 Track A** | 提供与 `src/` 同名的 API,但底层调用 `sqc/`。**纯 facade 文件,无业务逻辑** | Phase 1 起 |
 
-每个 src/*.py 文件遵循**同一种模板**:
+**Track A 不允许修改 `src/`;Track B 不需要改动 `sqc/` 或 `src_mirror/`**。两条 Track 通过单元/集成测试在 `tests/` 中相互验证。
+
+### 8.2 三种可选的 import 路径(完全等价的 API,不同的实现)
+
+任何使用本项目的代码(notebook、demo、新 workflow)在 P1 完成后,**有三种合法的 import 风格**:
 
 ```python
-# src/qubit.py (P1 之后)
-"""
-src.qubit — sqc.devices.transmon 的兼容镜像。
+# 风格 A:原始路径(永远可用,行为永远等于项目最初状态)
+from src.qubit import TransmonQubit
+from src.protocal import Protocal
 
-新代码应直接使用 sqc.devices.transmon。本文件仅为保持
-Simulation.ipynb 和 web_demo.py 等历史代码可运行而存在。
+# 风格 B:镜像路径(API 与风格 A 完全一致,底层走 sqc/)
+from src_mirror.qubit import TransmonQubit
+from src_mirror.protocal import Protocal
 
-本文件不应包含任何业务逻辑,所有改动须在 sqc/ 中进行。
+# 风格 C:全新路径(canonical,推荐用于新代码)
+from sqc.devices.transmon import TransmonQubit, QubitSpec
+from sqc.experiments.ramsey import RamseyExperiment
+```
+
+**Notebook 与 web_demo.py 默认仍用风格 A**(零迁移成本);若想测试 sqc/ 实现,改成风格 B 即可,**API 一字不变**;新代码直接用风格 C。
+
+### 8.3 src_mirror/ 的实现模式
+
+`src_mirror/` 文件**只做 re-export 与必要的 wrapper**,**永远不写业务逻辑**。
+
+#### 8.3.1 简单 re-export(如 transmon、signal、pulse)
+
+```python
+# src_mirror/qubit.py
+"""src_mirror.qubit — sqc.devices.transmon 的镜像,API 与 src.qubit 一致。
+
+本文件不含业务逻辑,任何修改请在 sqc/ 中进行。
+对应原 src.qubit:
+  - TransmonQubit, Cavity, Coupled_System, ideal_iSWAP, simulate_iSWAP, ideal_CZ, simulate_CZ
 """
-from sqc.devices.transmon import (
-    TransmonQubit,
-    QubitSpec,
-)
+from sqc.devices.transmon import TransmonQubit, QubitSpec
 from sqc.devices.resonator import Resonator as Cavity
 from sqc.devices.chip import CoupledSystem as Coupled_System
 from sqc.control.gates import (
@@ -816,39 +883,126 @@ __all__ = [
 ]
 ```
 
-### 8.3 import 等价矩阵
+#### 8.3.2 Facade 类(如 Protocal、Calibration、Analysis)
 
-**P1 完成后的等价关系**(每行左右两边在新代码里产生同一对象):
+旧 API 中带 case-dispatch 的类(`Protocal(type=N).evolve()`)需要在 `src_mirror/` 内重写一个 thin facade,不能简单 re-export。
 
-| 旧 import | 新 import |
-|---|---|
-| `from src.qubit import TransmonQubit` | `from sqc.devices.transmon import TransmonQubit` |
-| `from src.qubit import Cavity` | `from sqc.devices.resonator import Resonator as Cavity` |
-| `from src.qubit import Coupled_System` | `from sqc.devices.chip import CoupledSystem as Coupled_System` |
-| `from src.signal import Signal` | `from sqc.control.flux_signal import Signal` (兼容别名) |
-| `from src.signal import CompositeSignal` | `from sqc.control.waveform import CompositeWaveform as CompositeSignal` |
-| `from src.pulse import Pulse, CompositePulse` | `from sqc.control.pulse import Pulse, CompositePulse` |
-| `from src.pulse import create_ramsey_pulse` | `from sqc.control.sequence import create_ramsey_pulse` |
-| `from src.protocal import Protocal` | `from sqc.experiments.legacy import Protocal` (P2 后,facade) |
-| `from src.protocal import Calibration` | `from sqc.calibration.legacy import Calibration` (P3 后,facade) |
-| `from src.protocal import IQ_readout` | `from sqc.hardware.readout import IQ_readout_legacy as IQ_readout` |
-| `from src.analysis import Analysis` | `from sqc.reconstruction.legacy import Analysis` (P3 后,facade) |
+```python
+# src_mirror/protocal.py
+"""src_mirror.protocal — Protocal/Calibration facade backed by sqc.experiments.*
 
-`legacy.py` 文件在每个相关包内提供 facade,以保持旧 API 调用方式(类带 case dispatch)能继续工作。
+API 与 src.protocal 一致(同样的 type 码、同样的返回元组形状),底层调用 sqc。
+"""
+from __future__ import annotations
+import numpy as np
 
-### 8.4 关于 `Signal` 类的特殊处理
+from sqc.experiments.rabi import RabiExperiment
+from sqc.experiments.ramsey import RamseyExperiment
+from sqc.experiments.echo import DiffEchoExperiment
+from sqc.experiments.transient import TransientSensingExperiment
+# (Cryoscope 等在 P3 内化后追加)
+
+class Protocal:
+    """Drop-in replacement for src.protocal.Protocal."""
+    def __init__(self, type=0, **kwargs):
+        self.type = type
+        self.params = kwargs
+
+    def initialize(self, qubit, state=0):
+        # verbatim copy from src/protocal.py:23-44 (no business logic, just init defaults)
+        ...
+
+    def evolve(self, qubit):
+        match self.type:
+            case 0:
+                return RabiExperiment(qubit=qubit).run()    # facade
+            case 1:
+                exp = RamseyExperiment(qubit=qubit)
+                r = exp.run()
+                return exp.flux_signal, r.axes["tau"], r.data["p_e"].tolist()
+            case 2: ...   # DiffEcho
+            case 4: ...   # Transient
+            case _:
+                raise NotImplementedError(...)
+
+
+class Calibration:
+    """Drop-in replacement for src.protocal.Calibration (P3+)。"""
+    ...
+
+
+def IQ_readout(qubit, type, **kwargs):
+    """Drop-in replacement for src.protocal.IQ_readout."""
+    from sqc.hardware.readout import IQ_readout_legacy
+    return IQ_readout_legacy(qubit, type, **kwargs)
+```
+
+#### 8.3.3 完整的 src_mirror/ 目录清单
+
+```
+src_mirror/
+├── __init__.py           ← 空
+├── qubit.py              ← P1:re-export sqc.devices.* + sqc.control.gates.*
+├── signal.py             ← P1:re-export sqc.control.flux_signal.*
+├── pulse.py              ← P1:re-export sqc.control.pulse.* + sqc.control.sequence.*
+├── protocal.py           ← P2:Protocal facade(case 0/1/2/4 在 P2 完成,case 3/5/6/7/8 在 P3 加上)
+└── analysis.py           ← P3:Analysis facade
+```
+
+**`src_mirror/__init__.py` 永远为空**,不暴露顶层快捷 import,以保持与 `src/__init__.py`(同样为空)的等价性。
+
+### 8.4 import 等价矩阵
+
+**P1+ 完成后,三种路径的等价关系**:
+
+| 旧 src/ 路径 | src_mirror/ 路径(API 镜像) | sqc/ 路径(canonical) |
+|---|---|---|
+| `from src.qubit import TransmonQubit` | `from src_mirror.qubit import TransmonQubit` | `from sqc.devices.transmon import TransmonQubit` |
+| `from src.qubit import Cavity` | `from src_mirror.qubit import Cavity` | `from sqc.devices.resonator import Resonator as Cavity` |
+| `from src.qubit import Coupled_System` | `from src_mirror.qubit import Coupled_System` | `from sqc.devices.chip import CoupledSystem` |
+| `from src.signal import Signal` | `from src_mirror.signal import Signal` | `from sqc.control.flux_signal import FluxSignal` |
+| `from src.pulse import Pulse, CompositePulse` | `from src_mirror.pulse import Pulse, CompositePulse` | `from sqc.control.pulse import Pulse, CompositePulse` |
+| `from src.pulse import create_ramsey_pulse` | `from src_mirror.pulse import create_ramsey_pulse` | `from sqc.control.sequence import create_ramsey_pulse` |
+| `from src.protocal import Protocal` | `from src_mirror.protocal import Protocal` (P2+) | `from sqc.experiments.ramsey import RamseyExperiment` (具体类) |
+| `from src.protocal import Calibration` | `from src_mirror.protocal import Calibration` (P3+) | `from sqc.calibration.flux_response import FluxResponseCalibration` |
+| `from src.protocal import IQ_readout` | `from src_mirror.protocal import IQ_readout` | `from sqc.hardware.readout import IQReadoutModel` |
+| `from src.analysis import Analysis` | `from src_mirror.analysis import Analysis` (P3+) | `from sqc.reconstruction.wiener import WienerReconstruction` (具体类) |
+
+**关键不变量**:左中右三列输入相同参数,**得到的物理结果在数值上一致**(由 `tests/equivalence/` 测试套件保证)。
+
+### 8.5 sqc/ 自身不依赖 src/
+
+`sqc/` 是**独立的实现**,**绝不 `from src.* import *`**。这保证:
+- `sqc/` 可以单独发布(将来若提取为 PyPI 包)
+- `src/` 删除/重命名不会破坏 `sqc/`(虽然我们承诺不删除)
+- 物理回归测试可以独立验证 sqc/ 与 src/
+
+**唯一例外**:Phase 1 早期的 Verbatim Port 阶段,`sqc/devices/transmon.py` 中的 `TransmonQubit` 类是从 `src/qubit.py` **复制粘贴 + 改进**(不是 import)的代码,即"复制后独立"。
+
+### 8.6 关于 `Signal` 类的特殊处理
 
 `Signal` 在旧代码里是"控制波形 + 物理磁通信号"两用对象。重构后:
 - `sqc/control/waveform.py: Waveform` 是基类,通用波形语义。
 - `sqc/control/flux_signal.py: FluxSignal(Waveform)` 加磁通语义。
-- `sqc/control/flux_signal.py: Signal = FluxSignal` (兼容别名,旧 import 可用)。
-- `Signal.type=0..8` 通过 `make_waveform(kind=..., **kwargs)` 工厂提供;`Signal(type=N, **kwargs)` 兼容构造在 `legacy.py` 实现。
+- `sqc/control/flux_signal.py: Signal = FluxSignal` (兼容别名,新代码也可用)。
+- 旧 `Signal.type=0..8` 的工厂构造方式由 `FluxSignal.__init__(type=N, **kwargs)` 完整支持。
+- `src/signal.py` **不动**;`src_mirror/signal.py` 通过 `from sqc.control.flux_signal import Signal, CompositeSignal` 转发。
 
-### 8.5 拼写保留:Protocal vs Experiment
+### 8.7 拼写保留:Protocal vs Experiment
 
-- 旧符号 `Protocal` **永久保留**(在 `sqc/experiments/legacy.py` 实现,转发给具体 Experiment 类)。
-- 新符号 `Experiment` 是 ABC,所有新代码使用 `RamseyExperiment` 等具体类。
-- 不批量改 `src/` 中的 `Protocal` 拼写,以避免 Notebook/demo 失效。
+- 旧符号 `Protocal`(故意拼写错)在 `src/protocal.py` 中**永远不动**。
+- `src_mirror/protocal.py: Protocal` 是 facade,API 完全一致(包括拼写),仅底层走 sqc/。
+- `sqc/experiments/` 中的新符号统一用 `Experiment` 后缀的具体类(`RamseyExperiment`、`DiffEchoExperiment` 等),不引入 `Protocal` 这个符号。
+
+### 8.8 v1.1 修订原因(给执行者的说明)
+
+v1.0 版本曾计划在 `src/qubit.py`、`src/protocal.py`、`src/analysis.py` 中嵌入 facade 代码(改写其内容为 `from sqc.* import *`)。该方案于 2026-05-01 被项目所有者明确否决,理由:
+
+1. **`src/` 是项目最初的、被广泛引用的、被 git 历史锚定的代码**,任何修改都会污染原始历史;
+2. Track B 在 `src/` 中持续开发,Track A 修改 `src/` 会与 Track B 形成 merge 冲突;
+3. 物理回归 baseline 就是用 `src/` 在某个 commit 上的输出锚定的,如果 `src/` 被 Track A 改写为 facade,则 baseline 不再可独立复现。
+
+v1.1 之后,`src/` 视同**只读资产**,所有兼容/镜像/转发逻辑迁移到 `src_mirror/`。
 
 ---
 
@@ -1046,14 +1200,19 @@ def qubit_default():
 
 ### 14.4 主要文献引用
 
-- **[Gao 2021]** Y. Y. Gao, M. A. Rol, S. Touzard, and C. Wang, "Practical Guide for Building Superconducting Quantum Devices", *PRX Quantum* **2**, 040202 (2021). DOI: 10.1103/PRXQuantum.2.040202. **本项目架构的主要参考。**
-- **[Koch 2007]** J. Koch et al., "Charge-insensitive qubit design derived from the Cooper pair box", *Phys. Rev. A* **76**, 042319 (2007). Transmon 原始论文。
+- **[Gao 2021]** Y. Y. Gao, M. A. Rol, S. Touzard, and C. Wang, "Practical Guide for Building Superconducting Quantum Devices", *PRX Quantum* **2**, 040202 (2021). DOI: 10.1103/PRXQuantum.2.040202.
+  - **本项目架构的主要参考。**
+  - **本地 PDF 副本**:[`idea/refactor/Gao 等 - 2021 - Practical Guide for Building Superconducting Quantum Devices.pdf`](Gao%20%E7%AD%89%20-%202021%20-%20Practical%20Guide%20for%20Building%20Superconducting%20Quantum%20Devices.pdf)
+  - 重构期间无需重新下载;直接打开此文件即可。物理对应详见本主方案 §15。
+- **[Koch 2007]** J. Koch et al., "Charge-insensitive qubit design derived from the Cooper pair box", *Phys. Rev. A* **76**, 042319 (2007). Transmon 原始论文(`H = 4 EC n² - EJ cos φ` 的源头)。
 - **[Motzoi 2009]** F. Motzoi et al., "Simple Pulses for Elimination of Leakage in Weakly Nonlinear Qubits", *Phys. Rev. Lett.* **103**, 110501 (2009). DRAG 脉冲。
 - **[Reed 2010]** M. D. Reed et al., "High-Fidelity Readout in Circuit Quantum Electrodynamics Using the Jaynes-Cummings Nonlinearity", *Phys. Rev. Lett.* **105**, 173601 (2010). 高功率读出。
 
 ---
 
 ## 15. 与 Gao 2021 cQED 全栈架构的物理对应
+
+> 📖 **配套阅读**:论文本地副本位于 [`idea/refactor/Gao 等 - 2021 - Practical Guide for Building Superconducting Quantum Devices.pdf`](Gao%20%E7%AD%89%20-%202021%20-%20Practical%20Guide%20for%20Building%20Superconducting%20Quantum%20Devices.pdf)。本节中所有形如"Eq. (N)"或"§V.B"的引用都指向该 PDF。**建议在屏幕一边打开此 PDF,一边读本节**。
 
 本节详细列出 `sqc/` 各模块与 Gao 2021 论文的物理理论、公式、实验协议的对应关系。**目的**:让任何读过该论文的研究者能立即定位 sqc/ 中的实现细节;让重构执行者明白每一行代码背后的物理含义。
 

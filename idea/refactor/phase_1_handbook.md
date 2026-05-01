@@ -1,10 +1,10 @@
-# Phase 1 Handbook — sqc/ 骨架 + ABC + 数据结构 + src/ 镜像
+# Phase 1 Handbook — sqc/ 骨架 + ABC + 数据结构 + src_mirror/ 镜像
 
 > 前置阅读:[_refactor_plan.md](_refactor_plan.md) §4–§8、§15.1(物理公式对应),[phase_0_handbook.md](phase_0_handbook.md)  
-> 物理参考:Gao 2021 §II.B–C(Transmon)、§II.E(色散耦合)  
+> 物理参考(本地 PDF):[`./Gao 等 - 2021 - Practical Guide for Building Superconducting Quantum Devices.pdf`](./Gao%20%E7%AD%89%20-%202021%20-%20Practical%20Guide%20for%20Building%20Superconducting%20Quantum%20Devices.pdf) §II.B–C(Transmon Eq. 13–18)、§II.E(色散耦合 Eq. 21–35)、§III.B(器件参数推荐范围)  
 > 估计工时:3–5 天  
 > 触发条件:Phase 0 已完成,baseline 测试全部通过  
-> 完成标志:`sqc/` 完整目录建立,所有 ABC 定义,所有数据结构定义,`src/` 镜像不破坏任何 baseline
+> 完成标志:`sqc/` 完整目录建立,所有 ABC 定义,所有数据结构定义,**`src/` 字节级未变**,`src_mirror/` 镜像不破坏任何 baseline
 
 ---
 
@@ -15,11 +15,17 @@
 1. 创建 `sqc/` 完整目录树。
 2. 在所有应有 ABC 的位置写好抽象基类,实现处 `raise NotImplementedError`。
 3. 定义所有数据结构(`@dataclass`)。
-4. 把当前 `src/qubit.py` 中的 `TransmonQubit` 等已实现的物理对象**搬到** `sqc/devices/transmon.py`,并修复 D1 债务(qubit_in_mag 副作用)。
-5. 实现 `src/` 永久镜像层,使 `from src.qubit import TransmonQubit` 完全等价于 `from sqc.devices.transmon import TransmonQubit`。
-6. 物理回归测试 100% 通过。
+4. 把当前 `src/qubit.py` 中的 `TransmonQubit` 等已实现的物理对象**复制到**(不是移动) `sqc/devices/transmon.py`,并修复 D1 债务(qubit_in_mag 副作用)。**`src/` 不动**。
+5. **新建 `src_mirror/` 目录**(与 `src/` 平级),内部以 re-export 提供与 `src.qubit` / `src.signal` / `src.pulse` 一致的 API,底层走 `sqc/`。
+6. 物理回归测试 100% 通过(测的是 `src/`,因为 `src/` 不变,自动 pass);新增 `tests/equivalence/` 验证 `sqc/` 输出与 `src/` baseline 数值等价。
 
-**本 phase 完成后**,重构有了承载未来工作的"地基",但实验逻辑仍主要在 `src/protocal.py` 中。Phase 2 会迁移已实现的实验逻辑;Phase 3+ 会迁移 Track B 完成的功能。
+**本 phase 完成后**:
+- `src/` 与项目原始状态字节级一致(`git diff master -- src/` 为空)
+- `sqc/` 是完整骨架 + Transmon/Cavity/CoupledSystem 等已实现物理类的独立 reimplementation
+- `src_mirror/` 提供与 `src/` 同名的 import 路径,但底层走 sqc/
+- Notebook/web_demo.py 默认仍用 `from src.qubit import ...`(零迁移成本)
+
+Phase 2 会把已实现的实验逻辑(case 0/1/2/4)在 `sqc/experiments/` 中实现,并在 `src_mirror/protocal.py` 中提供 Protocal facade;Phase 3+ 会迁移 Track B 完成的功能。
 
 ---
 
@@ -706,32 +712,45 @@ class CompositeSignal(CompositeWaveform):
 
 **保留语义**:旧 `Signal(type=2, ...)`、`Signal(type=8, signal=arr)`、`signal.signal`、`signal.t_list`、`signal.value_at(t)`、`signal.truncate(...)`、`signal.update_signal(...)`、`signal.params` 全部行为不变。
 
-### 3.8 迁移 Pulse 到 sqc/control/pulse.py
+### 3.8 迁移 Pulse 到 sqc/control/pulse.py(独立实现,不影响 src/pulse.py)
 
-逐字符 port `src/pulse.py:Pulse` 和 `CompositePulse`。两件事:
+把 `src/pulse.py:Pulse` 和 `CompositePulse` 的代码**复制**到 `sqc/control/pulse.py`(`src/pulse.py` 保持原样)。两件事:
 
 1. **去掉 `get_kernel` 方法**(D2 债务)。kernel 计算的逻辑挪到 `sqc/reconstruction/kernel.py: KernelEstimator`(P2 实现;P1 留 ABC 与 stub `raise NotImplementedError`)。
-2. 在镜像层 `src/pulse.py` 中,如果有代码调用了旧 `pulse.get_kernel(qubit)`,通过 facade 兼容:`def get_kernel(self, qubit): from sqc.reconstruction.kernel import KernelEstimator; t_samples, kernel = KernelEstimator().estimate(self, qubit); self.t_samples = t_samples; self.kernel = kernel`
+2. 但 P1 阶段为了让 `src_mirror/pulse.py` 暴露的 `Pulse.get_kernel` 仍可用,**`sqc/control/pulse.py:Pulse.get_kernel` 逐字符保留 legacy 实现**(作为 deprecated 方法,P2 改为转发到 KernelEstimator)。
 
-注:**P1 完成时 `KernelEstimator` 还是 stub**,所以 `get_kernel` 在 P1 后会 `raise NotImplementedError`。这暂时会破坏 case 4。
+注:此处所有改动都在 `sqc/control/pulse.py` 内,`src/pulse.py` **绝对不动**。
 
-**解决**:P1 阶段的 `Pulse.get_kernel`(以及 `CompositePulse.get_kernel`)**逐字符保留** legacy 实现在 `sqc/control/pulse.py` 内,**作为 deprecated 方法**。P2 把它内化到 `KernelEstimator` 后,把 `Pulse.get_kernel` 改为转发调用。
+### 3.9 迁移 sequence factory 到 sqc/control/sequence.py(独立实现)
 
-### 3.9 迁移 sequence factory 到 sqc/control/sequence.py
+把 `create_pulse`、`create_ramsey_pulse`、`create_diff_echo_pulse`、`create_echo_pulse`、`create_cpmg_pulse`、`create_cryoscope_pulse` 的代码**复制**到 `sqc/control/sequence.py`,逐字符。`src/pulse.py` 中的同名函数**保持原样**。
 
-`create_pulse`、`create_ramsey_pulse`、`create_diff_echo_pulse`、`create_echo_pulse`、`create_cpmg_pulse`、`create_cryoscope_pulse` 全部 port 到 `sqc/control/sequence.py`,逐字符。
+### 3.10 创建 `src_mirror/` 目录(v1.1 — 不修改 `src/`)
 
-### 3.10 实现 src/ 永久镜像层
+⚠️ **本节是 v1.1 修订的核心改动**。原 v1.0 计划"改写 `src/qubit.py` 等为镜像",已废弃。
 
-按主方案 §8.2 模板实现。**所有 src/ 文件改写为镜像 + facade**。
+新策略:**新建 `src_mirror/` 目录**,与 `src/` 平级,内部文件名一一对应,但内部仅做 `from sqc.* import *` 风格的 re-export。**`src/` 中的任何文件不动**。
 
-#### 3.10.1 src/qubit.py
+#### 3.10.1 创建目录骨架
+
+```
+src_mirror/
+├── __init__.py        ← 空文件
+├── qubit.py           ← 见 3.10.2
+├── signal.py          ← 见 3.10.3
+└── pulse.py           ← 见 3.10.4
+```
+
+`src_mirror/protocal.py` 和 `src_mirror/analysis.py` **P1 不创建**(P2、P3 时再加)。如果用户在 P1 末态尝试 `from src_mirror.protocal import Protocal`,会得到 ImportError,这是预期行为(在 commit message 与 README 中说明)。
+
+#### 3.10.2 src_mirror/qubit.py
 
 ```python
-"""src.qubit — sqc.devices.transmon 的兼容镜像。
+# src_mirror/qubit.py
+"""src_mirror.qubit — sqc.devices.transmon 等的 API 镜像。
 
-新代码应直接使用 sqc.devices.* 。本文件为兼容历史代码而存在,
-不应包含任何业务逻辑。
+API 与 src.qubit 一一对应(同样的符号名),但底层实现来自 sqc/。
+本文件不含业务逻辑,任何修改请在 sqc/ 中进行。
 
 See idea/refactor/_refactor_plan.md §8.
 """
@@ -753,19 +772,21 @@ __all__ = [
 ]
 ```
 
-#### 3.10.2 src/signal.py
+#### 3.10.3 src_mirror/signal.py
 
 ```python
-"""src.signal — sqc.control.flux_signal 的兼容镜像。"""
+# src_mirror/signal.py
+"""src_mirror.signal — sqc.control.flux_signal 的 API 镜像。"""
 from sqc.control.flux_signal import FluxSignal as Signal, CompositeSignal
 
 __all__ = ["Signal", "CompositeSignal"]
 ```
 
-#### 3.10.3 src/pulse.py
+#### 3.10.4 src_mirror/pulse.py
 
 ```python
-"""src.pulse — sqc.control.pulse + sqc.control.sequence 的兼容镜像。"""
+# src_mirror/pulse.py
+"""src_mirror.pulse — sqc.control.pulse + sqc.control.sequence 的 API 镜像。"""
 from sqc.control.pulse import Pulse, CompositePulse
 from sqc.control.sequence import (
     create_pulse,
@@ -783,9 +804,25 @@ __all__ = [
 ]
 ```
 
-#### 3.10.4 src/protocal.py 和 src/analysis.py
+#### 3.10.5 src/qubit.py、src/signal.py、src/pulse.py:不动
 
-P1 阶段**不动**(它们本身是 Track A 后续 phase 的工作内容)。保留原文件。
+⚠️ **不修改、不删除、不重命名**。这三个文件保持原样,Notebook 与 web_demo.py 仍可使用 `from src.qubit import TransmonQubit`(走原始实现)。
+
+#### 3.10.6 src/protocal.py、src/analysis.py:不动
+
+P1 阶段不动(P2、P3 也不动)。Track B 在这两个文件内继续添加 case 6/7/8 等新功能。Track A 的对应 facade 在 `src_mirror/protocal.py` 与 `src_mirror/analysis.py`,P2/P3 时新建。
+
+### 3.11 验证 `src/` 未被修改 (硬约束检查)
+
+P1 PR 必须包含一条 CI 步骤(也可以本地手动跑):
+
+```bash
+# Phase 0 之后,src/ 的 git tree hash 应当永远等于此值
+git rev-parse HEAD:src
+# 把这个 hash 记到 P1 PR 描述里,作为 immutability 锚点
+```
+
+**任何 P1+ PR 中 `git diff master -- src/` 非空**,即应被拒绝合并(除非该 PR 的目标明确是 Track B 在 `src/` 内的功能开发)。
 
 ### 3.11 简单的 noise.py 模块
 
@@ -912,10 +949,10 @@ print('QubitSpec OK, frequency =', spec.frequency())
 "
 ```
 
-### 4.2 镜像等价性(关键)
+### 4.2 三种 import 路径全部可用 (关键)
 
 ```bash
-# 4.2.1 旧 import 仍然工作
+# 4.2.1 原始 src/ import 仍然工作 (走原始实现,与项目最初状态等价)
 python -c "
 from src.qubit import TransmonQubit, Cavity, Coupled_System
 from src.signal import Signal, CompositeSignal
@@ -923,16 +960,38 @@ from src.pulse import (Pulse, CompositePulse, create_pulse,
                        create_ramsey_pulse, create_diff_echo_pulse,
                        create_echo_pulse, create_cpmg_pulse,
                        create_cryoscope_pulse)
-print('src/* imports OK')
+print('src/* imports OK (original implementation)')
 "
 
-# 4.2.2 镜像与 sqc 是同一对象
+# 4.2.2 新建的 src_mirror/ import 工作 (走 sqc/ 实现)
+python -c "
+from src_mirror.qubit import TransmonQubit, Cavity, Coupled_System
+from src_mirror.signal import Signal, CompositeSignal
+from src_mirror.pulse import (Pulse, CompositePulse, create_pulse,
+                               create_ramsey_pulse, create_diff_echo_pulse,
+                               create_echo_pulse, create_cpmg_pulse,
+                               create_cryoscope_pulse)
+print('src_mirror/* imports OK (sqc-backed)')
+"
+
+# 4.2.3 src_mirror 与 sqc 是同一对象 (验证 src_mirror 是纯 re-export)
+python -c "
+import src_mirror.qubit as m
+import sqc.devices.transmon as s
+assert m.TransmonQubit is s.TransmonQubit, 'src_mirror not aliased to sqc'
+print('src_mirror -> sqc alias check OK')
+"
+
+# 4.2.4 src/ 与 src_mirror/ 不应是同一对象 (它们是两套独立实现)
 python -c "
 import src.qubit as a
-import sqc.devices.transmon as b
-assert a.TransmonQubit is b.TransmonQubit, 'TransmonQubit not aliased'
-print('alias check OK')
+import src_mirror.qubit as b
+assert a.TransmonQubit is not b.TransmonQubit, 'src/ should NOT be aliased to src_mirror/'
+print('src/ vs src_mirror/ are independent implementations OK')
 "
+
+# 4.2.5 硬约束检查:src/ 未被修改
+git diff --quiet master -- src/ && echo 'src/ unmodified, OK' || echo 'ERROR: src/ has been modified, abort PR'
 ```
 
 ### 4.3 物理回归
@@ -979,9 +1038,10 @@ P1 引入的新模块必须有 unit test。最低集合(`tests/unit/`):
 |---|---|
 | `tests/unit/test_qubit_spec.py` | QubitSpec frozen 检查、frequency 数值、optimal_work_point 返回 Φ₀ |
 | `tests/unit/test_waveform.py` | t_list/samples shape 检查、truncate 不修改原对象、value_at 越界返回 0 |
-| `tests/unit/test_flux_signal.py` | type=2 (sinusoidal) 与 type=8 (custom) 与 src/signal.py 输出对齐 |
-| `tests/unit/test_hamiltonian_builder.py` | flux=None 情况;rotating + omega_d=qubit.frequency 情况;flux_signal 给定时与旧 qubit_in_mag 输出一致 |
-| `tests/unit/test_pulse_mirror.py` | `from src.pulse import Pulse` 与 `from sqc.control.pulse import Pulse` 是同一对象 |
+| `tests/unit/test_flux_signal.py` | type=2 (sinusoidal) 与 type=8 (custom) 与 src/signal.py 输出**数值等价**(独立实现,非同一对象) |
+| `tests/unit/test_hamiltonian_builder.py` | flux=None 情况;rotating + omega_d=qubit.frequency 情况;flux_signal 给定时与旧 qubit_in_mag 输出**数值等价** |
+| `tests/unit/test_src_mirror.py` | `from src_mirror.pulse import Pulse` is `from sqc.control.pulse import Pulse`(身份相等);`from src.pulse import Pulse` is **NOT** `from src_mirror.pulse import Pulse`(独立) |
+| `tests/equivalence/test_qubit_numerical.py` | `src.qubit.TransmonQubit(...)` 和 `sqc.devices.transmon.TransmonQubit(...)` 在固定参数下产生数值等价的 frequency / hamiltonian / sensitivity 输出 |
 
 ### 5.2 必须保持的测试
 
@@ -1057,22 +1117,26 @@ sqc/
     └── base.py                     (Workflow ABC)
 ```
 
-### 7.2 文件清单(修改)
+### 7.2 文件清单(新增 — 与 src/ 平级的镜像目录)
 
 ```
-src/qubit.py                        (改为镜像)
-src/signal.py                       (改为镜像)
-src/pulse.py                        (改为镜像)
-src/__init__.py                     (无变化,保留)
+src_mirror/__init__.py              (空文件)
+src_mirror/qubit.py                 (re-export sqc.devices.* + sqc.control.gates.*)
+src_mirror/signal.py                (re-export sqc.control.flux_signal)
+src_mirror/pulse.py                 (re-export sqc.control.pulse + sqc.control.sequence)
 ```
 
-### 7.3 文件清单(不改)
+### 7.3 文件清单(永久不改)
 
 ```
-src/protocal.py                     (P2 改)
-src/analysis.py                     (P2/P3 改)
-web_demo.py                         (永久不改)
-Simulation.ipynb                    (永久不改)
+src/__init__.py                     ⚠️ 不动
+src/qubit.py                        ⚠️ 不动
+src/signal.py                       ⚠️ 不动
+src/pulse.py                        ⚠️ 不动
+src/protocal.py                     ⚠️ 不动 (Track B 可加 case;Track A 不动)
+src/analysis.py                     ⚠️ 不动 (Track B 可加方法;Track A 不动)
+web_demo.py                         ⚠️ 永久不动
+Simulation.ipynb                    ⚠️ 永久不动
 ```
 
 ### 7.4 接口快照
@@ -1098,9 +1162,10 @@ Simulation.ipynb                    (永久不改)
 - [ ] 所有数据结构可实例化(QubitSpec/Waveform/FluxSignal/ExperimentResult/...)
 - [ ] HamiltonianBuilder.build 实现并通过测试
 - [ ] sqc/devices/transmon.py 完整实现 TransmonQubit + QubitSpec
-- [ ] sqc/control/{waveform,flux_signal,pulse,sequence,gates}.py 全部完成迁移
-- [ ] src/qubit.py / signal.py / pulse.py 改为镜像
-- [ ] src/protocal.py / analysis.py 保持原状(不改)
+- [ ] sqc/control/{waveform,flux_signal,pulse,sequence,gates}.py 全部完成迁移(**复制自 src/,但 src/ 不动**)
+- [ ] **新建 src_mirror/{__init__,qubit,signal,pulse}.py**(re-export from sqc/)
+- [ ] **`git diff master -- src/` 为空**(硬约束:src/ 未被修改)
+- [ ] src/protocal.py、src/analysis.py 保持原状(本 phase 与 P2/P3 都不动)
 - [ ] tests/unit/ 至少 5 个新文件,每个至少 3 个用例
 - [ ] pytest tests/unit -v 全部 pass
 - [ ] pytest tests/regression -m regression -v 全部 pass(关键!)

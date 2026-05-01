@@ -1,9 +1,10 @@
 # Phase 4 Handbook — ControlLine + DistortionModel + 预失真
 
-> 前置阅读:[_refactor_plan.md](_refactor_plan.md) §1.3、§4–§6.2、[phase_3_handbook.md](phase_3_handbook.md)  
+> 前置阅读:[_refactor_plan.md](_refactor_plan.md) §1.3、§4–§6.2、§8(v1.1 兼容层),[phase_3_handbook.md](phase_3_handbook.md)  
+> 物理参考(本地 PDF):[`./Gao 等 - 2021 - Practical Guide for Building Superconducting Quantum Devices.pdf`](./Gao%20%E7%AD%89%20-%202021%20-%20Practical%20Guide%20for%20Building%20Superconducting%20Quantum%20Devices.pdf) §III.D(器件 coherence 设计与控制线 Eq. 36–38)、§IV.A–B(cryogenics + 微波链路传递函数)、§V.E(Cryoscope 标定阶跃响应)  
 > 估计工时:5–7 天  
 > 触发条件:Phase 3 完成 + Track B `_TODO_master.md 1.3` (DistortionModel 在 src/ 内已实现)  
-> 完成标志:`ControlLine`、`DistortionModel` 子类、`PredistortionDesigner`、predistortion validation workflow 全部实现并通过 baseline
+> 完成标志:`ControlLine`、`DistortionModel` 子类、`PredistortionDesigner`、predistortion validation workflow 全部实现并通过 baseline;**`src/` 仍未被 Track A 修改**
 
 ---
 

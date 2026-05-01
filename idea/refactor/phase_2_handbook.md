@@ -1,10 +1,10 @@
 # Phase 2 Handbook — 已实现协议的实验对象化 + KernelEstimator 去重
 
-> 前置阅读:[_refactor_plan.md](_refactor_plan.md) §6.5、§7.4、§15.2(单比特控制物理对应)、§15.4(实验对应表),[phase_1_handbook.md](phase_1_handbook.md)  
-> 物理参考:Gao 2021 §V.B(单比特实验),§IV.B(IQ 调制驱动)  
+> 前置阅读:[_refactor_plan.md](_refactor_plan.md) §6.5、§7.4、§8(v1.1 兼容层)、§15.2(单比特控制物理对应)、§15.4(实验对应表),[phase_1_handbook.md](phase_1_handbook.md)  
+> 物理参考(本地 PDF):[`./Gao 等 - 2021 - Practical Guide for Building Superconducting Quantum Devices.pdf`](./Gao%20%E7%AD%89%20-%202021%20-%20Practical%20Guide%20for%20Building%20Superconducting%20Quantum%20Devices.pdf) §V.B(单比特实验:Rabi/Ramsey/Echo,Eq. 49–55)、§V.B.3(ALLXY,Fig. 11)、§IV.B(IQ 调制驱动 Eq. 52)  
 > 估计工时:4–6 天  
 > 触发条件:Phase 1 完成 + Track B 已修复 LM 收敛(_TODO_master.md 0.1–0.3 完成,**仅 0.3 是硬依赖**)  
-> 完成标志:`RamseyExperiment` / `DiffEchoExperiment` / `TransientSensingExperiment` / `RabiExperiment` 实现并通过 baseline 回归;`KernelEstimator` 在三处 kernel 实现去重
+> 完成标志:`RamseyExperiment` / `DiffEchoExperiment` / `TransientSensingExperiment` / `RabiExperiment` 实现并通过 baseline 回归;`KernelEstimator` 在三处 kernel 实现去重;**`src_mirror/protocal.py` 已创建**;**`src/` 仍未被 Track A 修改**
 
 ---
 
@@ -12,13 +12,18 @@
 
 把当前 `src/protocal.py` 中 case 0/1/2/4 的实现**对象化**到 `sqc/experiments/`,消除 D3、D4 债务。同时:
 
-1. 实现 `KernelEstimator`,把 `src/pulse.py` 和 `src/analysis.py` 中三份重复的 kernel 计算合并为一个(消除 D2 债务)。
-2. 实现 `MesolveRunner` 和 `SlidingMeasurementRunner`,把 `single_measurement` 和 `sliding_measrement` 从 `Protocal` 中抽离(并修正拼写)。
-3. 实现 `IQReadoutModel`,把 `IQ_readout()` 类化(消除 D4 债务)。
-4. 在 `src/protocal.py` 中,case 0/1/2/4 改为转发调用新 Experiment 类(facade 模式)。
-5. 物理回归测试 100% 通过。
+1. 实现 `KernelEstimator`,把 `src/pulse.py` 和 `src/analysis.py` 中三份重复的 kernel 计算合并为一个(消除 D2 债务)。**`src/` 不动**,本节的"合并"指 `sqc/control/pulse.py` 中转发到 `sqc/reconstruction/kernel.py`。
+2. 实现 `MesolveRunner` 和 `SlidingMeasurementRunner`,把 `single_measurement` 和 `sliding_measrement` 的逻辑在 sqc/ 中重新实现(并修正拼写)。
+3. 实现 `IQReadoutModel`,把 `IQ_readout()` 类化(消除 D4 债务),实现位于 `sqc/hardware/readout.py`。
+4. **新建 `src_mirror/protocal.py`**:Protocal facade,case 0/1/2/4 转发到 sqc/experiments;`src/protocal.py` **绝对不动**。
+5. 物理回归测试 100% 通过(测的是 `src/`,自动 pass);新增 `tests/equivalence/test_protocal_mirror.py` 验证 `src_mirror/protocal.Protocal` 与 `src/protocal.Protocal` 输出数值等价。
 
-**本 phase 完成后**,case 0/1/2/4 在 sqc/ 中有"原生实现",src/protocal.py 是 facade。case 3/5/6/7/8 仍由 src/protocal.py 处理(P3 内化)。
+**本 phase 完成后**:
+- `src/` 与 P1 末态字节级一致(`git diff` 仅在 sqc/、src_mirror/、tests/ 内)
+- `sqc/experiments/` 含 case 0/1/2/4 的原生 Experiment 类
+- `src_mirror/protocal.py` 已创建,Protocal facade 工作
+- `src_mirror/analysis.py` **不创建**(P3 时再加)
+- case 3/5/6/7/8 在 `src_mirror/protocal.py` 中暂时 raise NotImplementedError;若用户需要这些 case,继续用 `from src.protocal import Protocal`(原始实现)
 
 ---
 
@@ -550,47 +555,64 @@ class ALLXYExperiment(Experiment):
 
 **注**:这是 **P2 推荐增强**,不是硬性必须。如时间紧,可以延到 P3 或留作 future work,在 commit message 中标注"未实现 ALLXY,见 phase_2_handbook §3.8"。
 
-### 3.9 改写 src/protocal.py 的 Protocal 类为 facade
+### 3.9 在 `src_mirror/` 中创建 Protocal facade(v1.1 — 不修改 `src/`)
+
+⚠️ **本节是 v1.1 修订**。原 v1.0 计划"改写 `src/protocal.py:Protocal` 为 facade",已废弃。
+
+新策略:**新建 `src_mirror/protocal.py`**,内部包含 `Protocal` 类的 facade 实现,API 与 `src/protocal.py:Protocal` 一致。`src/protocal.py` **绝对不动**。
+
+#### 3.9.1 新建 src_mirror/protocal.py
 
 ```python
-# src/protocal.py (P2 之后)
-"""src.protocal — facade over sqc.experiments and sqc.calibration.
+# src_mirror/protocal.py
+"""src_mirror.protocal — Protocal/Calibration/IQ_readout API mirror.
 
-Legacy API preserved verbatim:
-  Protocal(type=N).evolve(qubit) -> tuple-of-things-matching-old-behavior
+API 与 src.protocal 一一对应:
+  - Protocal(type=N).evolve(qubit) 返回与旧版完全相同的元组形状
+  - Calibration(qubit, type=N).calibrate() (P3 内化)
+  - IQ_readout(qubit, type, **kwargs) (函数级)
 
-Implementation delegates to sqc.experiments.{rabi,ramsey,...}.
+底层实现走 sqc.experiments.* 与 sqc.calibration.*。
+本文件不含业务逻辑。
 """
 from __future__ import annotations
 
 import numpy as np
 from qutip import basis
 
-from sqc.devices.transmon import TransmonQubit
+# P2 已实现的实验类
+from sqc.experiments.rabi import RabiExperiment
+from sqc.experiments.ramsey import RamseyExperiment
+from sqc.experiments.echo import DiffEchoExperiment
+from sqc.experiments.transient import TransientSensingExperiment
+from sqc.simulation.runner import MesolveRunner, SlidingMeasurementRunner
+from sqc.hardware.readout import IQ_readout_legacy as IQ_readout
+
+# 兼容 import 路径:src_mirror.protocal 内可重新导出 Signal/Pulse 等,
+# 让 `from src_mirror.protocal import Signal` 也能工作(与 src.protocal 行为对等)
 from sqc.control.flux_signal import FluxSignal as Signal, CompositeSignal
 from sqc.control.pulse import Pulse, CompositePulse
 from sqc.control.sequence import (
     create_pulse, create_ramsey_pulse, create_diff_echo_pulse,
     create_cpmg_pulse, create_cryoscope_pulse,
 )
-from sqc.hardware.readout import IQ_readout_legacy as IQ_readout
-
-# P2 internalized
-from sqc.experiments.rabi import RabiExperiment
-from sqc.experiments.ramsey import RamseyExperiment
-from sqc.experiments.echo import DiffEchoExperiment
-from sqc.experiments.transient import TransientSensingExperiment
 
 
 class Protocal:
-    """Legacy protocol class, now a thin facade."""
+    """Drop-in replacement for src.protocal.Protocal (case-dispatch facade).
+    
+    Supports cases 0/1/2/4 in P2; case 5 added in P3 once CryoscopeExperiment
+    is internalized; case 3/6/7/8 left as NotImplementedError until Track B
+    finishes them in src/.
+    """
     
     def __init__(self, type=0, **kwargs):
         self.type = type
         self.params = kwargs
     
     def initialize(self, qubit, state=0):
-        # Verbatim from old src/protocal.py:23-44
+        """Verbatim copy of src/protocal.py:Protocal.initialize (no business logic)."""
+        # ... copy the body from src/protocal.py:23-44 ...
         ...
     
     def evolve(self, qubit):
@@ -598,76 +620,97 @@ class Protocal:
             case 0:
                 exp = RabiExperiment(qubit=qubit)
                 result = exp.run()
-                # Legacy returned just `result`; mimic that
-                return result   # may need raw mesolve result; see below
+                return result
             case 1:
                 exp = RamseyExperiment(qubit=qubit)
-                result = exp.run()
-                # Legacy returned (Phi, tau_list, p_e_list)
-                return (
-                    exp.flux_signal,
-                    result.axes["tau"],
-                    result.data["p_e"].tolist(),
-                )
+                r = exp.run()
+                # Legacy returned (Phi, tau_list, p_e_list) — preserve tuple shape
+                return exp.flux_signal, r.axes["tau"], r.data["p_e"].tolist()
             case 2:
                 exp = DiffEchoExperiment(qubit=qubit)
-                result = exp.run()
+                r = exp.run()
                 # Legacy returned (Phi, tau_list, p_e_list, k, t_int)
-                return (
-                    exp.flux_signal,
-                    result.axes["tau"],
-                    result.data["p_e"].tolist(),
-                    exp.k,
-                    exp.t_int,
-                )
+                return (exp.flux_signal, r.axes["tau"], r.data["p_e"].tolist(),
+                        exp.k, exp.t_int)
             case 3:
-                pass   # CPMG stub, P3+
+                # CPMG: 原 src/protocal.py case 3 体为 pass(占位),保持等价行为。
+                # P3 在 sqc/experiments/ 内实现 CpmgExperiment 后,本 case 在 src_mirror 中
+                # 改为 `return CpmgExperiment(qubit=qubit).run()`。src/ 始终不动。
+                pass
             case 4:
                 exp = TransientSensingExperiment(qubit=qubit)
-                result = exp.run()
+                r = exp.run()
                 # Legacy returned (t_samples, kernel, scan_list, delta_p, p_e, Phi, control_pulse)
-                return (
-                    result.axes["t_samples"], result.data["kernel"],
-                    result.axes["scan"], result.data["delta_p"],
-                    result.data["p_e"], exp.flux_signal,
-                    exp.control_pulse,
-                )
+                return (r.axes["t_samples"], r.data["kernel"], r.axes["scan"],
+                        r.data["delta_p"], r.data["p_e"],
+                        exp.flux_signal, exp.control_pulse)
             case 5:
-                # Cryoscope: P3 internalized, leave delegate to CryoscopeExperiment
-                from sqc.experiments.cryoscope import CryoscopeExperiment
+                # Cryoscope: P3 时启用
+                try:
+                    from sqc.experiments.cryoscope import CryoscopeExperiment
+                except ImportError:
+                    raise NotImplementedError(
+                        "Protocal(type=5) requires P3 internalization; "
+                        "use src.protocal.Protocal in the meantime."
+                    )
                 exp = CryoscopeExperiment(qubit=qubit)
-                result = exp.run()
-                return (
-                    exp.trunc_list, result.data["varphi"],
-                    exp.flux_signal, [result.data["p_e_I"], result.data["p_e_Q"]],
-                )
+                r = exp.run()
+                return (exp.trunc_list, r.data["varphi"],
+                        exp.flux_signal,
+                        [r.data["p_e_I"], r.data["p_e_Q"]])
             case _:
                 raise ValueError(f"Unknown protocol type {self.type}")
     
-    # Helper methods kept as shims (delegate to runners)
+    # Helper methods preserved (delegate to runners)
     def single_measurement(self, qubit, Phi, ctrl, t_delay,
                            qubit_t=None, H=None, t_evole=None, index=None):
-        """Backward-compat. Delegates to MesolveRunner."""
+        """Delegates to MesolveRunner internals."""
         ...
     
     def sliding_measrement(self, qubit, Phi, ctrl):
-        """Backward-compat (legacy spelling preserved)."""
-        from sqc.simulation.runner import SlidingMeasurementRunner
-        runner = SlidingMeasurementRunner()
-        result = runner.run(qubit, Phi, ctrl)
+        """Backward-compat (legacy misspelling preserved)."""
+        result = SlidingMeasurementRunner().run(qubit, Phi, ctrl)
         return result.axes["scan"], result.data["p_e"].tolist()
 
 
-# Calibration is P3-internalized; for P2, leave the original src/protocal.py
-# Calibration class and IQ_readout function intact below this line.
+# Calibration is P3-internalized; for P2, raise clear error if user tries to use it
 class Calibration:
-    # ... (verbatim original until P3) ...
-    pass
+    """Stub for P2; full facade available after P3."""
+    
+    def __init__(self, qubit, type=0, **kwargs):
+        self.qubit = qubit
+        self.type = type
+        self.params = kwargs
+    
+    def calibrate(self):
+        raise NotImplementedError(
+            "src_mirror.protocal.Calibration is P3-internalized. "
+            "Until P3 completes, use src.protocal.Calibration directly."
+        )
+
+
+__all__ = [
+    "Protocal", "Calibration", "IQ_readout",
+    "Signal", "CompositeSignal",
+    "Pulse", "CompositePulse",
+    "create_pulse", "create_ramsey_pulse", "create_diff_echo_pulse",
+    "create_cpmg_pulse", "create_cryoscope_pulse",
+]
 ```
 
-**必读注释**:`Protocal.evolve` 必须返回与旧版**完全相同**的元组结构(顺序、类型),否则 web_demo.py 和 Notebook 会崩。Phase 2 的 baseline 测试就是验证这一点。
+#### 3.9.2 src/protocal.py:不动
 
-### 3.10 更新 src/analysis.py:Analysis.get_kernel 转发
+⚠️ **绝对不修改、不删除、不重命名**。原始 `Protocal`、`Calibration`、`IQ_readout` 全部保留;Track B 在此文件中继续添加 case 5/6/7/8 等新功能时,按 Track B 自己的节奏推进,与 Track A 解耦。
+
+#### 3.9.3 关键不变量
+
+`src_mirror/protocal.Protocal.evolve(qubit)` 返回的元组形状与 `src/protocal.Protocal.evolve(qubit)` 一致,**且数值等价**。Phase 2 的 baseline 测试 + 新增的 `tests/equivalence/test_protocal_mirror.py` 保证这点(见 §5.1)。
+
+### 3.10 (旧) src/analysis.py 转发 — 已废弃,详见 v1.1 修订
+
+⚠️ **v1.1 修订**:`src/analysis.py` 同样不动。`Analysis` 类的 facade 移到 `src_mirror/analysis.py`,**P3 内化** Reconstruction 时统一处理(见 [phase_3_handbook.md](phase_3_handbook.md) §3.9)。
+
+P2 阶段无需对 `src/analysis.py` 做任何修改。`src_mirror/analysis.py` **P2 不创建**(P3 创建);如果用户在 P2 末态尝试 `from src_mirror.analysis import Analysis`,得到 ImportError,这是预期。
 
 ```python
 # src/analysis.py
@@ -780,11 +823,12 @@ def test_ramsey_experiment_matches_baseline(qubit_default):
 
 | # | 风险 | 缓解 |
 |---|---|---|
-| 6.1 | RamseyExperiment 的默认参数与 case 1 不完全一致,导致 p_e 偏差 | 严格按 src/protocal.py:62-66 复制 amplitude=0.001、frequency=0.01、rise=fall=10、center=100、noise_level=0 |
+| 6.1 | RamseyExperiment 的默认参数与 case 1 不完全一致,导致 p_e 偏差 | 严格按 src/protocal.py:62-66(读取参考,**不修改**) 复制 amplitude=0.001、frequency=0.01、rise=fall=10、center=100、noise_level=0 |
 | 6.2 | TransientSensingExperiment 中 KernelEstimator 与旧 control_pulse.get_kernel 数值不等(浮点积分顺序) | 测试中允许 rtol=1e-5(略宽于 1e-6),并记录在 commit message |
-| 6.3 | facade Protocal.evolve 返回元组形状错误,web_demo.py 解包失败 | 在 P2 PR 必须显式跑 web_demo.py;tests/integration/test_legacy_facade.py 验证返回元组 |
-| 6.4 | sliding_measrement 的拼写改动后 src/protocal.py 中调用失效 | 保留方法名 `sliding_measrement`(拼写错误)在 Protocal 类中;新代码用 `SlidingMeasurementRunner` |
+| 6.3 | `src_mirror/protocal.Protocal.evolve` 返回元组形状错误,改用 `from src_mirror.protocal import Protocal` 的代码崩溃 | 在 P2 PR 必须跑 `tests/equivalence/test_protocal_mirror.py`,断言返回元组与 `src.protocal.Protocal` 一致 |
+| 6.4 | `sliding_measrement` 拼写错误:`src_mirror/protocal.Protocal` 必须保留这个拼写 | facade 类中保留 `sliding_measrement`(拼写错误)方法名;新代码用 `SlidingMeasurementRunner` |
 | 6.5 | KernelEstimator 把 stim_amplitude 默认值改成 auto_calibrate 后 transient_default 数值变化 | P2 阶段 `auto_calibrate=False`,保持 0.0215 默认值;auto_calibrate 是 P3 或更晚的事 |
+| 6.6 | **(v1.1 新增)** 误改 src/* 中任何文件 | P2 PR 必须包含 `git diff --quiet master -- src/` 检查;任何 src/ diff 立即拒绝合并 |
 
 **回滚**:
 - 单 commit 回滚:任意 baseline 失败,revert 该 commit。
@@ -801,25 +845,31 @@ sqc/experiments/rabi.py
 sqc/experiments/ramsey.py
 sqc/experiments/echo.py                          (DiffEchoExperiment + EchoExperiment)
 sqc/experiments/transient.py
-sqc/experiments/legacy.py                        (可选:Protocal facade,若 src/protocal.py 太复杂)
 sqc/simulation/runner.py                         (P1 是 stub,P2 完整实现)
 sqc/hardware/readout.py                          (P1 是 ABC,P2 完整实现 + IQ_readout_legacy)
-sqc/reconstruction/kernel.py                     (P1 仅有,P2 完整实现 KernelEstimator)
+sqc/reconstruction/kernel.py                     (P1 仅有 stub,P2 完整实现 KernelEstimator)
+src_mirror/protocal.py                           (Protocal/Calibration/IQ_readout facade)
 tests/unit/test_kernel_estimator.py
 tests/unit/test_runners.py
 tests/unit/test_iq_readout.py
 tests/integration/test_ramsey_experiment.py
 tests/integration/test_diff_echo_experiment.py
 tests/integration/test_transient_experiment.py
-tests/integration/test_legacy_facade.py          (验证 Protocal.evolve 返回元组形状)
+tests/equivalence/test_protocal_mirror.py        (src.protocal.Protocal vs src_mirror.protocal.Protocal 数值等价)
 ```
 
 ### 7.2 文件清单(修改)
 
 ```
-src/protocal.py                                  (Protocal 改为 facade,case 0/1/2/4 内化;case 3/5 留旧实现)
-src/analysis.py                                  (Analysis.get_kernel 转发到 KernelEstimator)
-sqc/control/pulse.py                             (Pulse.get_kernel / CompositePulse.get_kernel 转发)
+sqc/control/pulse.py                             (Pulse.get_kernel / CompositePulse.get_kernel 转发到 KernelEstimator)
+```
+
+### 7.3 文件清单(永久不动 — v1.1 硬约束)
+
+```
+src/protocal.py                                  ⚠️ 不动 (Track A 不修改;Track B 可加 case)
+src/analysis.py                                  ⚠️ 不动 (P3 也不动;facade 在 src_mirror/analysis.py)
+src/qubit.py / signal.py / pulse.py             ⚠️ 不动 (P1 即已确定)
 ```
 
 ### 7.3 接口快照
@@ -859,13 +909,11 @@ sqc/control/pulse.py                             (Pulse.get_kernel / CompositePu
 - [ ] sqc/hardware/readout.py 完整实现 (IQReadoutModel + IQ_readout_legacy)
 - [ ] sqc/reconstruction/kernel.py 完整实现 KernelEstimator
 - [ ] sqc/control/pulse.py 中 get_kernel 转发到 KernelEstimator
-- [ ] src/protocal.py:Protocal.evolve case 0/1/2/4 改为 facade
-- [ ] src/protocal.py:Protocal.sliding_measrement 转发到 SlidingMeasurementRunner
-- [ ] src/protocal.py:Protocal.evolve case 3/5 保持原状
-- [ ] src/protocal.py:Calibration 类保持原状(P3 内化)
-- [ ] src/analysis.py:Analysis.get_kernel 转发到 KernelEstimator
+- [ ] **新建 src_mirror/protocal.py(Protocal/Calibration/IQ_readout facade)**
+- [ ] **`git diff master -- src/` 为空**(硬约束:src/ 未被修改)
 - [ ] tests/unit/ 至少新增 3 个文件
-- [ ] tests/integration/ 至少新增 4 个文件
+- [ ] tests/integration/ 至少新增 3 个文件
+- [ ] **新增 tests/equivalence/test_protocal_mirror.py**:验证 src.protocal.Protocal 与 src_mirror.protocal.Protocal 数值等价
 - [ ] pytest tests/unit -v 全部 pass
 - [ ] pytest tests/integration -v 全部 pass
 - [ ] pytest tests/regression -m regression -v 全部 pass(关键!)

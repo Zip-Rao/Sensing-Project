@@ -1,10 +1,10 @@
 # Phase 5 Handbook — 多 qubit Z-crosstalk + Cavity 表征 论文级 demo
 
 > 前置阅读:[_refactor_plan.md](_refactor_plan.md) §1.3、§4–§6、§15.4、§15.5,[phase_4_handbook.md](phase_4_handbook.md)  
-> 物理参考:Gao 2021 §V.D(双比特门)、§V.E Eq. (75-85)(残余 ZZ)、§V.F + Fig. 17(cavity 表征)  
+> 物理参考(本地 PDF):[`./Gao 等 - 2021 - Practical Guide for Building Superconducting Quantum Devices.pdf`](./Gao%20%E7%AD%89%20-%202021%20-%20Practical%20Guide%20for%20Building%20Superconducting%20Quantum%20Devices.pdf) §V.D(双比特门三类),§V.E + Fig. 14 + Fig. 16(残余 ZZ Eq. 75–85),§V.F + Fig. 17(cavity 表征:number splitting/Ramsey revival/Wigner Eq. 87–89)  
 > 估计工时:5–7 天(基础)+ 3–5 天(可选 cavity 表征扩展)  
 > 触发条件:Phase 4 完成,DistortionModel + ControlLine + PredistortionDesigner 已稳定  
-> 完成标志:`TransferMatrix` 完整实现 + 双 qubit `ChipTopology` + Z-crosstalk demo workflow + 双 qubit baseline;**(可选)** Cavity number splitting / Ramsey revival / Wigner tomography 三件套
+> 完成标志:`TransferMatrix` 完整实现 + 双 qubit `ChipTopology` + Z-crosstalk demo workflow + 双 qubit baseline;**(可选)** Cavity number splitting / Ramsey revival / Wigner tomography 三件套;**`src/` 仍未被 Track A 修改**
 
 ---
 

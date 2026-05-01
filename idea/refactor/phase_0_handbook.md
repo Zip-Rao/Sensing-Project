@@ -1,6 +1,7 @@
 # Phase 0 Handbook — 测试基线 + 工具基础设施
 
-> 前置阅读:[_refactor_plan.md](_refactor_plan.md) §1–§13  
+> 前置阅读:[_refactor_plan.md](_refactor_plan.md) §1–§13、§0.1(本地物理参考 PDF 说明)  
+> 物理参考(可选):打开本地 PDF [`./Gao 等 - 2021 - Practical Guide for Building Superconducting Quantum Devices.pdf`](./Gao%20%E7%AD%89%20-%202021%20-%20Practical%20Guide%20for%20Building%20Superconducting%20Quantum%20Devices.pdf) §I 浏览全栈架构,§II.C Transmon 物理参数推荐范围(确认 P0 baseline 选取合理性)  
 > 估计工时:1–2 天  
 > 触发条件:无,立即开始  
 > 完成标志:`pytest tests/regression -x` 全部通过,baseline pickle 已生成并提交
