@@ -253,12 +253,61 @@ def _baseline_lm() -> dict:
     }
 
 
+def _baseline_predistortion() -> dict:
+    """Generate predistortion validation baseline.
+
+    Runs the PredistortionValidationWorkflow with a standard
+    SingleExponentialDistortion and saves key metrics.
+    """
+    import numpy as np
+    from sqc.control.waveform import Waveform
+    from sqc.hardware.distortion import SingleExponentialDistortion
+    from sqc.calibration.predistortion import PredistortionDesigner
+    from sqc.workflows.predistortion_validation import PredistortionValidationWorkflow
+
+    np.random.seed(42)
+
+    t = np.linspace(0, 200, 2000)
+    target = Waveform(
+        t_list=t,
+        samples=np.where((t > 30) & (t < 100), 1.0, 0.0),
+    )
+    dist = SingleExponentialDistortion(amplitude=0.05, tau=20.0)
+    designer = PredistortionDesigner(method="auto")
+
+    wf = PredistortionValidationWorkflow(
+        target_waveform=target,
+        true_distortion=dist,
+        designer=designer,
+    )
+    result = wf.run()
+
+    return {
+        "rmse_uncorrected": float(result["metrics"]["rmse_uncorrected"]),
+        "rmse_corrected": float(result["metrics"]["rmse_corrected"]),
+        "improvement_factor": float(result["metrics"]["improvement_factor"]),
+        "settling_uncorrected_ns": float(result["metrics"]["settling_uncorrected_ns"]),
+        "settling_corrected_ns": float(result["metrics"]["settling_corrected_ns"]),
+        "inverse_model_type": result["metrics"]["inverse_model_type"],
+        "target_samples_first10": np.asarray(
+            result["target"].samples[:10]
+        ),
+        "on_chip_uncorrected_last10": np.asarray(
+            result["on_chip_uncorrected"].samples[-10:]
+        ),
+        "awg_predistorted_max": float(
+            np.max(np.abs(result["awg_predistorted"].samples))
+        ),
+    }
+
+
 BASELINES = {
     "qubit_static": _baseline_qubit_static,
     "ramsey_default": _baseline_ramsey,
     "diff_echo_default": _baseline_diff_echo,
     "transient_default": _baseline_transient,
     "lm_default": _baseline_lm,
+    "predistortion_default": _baseline_predistortion,
 }
 
 
