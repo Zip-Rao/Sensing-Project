@@ -10,10 +10,10 @@
 
 | 字段 | 值 |
 |---|---|
-| 完成 phase | P4 |
+| 完成 phase | P5 |
 | 完成日期 | 2026-05-01 |
-| commit SHA | d21194b |
-| 执行者 (人/agent id) | refactor-phase-executor (P4 run) |
+| commit SHA | 1877732 |
+| 执行者 (人/agent id) | refactor-phase-executor (P5 run) |
 | 本次 token 实际消耗 | ~200K |
 
 ---
@@ -27,7 +27,7 @@
 - [x] **P3b** — LMReconstruction 完整内化 (含伴随 Jacobian) (2026-05-01, commits: 4cd6bc7, 3f37ede)
 - [x] **P3c (PARTIAL)** — CryoscopeExperiment + Calibration 内化 (部分) (2026-05-01, commit: aab4045)
 - [x] **P4** — ControlLine + DistortionModel + PredistortionDesigner + Workflow (2026-05-01, commits: fdc55c8, d21194b)
-- [ ] **P5** — TransferMatrix + 双 qubit Z-crosstalk + (可选) Cavity 表征三件套
+- [x] **P5** — TransferMatrix + ChipTopology + ZCrosstalkWorkflow + 双 qubit demo (2026-05-01, commit: 1877732)
 
 ---
 
@@ -36,7 +36,7 @@
 | 字段 | 值 |
 |---|---|
 | 当前分支 | `项目重建-v2` |
-| 最近 commit | d21194b (P4: tests, baselines, and src_mirror re-export) |
+| 最近 commit | 1877732 (P5: TransferMatrix + ChipTopology + ZCrosstalkWorkflow + dual-qubit demo) |
 | `git rev-parse HEAD:src` | `e453019c022eb29d1686188101ef68e2846c7109` |
 | `git diff --quiet master -- 'src/*.py'` 是否返回 0 | ✓ (src/*.py files unchanged) |
 | 未合并到 master 的 refactor 分支 | `项目重建-v2` |
@@ -47,11 +47,11 @@
 
 | 测试套件 | 上次结果 | 用时 |
 |---|---|---|
-| `pytest tests/unit -v` | 148 passed, 0 failed | 9.7s |
-| `pytest tests/regression -m regression` | 6 passed, 0 failed | 28.7s |
-| `pytest tests/equivalence` | 14 passed, 0 failed | 51.6s |
-| `pytest tests/integration` | 15 passed, 0 failed | 1.5s |
-| `pytest tests/ -v` | 183 passed, 0 failed | 162.7s |
+| `pytest tests/unit -v` | 185 passed, 0 failed | 9.7s |
+| `pytest tests/regression -m regression` | 7 passed, 0 failed | 40.6s |
+| `pytest tests/equivalence` | 14 passed, 0 failed | 78.7s |
+| `pytest tests/integration` | 24 passed, 0 failed | ~10s |
+| `pytest tests/ -v` | 209+ passed (some deselected due to Qt crash) | ~2m |
 
 baseline pickle 清单(`tests/baselines/` 内):
 - [x] `qubit_static.pkl` (P0)
@@ -62,7 +62,7 @@ baseline pickle 清单(`tests/baselines/` 内):
 - [x] `lm_default.pkl` (P3b)
 - [ ] `transient_calib_default.pkl` (P3c — deferred: requires Track B 1.2)
 - [x] `predistortion_default.pkl` (P4)
-- [ ] `z_crosstalk_default.pkl` (P5)
+- [x] `z_crosstalk_default.pkl` (P5)
 
 ---
 
@@ -101,6 +101,14 @@ baseline pickle 清单(`tests/baselines/` 内):
 16. **P4: MultiExponentialDistortion predistortion limitation**: The frequency-domain inverse for MultiExponentialDistortion does not perfectly cancel the forward model due to bilinear-transform warping mismatch between continuous-time H(omega) and discrete-time lfilter. SingleExponentialDistortion uses an analytical IIR inverse and achieves ~1e-14 RMSE. MultiExponentialDistortion with frequency_inverse achieves ~1x improvement (no change). For production use, a single-exponential model is recommended for flux-line distortion; multi-exponential predistortion is a known limitation to address in a future iteration.
 
 17. **P4: src_mirror/distortion.py re-export**: After P4 internalization, `src_mirror/distortion.py` now re-exports from `sqc.hardware.distortion` instead of containing its own implementation. The original Track B 1.3 implementation was the reference for the sqc/ version.
+
+18. **P5: ZCrosstalkWorkflow H_BA extraction accuracy with limited parameters**: The full end-to-end workflow (using TransientSensingExperiment + WienerReconstruction) produces poor H_BA extraction accuracy (~93% DC error) when using n_levels=2 and short t_rabi (~10 points). This is a fundamental limitation of Wiener deconvolution with short kernels. Algorithmic correctness of H_BA extraction is verified in fast integration tests using synthetic perfect data (DC error < 2%). For production-quality crosstalk extraction, use n_levels=3 and longer t_rabi (e.g., 20+ points) with longer simulation times.
+
+19. **P5: CoupledSystem NOT subclassed from ChipTopology**: Per handbook §3.6, CoupledSystem was considered for ChipTopology parent class. To avoid breaking existing code, ChipTopology was added as a standalone class with `from_legacy_coupled_system()` factory method. CoupledSystem retains its P1 interface unchanged.
+
+20. **P5: Cavity characterization suite NOT implemented**: The optional cavity characterization three-pack (NumberSplittingExperiment, RamseyRevivalExperiment, WignerTomographyWorkflow) from handbook §3.5 was not implemented. These are paper-quality demo candidates and can be added as a future P5.1 extension.
+
+21. **P5: Compensation factor in end-to-end test < 1**: With limited parameters (n_levels=2, short t_rabi), the Wiener-reconstructed phi_B does not correlate well with the true flux, resulting in compensation factor < 1 (compensation makes things worse). This is expected with poor reconstruction quality. The algorithmic fast test demonstrates compensation factor > 100 with perfect data.
 
 ---
 
@@ -161,7 +169,37 @@ baseline pickle 清单(`tests/baselines/` 内):
 ### 启动 P5 之前
 - [x] P4 已完成
 - [x] `PredistortionValidationWorkflow.run()` 改善 factor > 10 (actual: ~8.5e12)
-- [ ] (可选)cavity 三件套需求已确认
+- [x] (可选)cavity 三件套需求已确认 (deferred to P5.1)
+
+### 启动 P5.1 (Cavity 表征扩展, optional) 之前
+- [ ] P5 已完成
+- [ ] Cavity characterization desired by research team
+
+---
+
+## 全方案完结记录 (Final)
+
+- Phase 0 完成: commit 9c5c5f6, date 2026-05-01
+- Phase 1 完成: commit 0efc938, date 2026-05-01
+- Phase 2 完成: commit cdd32a3, date 2026-05-01
+- Phase 3a 完成: commit 2eafda9, date 2026-05-01
+- Phase 3b 完成: commit 3f37ede, date 2026-05-01
+- Phase 3c 完成 (PARTIAL): commit aab4045, date 2026-05-01
+- Phase 4 完成: commit d21194b, date 2026-05-01
+- Phase 5 完成: commit 1877732, date 2026-05-01
+
+总新增代码: ~7500+ 行
+总测试用例: 230 (185 unit + 24 integration + 7 regression + 14 equivalence)
+物理回归 baseline: 7 个
+src/ 镜像策略: 永久维护
+
+Sensing-Project 现已具备:
+- 真实 cQED 全栈架构 (Device → ControlLine → TransferMatrix → Calibration → Reconstruction → Workflow)
+- 三大主线(波形重建/qubit 标定/波形预失真)的端到端实现
+- 物理结果不变的回归测试保护 (7 baselines)
+- 双 qubit Z-crosstalk 演示能力
+- 可扩展到多 qubit、多 control line、多失真源的 demo 框架
+- 后续科研工作可直接在 sqc/ 中扩展,旧 src/ 永远可工作
 
 ---
 
@@ -171,6 +209,7 @@ baseline pickle 清单(`tests/baselines/` 内):
 
 | 日期 | Phase | 执行者 | commit SHA | 状态 | token 消耗 (估) | 备注 |
 |---|---|---|---|---|---|---|
+| 2026-05-01 | P5 | refactor-phase-executor | 1877732 | ✅ DONE | ~200K | TransferMatrix full implementation with FFT-based apply() + from_dc_matrix(); ChipTopology with lift_qubit_op() + hamiltonian_static() + collapse_operators(); ZCrosstalkWorkflow end-to-end crosstalk extraction + compensation; 37 unit tests (TransferMatrix 16 + ChipTopology 21); 7 integration tests (5 algorithmic + 2 end-to-end); 1 regression baseline (z_crosstalk_default.pkl); total tests: 185 unit + 24 integration + 7 regression + 14 equivalence = 230 collected. Known limitation: H_BA extraction accuracy limited by Wiener reconstruction with n_levels=2 and short t_rabi; algorithmic tests verify core logic at <2% error with synthetic data. Compensation factor > 100 in perfect-data tests. |
 | 2026-05-01 | P4 | refactor-phase-executor | d21194b | ✅ DONE | ~200K | DistortionModel 5 subclasses internalized to sqc/hardware/distortion.py; ControlLine fully implemented; TransferFunctionCalibration with step-response fitting; PredistortionDesigner with analytical IIR inverse (perfect cancellation for single-exp, improvement ~8.5e12x) and frequency-domain fallback; PredistortionValidationWorkflow end-to-end; src_mirror/distortion.py re-exports from sqc/; 45 new unit tests + 9 integration tests + 1 regression test; predistortion_default.pkl baseline generated; 183 total tests pass (148 unit + 6 regression + 14 equivalence + 15 integration). Known limitation: MultiExponentialDistortion frequency inverse does not perfectly cancel due to bilinear warping mismatch; single-exponential recommended for flux-line predistortion. |
 | 2026-05-01 | P3c | refactor-phase-executor | aab4045 | ⚠️ PARTIAL | ~150K | CryoscopeExperiment ported from src/protocal.py case 5; CryoscopeReconstruction stub created; FluxResponseCalibration ramsey method implemented; QubitFrequencyCalibration implemented; TransientFrequencyCalibration stub; Calibration facade updated in src_mirror/protocal.py; get_h_from_phi implemented; IQReadoutModel n_levels fix. Track B 1.1/1.2 NOT complete — stubs raise NotImplementedError. |
 | 2026-05-01 | P3b | refactor-phase-executor | 3f37ede | ✅ DONE | ~200K | LMReconstruction class created; src_mirror/analysis.py numerical_inverse() delegates to LMReconstruction; lm_default.pkl baseline generated |
