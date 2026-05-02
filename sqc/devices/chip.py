@@ -1,14 +1,15 @@
-"""sqc.devices.chip — CoupledSystem: two qubits + coupler + multi-mode cavity.
+"""sqc.devices.chip — Multi-qubit chip topology and coupled systems.
 
-Verbatim port of src/qubit.py:Coupled_System → CoupledSystem.
-Renamed: spelling corrected per _refactor_plan.md §7.1.
+ChipTopology: generic multi-qubit + resonator chip model (P5).
+CoupledSystem: two qubits + coupler + multi-mode cavity (P1 port).
 """
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 from typing import Optional
 
 import numpy as np
-from qutip import Qobj, basis, propagator, sesolve, tensor
+from qutip import Qobj, basis, destroy, propagator, qeye, sesolve, tensor
 
 from .base import Device
 
@@ -385,3 +386,235 @@ class CoupledSystem(Device):
         R_opt = tensor(Rz(c), Rz(d_))
         U_cal = L_opt * Uu * R_opt
         return U_cal, leakage, F_loc
+
+
+# ===========================================================================
+# ChipTopology — multi-qubit chip descriptor (P5)
+# ===========================================================================
+
+
+@dataclass
+class ChipTopology(Device):
+    """Multi-qubit chip topology: qubits + resonators + couplings + control lines.
+
+    Acts as a container for all devices on a chip and provides methods
+    to embed single-device operators into the full Hilbert space.
+
+    Per phase_5_handbook.md §3.1.
+
+    Parameters
+    ----------
+    qubits : list[TransmonQubit]
+        All qubits on the chip.
+    resonators : list[Resonator]
+        All readout/coupling resonators.
+    couplings : dict[tuple[str, str], float]
+        (qubit_name, resonator_name) → coupling g (rad/ns).
+    control_lines : dict[str, ControlLine]
+        Name → ControlLine mapping.
+    transfer_matrix : TransferMatrix or None
+        Frequency-dependent Z-line crosstalk matrix.
+    """
+
+    qubits: list = field(default_factory=list)  # list[TransmonQubit]
+    resonators: list = field(default_factory=list)  # list[Resonator]
+    couplings: dict = field(default_factory=dict)  # dict[tuple[str, str], float]
+    control_lines: dict = field(default_factory=dict)
+    transfer_matrix: Optional[object] = None  # TransferMatrix | None
+
+    # -- Device ABC ----------------------------------------------------------
+
+    @property
+    def name(self) -> str:
+        q_names = [q.name for q in self.qubits]
+        return f"Chip({','.join(q_names)})" if q_names else "Chip(empty)"
+
+    def hilbert_dim(self) -> int:
+        """Total Hilbert space dimension (product of all subsystem dims)."""
+        d = 1
+        for q in self.qubits:
+            d *= getattr(q, "n_levels", q.hilbert_dim())
+        for r in self.resonators:
+            d *= r.hilbert_dim()
+        return d
+
+    def lift_qubit_op(self, op: Qobj, qubit_name: str) -> Qobj:
+        """Embed a single-qubit operator into the full chip Hilbert space.
+
+        Builds a tensor product where the target qubit slot gets `op`
+        and all other slots get identity.
+
+        Parameters
+        ----------
+        op : Qobj
+            Operator on the single-qubit Hilbert space (n_levels × n_levels).
+        qubit_name : str
+            Name of the target qubit.
+
+        Returns
+        -------
+        Qobj
+            Operator on the full chip Hilbert space.
+
+        Raises
+        ------
+        ValueError
+            If qubit_name not found in self.qubits.
+        """
+        # Collect all subsystem ops in order: qubits then resonators
+        all_ops: list[Qobj] = []
+        found = False
+        for q in self.qubits:
+            nq = getattr(q, "n_levels", q.hilbert_dim())
+            if q.name == qubit_name:
+                all_ops.append(op)
+                found = True
+            else:
+                all_ops.append(qeye(nq))
+
+        if not found:
+            raise ValueError(
+                f"Qubit '{qubit_name}' not found in chip topology. "
+                f"Available: {[q.name for q in self.qubits]}"
+            )
+
+        for r in self.resonators:
+            for n in r.n_levels:
+                all_ops.append(qeye(n))
+
+        return tensor(*all_ops)
+
+    def hamiltonian_static(self) -> Qobj:
+        """Sum of static (bare) Hamiltonians for all devices.
+
+        H = sum_i lift(H_i) + sum_r lift(H_r)
+
+        Note: coupling terms (g * a_q† a_r + h.c.) are NOT included
+        in this basic implementation. For coupled systems, use the
+        dedicated CoupledSystem class or extend this method.
+
+        Returns
+        -------
+        Qobj
+            Total static Hamiltonian.
+        """
+        H = None
+        for q in self.qubits:
+            H_q = getattr(q, "hamiltonian_static", q.get_hamiltonian)()
+            H_q_full = self.lift_qubit_op(H_q, q.name)
+            H = H_q_full if H is None else H + H_q_full
+
+        # Resonator terms (each mode is lifted into the full space)
+        if H is None:
+            H = 0 * self._identity()
+
+        for r in self.resonators:
+            H_r = r.hamiltonian_static()
+            H_r_full = self._lift_resonator_op(H_r, r)
+            H += H_r_full
+
+        return H
+
+    def collapse_operators(self) -> list[Qobj]:
+        """All Lindblad collapse operators for the chip.
+
+        Lifts each qubit's collapse operators into the full space.
+
+        Returns
+        -------
+        list[Qobj]
+            Collapse operators for mesolve.
+        """
+        c_ops_all: list[Qobj] = []
+        for q in self.qubits:
+            c_ops_q = getattr(q, "collapse_operators", q.get_collapse_operators)()
+            for c in c_ops_q:
+                c_ops_all.append(self.lift_qubit_op(c, q.name))
+
+        for r in self.resonators:
+            for c in r.collapse_operators():
+                c_ops_all.append(self._lift_resonator_op(c, r))
+
+        return c_ops_all
+
+    # -- helpers --------------------------------------------------------------
+
+    def _identity(self) -> Qobj:
+        """Build the identity operator on the full Hilbert space."""
+        all_ops: list[Qobj] = []
+        for q in self.qubits:
+            nq = getattr(q, "n_levels", q.hilbert_dim())
+            all_ops.append(qeye(nq))
+        for r in self.resonators:
+            for n in r.n_levels:
+                all_ops.append(qeye(n))
+        return tensor(*all_ops) if all_ops else qeye(1)
+
+    def _lift_resonator_op(self, op: Qobj, resonator) -> Qobj:
+        """Embed a resonator operator into the full chip space."""
+        all_ops: list[Qobj] = []
+        for q in self.qubits:
+            nq = getattr(q, "n_levels", q.hilbert_dim())
+            all_ops.append(qeye(nq))
+        # The resonator's op is already on its own full tensor-product space,
+        # so we can't easily decompose it into per-mode identities.
+        # Instead, we tensor with identities for qubit spaces.
+        qubit_id = tensor(*[qeye(getattr(q, "n_levels", q.hilbert_dim()))
+                           for q in self.qubits])
+        return tensor(qubit_id, op) if qubit_id.dims != [[1], [1]] else op
+
+    # -- factory methods ------------------------------------------------------
+
+    @classmethod
+    def from_legacy_coupled_system(cls, coupled_system) -> "ChipTopology":
+        """Build a ChipTopology from a legacy Coupled_System / CoupledSystem.
+
+        Extracts qubits and resonator from the coupled system object.
+
+        Parameters
+        ----------
+        coupled_system : CoupledSystem or src.qubit.Coupled_System
+            Legacy coupled system object.
+
+        Returns
+        -------
+        ChipTopology
+        """
+        qubits = []
+        for attr_name in ("qubit1", "qubit2"):
+            if hasattr(coupled_system, attr_name):
+                qubits.append(getattr(coupled_system, attr_name))
+
+        resonator = None
+        for attr_name in ("cavity", "resonator"):
+            if hasattr(coupled_system, attr_name):
+                resonator = getattr(coupled_system, attr_name)
+                break
+
+        resonators = [resonator] if resonator is not None else []
+
+        return cls(qubits=qubits, resonators=resonators)
+
+    def get_qubit(self, name: str):
+        """Get a qubit by name.
+
+        Parameters
+        ----------
+        name : str
+            Qubit name.
+
+        Returns
+        -------
+        TransmonQubit
+
+        Raises
+        ------
+        ValueError
+            If no qubit with that name is found.
+        """
+        for q in self.qubits:
+            if q.name == name:
+                return q
+        raise ValueError(
+            f"Qubit '{name}' not found. Available: {[q.name for q in self.qubits]}"
+        )

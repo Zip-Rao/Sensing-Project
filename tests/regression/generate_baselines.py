@@ -301,6 +301,75 @@ def _baseline_predistortion() -> dict:
     }
 
 
+def _baseline_z_crosstalk() -> dict:
+    """Generate Z-crosstalk workflow baseline.
+
+    Runs the ZCrosstalkWorkflow with fixed parameters and saves
+    key metrics for regression testing.
+    """
+    import numpy as np
+    from sqc.control.waveform import Waveform
+    from sqc.devices.chip import ChipTopology
+    from sqc.devices.transmon import TransmonQubit
+    from sqc.hardware.transfer_matrix import TransferMatrix
+    from sqc.workflows.z_crosstalk import ZCrosstalkWorkflow
+
+    np.random.seed(42)
+
+    qA = TransmonQubit(
+        EC=2 * np.pi * 0.2, EJ=2 * np.pi * 15,
+        T1=10000, T2=8000, flux=0.0, n_levels=2, name="QA",
+    )
+    qB = TransmonQubit(
+        EC=2 * np.pi * 0.2, EJ=2 * np.pi * 15,
+        T1=10000, T2=8000, flux=0.0, n_levels=2, name="QB",
+    )
+    chip = ChipTopology(qubits=[qA, qB])
+
+    t_pulse = np.linspace(0, 60, 60)
+    pulse_samples = np.where((t_pulse > 12) & (t_pulse < 48), 1.0, 0.0)
+    pulse = Waveform(t_list=t_pulse, samples=pulse_samples)
+
+    tm = TransferMatrix.from_dc_matrix(
+        dc_matrix=np.array([[1.0, 0.0], [0.04, 1.0]]),
+        source_names=["QA", "QB"],
+        target_names=["QA", "QB"],
+    )
+
+    t_rabi = np.linspace(0, 10, 8)
+    wiener_lambda_reg = 1e-2
+    deconv_lambda_reg = 1e-3
+
+    wf = ZCrosstalkWorkflow(
+        chip=chip,
+        flux_pulse_on_A=pulse,
+        true_transfer_matrix=tm,
+        qubit_A_name="QA",
+        qubit_B_name="QB",
+        t_rabi=t_rabi,
+        wiener_lambda_reg=wiener_lambda_reg,
+        deconv_lambda_reg=deconv_lambda_reg,
+    )
+
+    result = wf.run()
+
+    return {
+        "t_pulse": np.asarray(t_pulse),
+        "pulse_samples": np.asarray(pulse_samples),
+        "t_rabi": np.asarray(t_rabi),
+        "wiener_lambda_reg": wiener_lambda_reg,
+        "deconv_lambda_reg": deconv_lambda_reg,
+        "phi_B_true_samples": np.asarray(result["phi_B_true"].samples),
+        "phi_B_reconstructed_samples": np.asarray(
+            result["phi_B_reconstructed"].samples
+        ),
+        "H_BA_estimated_real": np.asarray(result["H_BA_estimated"].real),
+        "H_BA_estimated_imag": np.asarray(result["H_BA_estimated"].imag),
+        "compensation_factor": float(result["compensation_factor"]),
+        "fit_error_dB": float(result["fit_error_dB"]),
+    }
+
+
 BASELINES = {
     "qubit_static": _baseline_qubit_static,
     "ramsey_default": _baseline_ramsey,
@@ -308,6 +377,7 @@ BASELINES = {
     "transient_default": _baseline_transient,
     "lm_default": _baseline_lm,
     "predistortion_default": _baseline_predistortion,
+    "z_crosstalk_default": _baseline_z_crosstalk,
 }
 
 
