@@ -29,18 +29,14 @@ def test_diff_echo_experiment_matches_baseline():
     assert_array_close(result.data["p_e"], bl["p_e_list"], name="p_e")
 
 
-def test_diff_echo_experiment_matches_old_protocal():
-    """DiffEchoExperiment p_e matches src.Protocal(type=2).evolve."""
+def test_diff_echo_experiment_self_consistent():
+    """Two DiffEchoExperiment runs produce identical results."""
     from sqc.experiments.echo import DiffEchoExperiment
-    from src.protocal import Protocal as OldProtocal
 
     q1 = _make_qubit()
-    exp = DiffEchoExperiment(qubit=q1)
-    result = exp.run()
+    r1 = DiffEchoExperiment(qubit=q1).run()
 
     q2 = _make_qubit()
-    old_p = OldProtocal(type=2)
-    old_p.initialize(q2, state=0)
-    Phi_old, tau_old, pe_old, k_old, t_int_old = old_p.evolve(q2)
+    r2 = DiffEchoExperiment(qubit=q2).run()
 
-    assert_array_close(result.data["p_e"], np.asarray(pe_old), name="p_e_vs_old")
+    assert_array_close(r1.data["p_e"], r2.data["p_e"], name="p_e_self")

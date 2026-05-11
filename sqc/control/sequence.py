@@ -14,8 +14,23 @@ from typing import Optional
 import numpy as np
 from qutip import QobjEvo
 
+from sqc.config import CONFIG
 from .flux_signal import FluxSignal as Signal
 from .pulse import Pulse, CompositePulse
+
+
+# Use global dt from AWG config for all free-evolution gap time axes.
+_GT = CONFIG.awg.dt
+
+
+def _gap(duration: float, min_points: int = 2) -> np.ndarray:
+    """Return a time axis covering [0, duration) at the global dt.
+
+    Ensures at least ``min_points`` points when duration > 0.
+    Falls back to a single-point zero-duration stub if duration ≤ 0.
+    """
+    N = max(int(duration / _GT), min_points if duration > 0 else 1)
+    return np.arange(0, N * _GT, _GT)
 
 
 # ---------------------------------------------------------------------------
@@ -110,7 +125,7 @@ def create_ramsey_pulse(
     CompositePulse
     """
     if tau != 0.0:
-        Omega_0 = Signal(type=0, t_list=np.linspace(0, tau, 100))
+        Omega_0 = Signal(type=0, t_list=_gap(tau))
     else:
         Omega_0 = None
 
@@ -191,18 +206,14 @@ def create_diff_echo_pulse(
     -------
     CompositePulse
     """
-    Omega_0 = Signal(type=0, t_list=np.linspace(0, tau, 100))
+    Omega_0 = Signal(type=0, t_list=_gap(tau))
     Omega_01 = Signal(
         type=0,
-        t_list=np.linspace(
-            0, t_rep + t_int - t_rabi[-1] + t_rabi[0], 100
-        ),
+        t_list=_gap(t_rep + t_int - t_rabi[-1] + t_rabi[0]),
     )
     Omega_02 = Signal(
         type=0,
-        t_list=np.linspace(
-            0, t_rep - tau - t_int - (t_rabi[-1] - t_rabi[0]), 100
-        ),
+        t_list=_gap(t_rep - tau - t_int - (t_rabi[-1] - t_rabi[0])),
     )
     Omega_1 = Signal(
         type=1,
@@ -307,7 +318,7 @@ def create_echo_pulse(
     -------
     CompositePulse
     """
-    Omega_0 = Signal(type=0, t_list=np.linspace(0, tau, 100))
+    Omega_0 = Signal(type=0, t_list=_gap(tau))
     Omega_1 = Signal(
         type=1,
         t_list=t_rabi,
@@ -390,8 +401,8 @@ def create_cpmg_pulse(
     -------
     CompositePulse
     """
-    Omega_0 = Signal(type=0, t_list=np.linspace(0, tau / 2, 100))
-    Omega_1 = Signal(type=0, t_list=np.linspace(0, tau, 100))
+    Omega_0 = Signal(type=0, t_list=_gap(tau / 2))
+    Omega_1 = Signal(type=0, t_list=_gap(tau))
     Omega_2 = Signal(
         type=1,
         t_list=t_rabi,
@@ -485,7 +496,7 @@ def create_cryoscope_pulse(
     """
     Omega_0 = Signal(
         type=1,
-        t_list=np.linspace(0, tau, 100),
+        t_list=_gap(tau),
         amplitude=0.0,
     )
     Omega_1 = Signal(

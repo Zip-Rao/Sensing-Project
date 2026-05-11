@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 import numpy as np
 from qutip import QobjEvo, basis, mesolve
 
+from sqc.config import CONFIG
 from sqc.experiments.base import Experiment
 from sqc.control.flux_signal import FluxSignal
 from sqc.control.sequence import create_ramsey_pulse
@@ -50,13 +51,13 @@ class RamseyExperiment(Experiment):
     flux_signal: FluxSignal | None = None
     omega_d: float | None = None
     t_rabi: np.ndarray = field(
-        default_factory=lambda: np.linspace(0, 20, 40)
+        default_factory=lambda: CONFIG.pulse.t_rabi.copy()
     )
     tau_list: np.ndarray = field(
-        default_factory=lambda: np.linspace(0, 250, 500)
+        default_factory=lambda: CONFIG.pulse.tau_list.copy()
     )
     t_global: np.ndarray = field(
-        default_factory=lambda: np.linspace(-50, 300, 700)
+        default_factory=lambda: CONFIG.pulse.t_global.copy()
     )
     phase1: float = 0.0
     phase2: float = 0.0
@@ -68,7 +69,7 @@ class RamseyExperiment(Experiment):
             # Default test signal matches src/protocal.py case 1
             self.flux_signal = FluxSignal(
                 type=2,
-                t_list=np.linspace(0, 250, 500),
+                t_list=CONFIG.pulse.t_signal.copy(),
                 amplitude=0.001,
                 frequency=0.01,
                 rise=10,

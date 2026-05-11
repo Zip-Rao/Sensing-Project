@@ -24,12 +24,28 @@ from src.pulse import (
     create_ramsey_pulse,
     create_diff_echo_pulse,
 )
-from src.protocal import Protocal
+from src.protocal import Protocal  # kept for LM baseline (old code)
+from sqc.experiments.ramsey import RamseyExperiment
+from sqc.experiments.echo import DiffEchoExperiment
+from sqc.experiments.transient import TransientSensingExperiment
+from sqc.devices.transmon import TransmonQubit as SqcQubit
 from tests.conftest import save_baseline
 
 
 def _make_default_qubit() -> TransmonQubit:
     return TransmonQubit(
+        EC=2 * np.pi * 0.2,
+        EJ=2 * np.pi * 15,
+        T1=10000.0,
+        T2=8000.0,
+        flux=0.0,
+        state=0,
+        n_levels=2,
+    )
+
+
+def _make_sqc_qubit():
+    return SqcQubit(
         EC=2 * np.pi * 0.2,
         EJ=2 * np.pi * 15,
         T1=10000.0,
@@ -54,51 +70,46 @@ def _baseline_qubit_static() -> dict:
 
 
 def _baseline_ramsey() -> dict:
-    """Run Protocal.evolve case 1 and snapshot outputs."""
-    q = _make_default_qubit()
-    proto = Protocal(type=1)
-    proto.initialize(q, state=0)
-
-    # NOTE: Protocal.evolve case 1 returns Phi, tau_list, p_e_list
-    Phi, tau_list, p_e_list = proto.evolve(q)
+    """Run RamseyExperiment (new sqc, CONFIG time axes) and snapshot outputs."""
+    q = _make_sqc_qubit()
+    exp = RamseyExperiment(qubit=q)
+    result = exp.run()
     return {
-        "Phi_signal": np.asarray(Phi.signal),
-        "Phi_t_list": np.asarray(Phi.t_list),
-        "tau_list": np.asarray(tau_list),
-        "p_e_list": np.asarray(p_e_list),
+        "Phi_signal": np.asarray(result.data["flux_samples"]),
+        "Phi_t_list": np.asarray(result.axes["t_flux"]),
+        "tau_list": np.asarray(result.axes["tau"]),
+        "p_e_list": np.asarray(result.data["p_e"]),
     }
 
 
 def _baseline_diff_echo() -> dict:
-    """Run Protocal.evolve case 2."""
-    q = _make_default_qubit()
-    proto = Protocal(type=2)
-    proto.initialize(q, state=0)
-    Phi, tau_list, p_e_list, k, t_int = proto.evolve(q)
+    """Run DiffEchoExperiment (new sqc, CONFIG time axes)."""
+    q = _make_sqc_qubit()
+    exp = DiffEchoExperiment(qubit=q)
+    result = exp.run()
     return {
-        "Phi_signal": np.asarray(Phi.signal),
-        "Phi_t_list": np.asarray(Phi.t_list),
-        "tau_list": np.asarray(tau_list),
-        "p_e_list": np.asarray(p_e_list),
-        "k": int(k),
-        "t_int": float(t_int),
+        "Phi_signal": np.asarray(result.data["flux_samples"]),
+        "Phi_t_list": np.asarray(result.axes["t_flux"]),
+        "tau_list": np.asarray(result.axes["tau"]),
+        "p_e_list": np.asarray(result.data["p_e"]),
+        "k": int(exp.k),
+        "t_int": float(exp.t_int),
     }
 
 
 def _baseline_transient() -> dict:
-    """Run Protocal.evolve case 4 (sliding measurement)."""
-    q = _make_default_qubit()
-    proto = Protocal(type=4)
-    proto.initialize(q, state=0)
-    t_samples, kernel, scan_list, delta_p, p_e, Phi, ctrl = proto.evolve(q)
+    """Run TransientSensingExperiment (new sqc, CONFIG time axes)."""
+    q = _make_sqc_qubit()
+    exp = TransientSensingExperiment(qubit=q)
+    result = exp.run()
     return {
-        "t_samples": np.asarray(t_samples),
-        "kernel": np.asarray(kernel),
-        "scan_list": np.asarray(scan_list),
-        "delta_p": np.asarray(delta_p),
-        "p_e": np.asarray(p_e),
-        "Phi_signal": np.asarray(Phi.signal),
-        "Phi_t_list": np.asarray(Phi.t_list),
+        "t_samples": np.asarray(result.axes["t_samples"]),
+        "kernel": np.asarray(result.data["kernel"]),
+        "scan_list": np.asarray(result.axes["scan"]),
+        "delta_p": np.asarray(result.data["delta_p"]),
+        "p_e": np.asarray(result.data["p_e"]),
+        "Phi_signal": np.asarray(result.data["flux_samples"]),
+        "Phi_t_list": np.asarray(result.axes["t_flux"]),
     }
 
 

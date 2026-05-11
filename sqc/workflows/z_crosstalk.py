@@ -17,6 +17,7 @@ import numpy as np
 
 from sqc.control.waveform import Waveform
 from sqc.control.flux_signal import FluxSignal
+from sqc.config import CONFIG
 from sqc.workflows.base import Workflow
 
 
@@ -155,7 +156,7 @@ class ZCrosstalkWorkflow(Workflow):
         # Configure experiment
         t_rabi = self.t_rabi
         if t_rabi is None:
-            t_rabi = np.linspace(0, 10, 10)
+            t_rabi = CONFIG.pulse.t_rabi.copy()
 
         # Use the crosstalk flux as the signal to sense
         exp = TransientSensingExperiment(

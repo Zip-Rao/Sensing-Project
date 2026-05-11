@@ -20,6 +20,7 @@ from typing import Literal
 import numpy as np
 from qutip import QobjEvo, basis, mesolve
 
+from sqc.config import CONFIG
 from sqc.calibration.base import Calibration, CalibrationTable
 from sqc.control.flux_signal import FluxSignal
 from sqc.control.sequence import create_ramsey_pulse
@@ -53,7 +54,7 @@ class FluxResponseCalibration(Calibration):
     h_list: np.ndarray | None = None
     tau: float = 100.0
     t_rabi: np.ndarray = field(
-        default_factory=lambda: np.linspace(0, 10, 20)
+        default_factory=lambda: CONFIG.pulse.t_rabi.copy()
     )
 
     def __post_init__(self):
@@ -98,15 +99,15 @@ class FluxResponseCalibration(Calibration):
         4. Record f(Φ) = omega_d + fitted_detuning
         """
         omega_d = self.qubit.frequency
-        tau_list = np.linspace(0, 200, 100)
+        tau_list = CONFIG.pulse.make_time(0, 200)
         frequency_list: list[float] = []
 
         psi_e = basis(self.qubit.n_levels, 1)
-        t_global = np.linspace(-50, 400, 900)
+        t_global = CONFIG.pulse.t_global.copy()
 
         for h in self.h_list:
             # Create constant flux signal
-            t_sig = np.linspace(0, 300, 600)
+            t_sig = CONFIG.pulse.make_time(0, 300)
             Phi = FluxSignal(
                 type=1,
                 t_list=t_sig,

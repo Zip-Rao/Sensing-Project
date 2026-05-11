@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 import numpy as np
 from qutip import QobjEvo, basis, mesolve
 
+from sqc.config import CONFIG
 from sqc.experiments.base import Experiment
 from sqc.control.sequence import create_pulse
 
@@ -32,7 +33,7 @@ class RabiExperiment(Experiment):
 
     qubit: object  # TransmonQubit (duck typed)
     t_rabi: np.ndarray = field(
-        default_factory=lambda: np.linspace(0, 40, 1000)
+        default_factory=lambda: CONFIG.pulse.make_time(0, 40)
     )
     omega_d: float | None = None
 

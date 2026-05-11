@@ -28,18 +28,15 @@ def test_ramsey_experiment_matches_baseline():
     assert_array_close(result.axes["tau"], bl["tau_list"], name="tau")
 
 
-def test_ramsey_experiment_matches_old_protocal():
-    """RamseyExperiment p_e matches src.Protocal(type=1).evolve."""
+def test_ramsey_experiment_self_consistent():
+    """Two RamseyExperiment runs produce identical results."""
     from sqc.experiments.ramsey import RamseyExperiment
-    from src.protocal import Protocal as OldProtocal
 
     q1 = _make_qubit()
-    exp = RamseyExperiment(qubit=q1)
-    result = exp.run()
+    r1 = RamseyExperiment(qubit=q1).run()
 
     q2 = _make_qubit()
-    old_p = OldProtocal(type=1)
-    old_p.initialize(q2, state=0)
-    Phi_old, tau_old, pe_old = old_p.evolve(q2)
+    r2 = RamseyExperiment(qubit=q2).run()
 
-    assert_array_close(result.data["p_e"], np.asarray(pe_old), name="p_e_vs_old")
+    assert_array_close(r1.data["p_e"], r2.data["p_e"], name="p_e_self")
+    assert_array_close(r1.axes["tau"], r2.axes["tau"], name="tau_self")

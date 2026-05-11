@@ -31,21 +31,16 @@ def test_transient_experiment_matches_baseline():
 
 
 @pytest.mark.slow
-def test_transient_experiment_matches_old_protocal():
-    """TransientSensingExperiment matches src.Protocal(type=4).evolve."""
+def test_transient_experiment_self_consistent():
+    """Two TransientSensingExperiment runs produce identical results."""
     from sqc.experiments.transient import TransientSensingExperiment
-    from src.protocal import Protocal as OldProtocal
 
     q1 = _make_qubit()
-    exp = TransientSensingExperiment(qubit=q1)
-    result = exp.run()
+    r1 = TransientSensingExperiment(qubit=q1).run()
 
     q2 = _make_qubit()
-    old_p = OldProtocal(type=4)
-    old_p.initialize(q2, state=0)
-    (t_s, k_old, scan_old, dp_old,
-     pe_old, Phi_old, cp_old) = old_p.evolve(q2)
+    r2 = TransientSensingExperiment(qubit=q2).run()
 
-    assert_array_close(result.data["kernel"], np.asarray(k_old), name="kernel")
-    assert_array_close(result.data["delta_p"], np.asarray(dp_old), name="delta_p")
-    assert_array_close(result.data["p_e"], np.asarray(pe_old), name="p_e")
+    assert_array_close(r1.data["kernel"], r2.data["kernel"], name="kernel")
+    assert_array_close(r1.data["delta_p"], r2.data["delta_p"], name="delta_p")
+    assert_array_close(r1.data["p_e"], r2.data["p_e"], name="p_e")

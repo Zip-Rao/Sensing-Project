@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from sqc.control.flux_signal import FluxSignal
+from sqc.config import CONFIG
 from sqc.experiments.base import Experiment
 from sqc.hardware.readout import IQReadoutModel
 from sqc.simulation.result import ExperimentResult
@@ -48,7 +49,7 @@ class CryoscopeExperiment(Experiment):
     qubit: object  # TransmonQubit (duck-typed)
     flux_signal: FluxSignal | None = None
     t_rabi: np.ndarray = field(
-        default_factory=lambda: np.linspace(0, 10, 20)
+        default_factory=lambda: CONFIG.pulse.t_rabi.copy()
     )
     tau: float = 100.0
     trunc_list: np.ndarray | None = None
@@ -60,7 +61,7 @@ class CryoscopeExperiment(Experiment):
         if self.flux_signal is None:
             self.flux_signal = FluxSignal(
                 type=2,
-                t_list=np.linspace(0, 80, 160),
+                t_list=CONFIG.pulse.make_time(0, 80),
                 amplitude=0.01,
             )
         if self.trunc_list is None:

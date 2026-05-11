@@ -34,58 +34,55 @@ def test_qubit_static_properties(qubit_default):
 
 
 def test_ramsey_default_baseline():
-    """Protocal(type=1).evolve must match frozen Ramsey output."""
-    from src.qubit import TransmonQubit
-    from src.protocal import Protocal
+    """RamseyExperiment (sqc, CONFIG time axes) must match frozen Ramsey baseline."""
+    from sqc.devices.transmon import TransmonQubit as SqcQubit
+    from sqc.experiments.ramsey import RamseyExperiment
 
-    q = TransmonQubit(
+    q = SqcQubit(
         EC=2*np.pi*0.2, EJ=2*np.pi*15, T1=10000, T2=8000,
         flux=0.0, state=0, n_levels=2,
     )
-    proto = Protocal(type=1)
-    proto.initialize(q, state=0)
-    Phi, tau_list, p_e_list = proto.evolve(q)
+    exp = RamseyExperiment(qubit=q)
+    result = exp.run()
 
     bl = load_baseline("ramsey_default")
-    assert_array_close(Phi.signal, bl["Phi_signal"], name="Phi.signal")
-    assert_array_close(np.asarray(tau_list), bl["tau_list"], name="tau_list")
-    assert_array_close(np.asarray(p_e_list), bl["p_e_list"], name="p_e_list")
+    assert_array_close(result.data["flux_samples"], bl["Phi_signal"], name="Phi.signal")
+    assert_array_close(result.axes["tau"], bl["tau_list"], name="tau_list")
+    assert_array_close(result.data["p_e"], bl["p_e_list"], name="p_e_list")
 
 
 def test_diff_echo_default_baseline():
-    from src.qubit import TransmonQubit
-    from src.protocal import Protocal
+    from sqc.devices.transmon import TransmonQubit as SqcQubit
+    from sqc.experiments.echo import DiffEchoExperiment
 
-    q = TransmonQubit(
+    q = SqcQubit(
         EC=2*np.pi*0.2, EJ=2*np.pi*15, T1=10000, T2=8000,
         flux=0.0, state=0, n_levels=2,
     )
-    proto = Protocal(type=2)
-    proto.initialize(q, state=0)
-    Phi, tau_list, p_e_list, k, t_int = proto.evolve(q)
+    exp = DiffEchoExperiment(qubit=q)
+    result = exp.run()
 
     bl = load_baseline("diff_echo_default")
-    assert k == bl["k"]
-    assert t_int == pytest.approx(bl["t_int"], rel=1e-12)
-    assert_array_close(np.asarray(p_e_list), bl["p_e_list"], name="p_e_list")
+    assert exp.k == bl["k"]
+    assert exp.t_int == pytest.approx(bl["t_int"], rel=1e-12)
+    assert_array_close(result.data["p_e"], bl["p_e_list"], name="p_e_list")
 
 
 def test_transient_default_baseline():
-    from src.qubit import TransmonQubit
-    from src.protocal import Protocal
+    from sqc.devices.transmon import TransmonQubit as SqcQubit
+    from sqc.experiments.transient import TransientSensingExperiment
 
-    q = TransmonQubit(
+    q = SqcQubit(
         EC=2*np.pi*0.2, EJ=2*np.pi*15, T1=10000, T2=8000,
         flux=0.0, state=0, n_levels=2,
     )
-    proto = Protocal(type=4)
-    proto.initialize(q, state=0)
-    t_samples, kernel, scan_list, delta_p, p_e, Phi, ctrl = proto.evolve(q)
+    exp = TransientSensingExperiment(qubit=q)
+    result = exp.run()
 
     bl = load_baseline("transient_default")
-    assert_array_close(kernel, bl["kernel"], name="kernel")
-    assert_array_close(np.asarray(delta_p), bl["delta_p"], name="delta_p")
-    assert_array_close(np.asarray(p_e), bl["p_e"], name="p_e")
+    assert_array_close(result.data["kernel"], bl["kernel"], name="kernel")
+    assert_array_close(result.data["delta_p"], bl["delta_p"], name="delta_p")
+    assert_array_close(result.data["p_e"], bl["p_e"], name="p_e")
 
 
 def test_lm_default_baseline():

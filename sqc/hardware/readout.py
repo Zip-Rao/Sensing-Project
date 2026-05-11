@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 import numpy as np
+from sqc.config import CONFIG
 from qutip import Qobj, QobjEvo, basis, mesolve
 
 
@@ -91,7 +92,7 @@ class IQReadoutModel(ReadoutModel):
 
     def __post_init__(self):
         if self.t_rabi is None:
-            self.t_rabi = np.linspace(0, 10, 20)
+            self.t_rabi = CONFIG.pulse.t_rabi.copy()
 
     def measure(self, qubit, **extra) -> dict[str, float]:
         """Run two Ramsey sequences and return I, Q components.
@@ -189,7 +190,7 @@ def IQ_readout_legacy(qubit, type, **kwargs):
     if type in (2, 3):
         readout = IQReadoutModel(
             tau=kwargs.get("tau", 20.0),
-            t_rabi=kwargs.get("t_rabi", np.linspace(0, 10, 20)),
+            t_rabi=kwargs.get("t_rabi", CONFIG.pulse.t_rabi.copy()),
         )
         result = readout.measure(qubit)
         return result["p_e_I"], result["p_e_Q"]

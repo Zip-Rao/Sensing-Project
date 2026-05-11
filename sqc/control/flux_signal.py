@@ -13,6 +13,7 @@ from typing import Optional
 
 import numpy as np
 
+from sqc.config import CONFIG
 from .waveform import Waveform, CompositeWaveform
 
 
@@ -53,7 +54,7 @@ class FluxSignal(Waveform):
             self._build_basis_functions(t_list)
 
         # Generate samples
-        t_arr = np.asarray(t_list, dtype=float) if t_list is not None else np.linspace(0, 250, 500)
+        t_arr = np.asarray(t_list, dtype=float) if t_list is not None else CONFIG.pulse.t_signal.copy()
 
         if type == 6 and self._basis_functions:
             # Generate with basis functions applied
@@ -113,7 +114,7 @@ class FluxSignal(Waveform):
             "center": 0.0,
             "width": 30.0,
             "offset": 0.0,
-            "t_rabi": np.linspace(0, 40, 100),
+            "t_rabi": CONFIG.pulse.make_time(0, 40),
             "tau": 20.0,
             "rise": 5.0,
             "fall": 2.0,

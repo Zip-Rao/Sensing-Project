@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 import numpy as np
 from qutip import QobjEvo, basis, mesolve
 
+from sqc.config import CONFIG
 from sqc.experiments.base import Experiment
 from sqc.control.flux_signal import FluxSignal, CompositeSignal
 from sqc.control.sequence import create_diff_echo_pulse
@@ -51,13 +52,13 @@ class DiffEchoExperiment(Experiment):
     flux_signal: FluxSignal | None = None
     k: int = 5
     t_rabi: np.ndarray = field(
-        default_factory=lambda: np.linspace(0, 10, 20)
+        default_factory=lambda: CONFIG.pulse.t_rabi.copy()
     )
     t_int: float | None = None
     t_rep: float | None = None
     tau_list: np.ndarray | None = None
     t_global: np.ndarray = field(
-        default_factory=lambda: np.linspace(-10, 1010, 2020)
+        default_factory=lambda: CONFIG.pulse.make_time(-10, 1010)
     )
     omega_d: float | None = None
 
@@ -67,7 +68,7 @@ class DiffEchoExperiment(Experiment):
 
         if self.flux_signal is None:
             # Default test signal matches src/protocal.py case 2
-            t_list = np.linspace(0, 100, 200)
+            t_list = CONFIG.pulse.make_time(0, 100)
             self.flux_signal = FluxSignal(
                 type=3,
                 t_list=t_list,

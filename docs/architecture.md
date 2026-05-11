@@ -712,9 +712,66 @@ TransferMatrix.apply(source_voltages: dict[str, Waveform]) -> dict[str, FluxSign
 
 ---
 
-## 10. 设计原则与约定
+## 10. 全局配置 (Global Configuration)
 
-### 10.1 核心原则
+### 10.1 设计理念
+
+`sqc/config.py` 提供统一的全局配置体系。参数从**硬件层向上推导**，而不是在不同文件中各自硬编码。
+
+```
+AWG sample_rate (hardware)
+  → dt = 1 / sample_rate (全局时间量子)
+    → t_rabi = arange(0, 10, dt)  (标准 π 脉冲窗口)
+    → t_global = arange(-50, 400, dt)  (仿真时间窗)
+    → t_signal = arange(0, 250, dt)  (磁通信号默认时间轴)
+```
+
+所有时间轴使用 `np.arange(start, stop, dt)` 而非 `np.linspace(start, stop, N)`，以确保：
+- 每个时间点落在整数 AWG 采样边界上
+- `dt` 全局唯一，从 `AWGConfig.sample_rate` 推导
+- 脉冲面积计算不依赖不整齐的步长（`amplitude = pi / duration`）
+
+### 10.2 配置层次
+
+| Section | Dataclass | 关键字段 |
+|---|---|---|
+| Hardware | `AWGConfig` | `sample_rate: 2.0 GSa/s` → `dt: 0.5 ns` |
+| | `ControlLineDefaults` | `impedance: 50 Ω`, `attenuation_db: 20 dB` |
+| Devices | `TransmonDefaults` | `EC: 0.2`, `EJ: 15.0`, `T1: 10k ns`, `n_levels: 3` |
+| Control | `PulseConfig` | `t_rabi_duration: 10 ns`, `t_global_start/end`, `dt` (injected) |
+| Simulation | `SimulationConfig` | `atol: 1e-8`, `rtol: 1e-6` |
+| Reconstruction | `ReconstructionConfig` | `lambda_reg: 1.0`, `stim_amplitude: 0.0215`, `lm_n_basis: 100` |
+
+### 10.3 使用方式
+
+```python
+from sqc.config import CONFIG, reconfigure
+
+# 获取全局默认值
+dt = CONFIG.awg.dt               # 0.5 ns
+t_rabi = CONFIG.pulse.t_rabi      # arange(0, 10, dt)
+t_cons = CONFIG.transmon          # TransmonDefaults
+q = TransmonQubit(**t_cons.to_dict())
+
+# 创建自定义配置（全局单例不变）
+cfg2 = reconfigure(sample_rate=4.0, t_rabi_duration=20)
+exp = RamseyExperiment(qubit=q, t_rabi=cfg2.pulse.t_rabi)
+```
+
+### 10.4 已适配模块
+
+所有时间轴从 `CONFIG.pulse` 获取默认值：
+- `sqc/experiments/`: Ramsey, Echo, Rabi, Transient, Cryoscope
+- `sqc/calibration/`: QubitFrequency, FluxResponse
+- `sqc/control/`: sequence.py (free-evolution gaps), flux_signal.py (default t_signal)
+- `sqc/hardware/`: readout.py (t_rabi)
+- `sqc/workflows/`: z_crosstalk.py (t_rabi)
+
+---
+
+## 11. 设计原则与约定
+
+### 11.1 核心原则
 
 1. **物理结果不变**：重构不改变任何物理算法的等价行为
 2. **device/qubit 只描述物理参数**：不存储实验状态
@@ -724,6 +781,7 @@ TransferMatrix.apply(source_voltages: dict[str, Waveform]) -> dict[str, FluxSign
 6. **hardware 显式建模**：反映真实 cQED 栈
 7. **永久镜像**：`src/` 不删除，旧代码无限期可工作
 8. **不引入新依赖**：只用 numpy/scipy/qutip/matplotlib/dataclasses
+9. **全局配置中心化**：所有时间网格从 `CONFIG.awg.dt` 推导，不使用 `np.linspace`
 
 ### 10.2 命名与拼写
 

@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 import numpy as np
 from qutip import QobjEvo, basis, mesolve
 
+from sqc.config import CONFIG
 from sqc.calibration.base import Calibration, CalibrationTable
 from sqc.control.flux_signal import FluxSignal
 from sqc.control.sequence import create_ramsey_pulse
@@ -47,15 +48,15 @@ class QubitFrequencyCalibration(Calibration):
     qubit: object  # TransmonQubit
     tau_list: np.ndarray | None = None
     t_rabi: np.ndarray = field(
-        default_factory=lambda: np.linspace(0, 10, 20)
+        default_factory=lambda: CONFIG.pulse.t_rabi.copy()
     )
     t_global: np.ndarray | None = None
 
     def __post_init__(self):
         if self.tau_list is None:
-            self.tau_list = np.linspace(0, 200, 100)
+            self.tau_list = CONFIG.pulse.make_time(0, 200)
         if self.t_global is None:
-            self.t_global = np.linspace(-50, 400, 900)
+            self.t_global = CONFIG.pulse.t_global.copy()
 
     def calibrate(self) -> CalibrationTable:
         """Run Ramsey frequency calibration.
@@ -69,7 +70,7 @@ class QubitFrequencyCalibration(Calibration):
         n_levels = self.qubit.n_levels
 
         # Create a zero-flux signal (qubit in idle)
-        t_sig = np.linspace(0, 300, 600)
+        t_sig = CONFIG.pulse.make_time(0, 300)
         Phi = FluxSignal(type=0, t_list=t_sig)
         self.qubit.qubit_in_mag(Phi, frame=1, omega_d=omega_d)
 
