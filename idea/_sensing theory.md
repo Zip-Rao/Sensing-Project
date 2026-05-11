@@ -578,6 +578,72 @@ $$
 
 
 ![alt text](image-4.png)
+
+
+
+以下两种方法主要用于测量方波脉冲的拖尾，用于波形的预失真。
+## $\pi$脉冲补偿法
+![alt text](image-12.png)
+上图是$\pi$脉冲补偿法的示意图。
+
+该方法需要在磁通敏感点上进行测量，因此首先需要将工作点偏置到磁通敏感点附近，然后通过AWG施加一个方波，由于波形失真，到达qubit的flux会有一个上升沿和下降沿，假设两者对称，因此只测下降沿。
+
+设方波关断指令时刻为时间零点，偏置点为$\Phi_m$，到达qubit的真实磁通为$\tilde{\Phi}_{sq}(t)$。在$\tau$时刻施加一个宽度为$T_{\pi}$，高度为$z$的flux补偿，因此qubit实际感受到的磁通为
+$$
+\Phi_{total}(t) = \tilde{\Phi}_{sq}(t) + z(t)
+$$
+补偿条件写为
+$$
+\braket{\Phi_{total}} = \Phi_m
+$$
+则拖尾和补偿的关系为
+$$
+z^*(t) = -\frac{1}{T_\pi}\int_t^{t+T_\pi} \tilde{\Phi}_{sq}(t') dt' + \Phi_m 
+$$
+
+与补偿flux相同的时间窗口上施加一个pi脉冲，脉冲驱动频率为$\omega_d = \omega_q(\Phi_m)$，若补偿可以抵消拖尾，则qubit共振，态翻转到激发态。
+
+扫描$\tau$和$z$，每次得到相应的激发概率$P_e(\tau, z)$，则$\tau,z$对应的$p_e$最大值即为最佳的$z(\tau)$，提取之，即得到拖尾近似满足的波形。如图c，若将亮线翻转，即为拖尾波形。
+
+由于实验需要找共振峰，而$\pi$脉冲带宽约为$\frac{1}{T_\pi}$，则$\kappa \Phi_{tail}$至少要大于$\frac{1}{T_\pi}$，才能保证共振峰的存在，因此需要偏置到磁通敏感点附近，以保证足够的频率响应。
+
+### 性能分析
+由于补偿条件是对一个时间窗口的平均，因此该方法存在一个时间分辨率限制$T_\pi$，另外该方法要求对qubit进行偏置，且偏置点的频率必须测量，以施加正确频率的$\pi$脉冲。测量涉及二维扫描，每个扫描点又需要进行多次重复测量以获得统计结果，因此该方法的测量时间较长，且对环境变化较为敏感。
+
+## delay Ramsey
+![alt text](image-13.png)
+上图是Ramsey tomo方法的示意图。
+
+该方法相对$\pi$脉冲补偿法来说，不需要对qubit偏置点频率进行标定测量。也不需要flux补偿。
+
+设方波关断指令时刻为时间零点，在$t_d$时刻，施加一个演化时间为$\tau_R$的Ramsey脉冲，驱动频率为$\omega_d = \omega_q(\Phi_b)$，$\pi/2$脉冲宽度为$T_{\pi/2}$，做正交测量，得到$P_x$和$P_y$，计算得到相位
+$$
+\phi = \arctan\left(\frac{P_y}{P_x}\right)
+$$
+
+扫描$t_d$，得到相位$\phi(t_d)$，
+
+不施加方波，重复上述实验，得到baseline相位$\phi_{base}$，则拖尾引入的相位为
+$$
+\phi_{tail}(t_d) = \phi - \phi_{base} = \int_{t_d}^{t_d+\tau_R} \delta \omega(t) dt
+$$
+由此得到拖尾和相位的关系为
+$$
+\braket{\Phi_{tail}} = \int_{t_d}^{t_d+\tau_R} \Phi_{tail}(t) dt = \frac{\phi_{tail}}{\tau_R \kappa_{\Phi_b}}
+$$
+
+随后做相位标定，在baseline下，在Ramsey序列的自由演化阶段施加一个高度为$z$的flux，进行Ramsey实验得到相位$\phi_{cal}(z)$，相位满足
+$$
+\phi_{cal}(z) = \tau_R \kappa_{\Phi_b} z
+$$
+
+扫描$z$，得到标定曲线$\phi_{cal}(z)$，拟合斜率$k = \frac{d\phi_{cal}}{dz} = \tau_R \kappa_{\Phi_b}$
+
+则拖尾的磁通可以由标定相位得到：
+$$
+\Phi_{tail}(t_d) = \phi_{cal}^{-1}(\phi_{tail}(t_d)) = \frac{\phi_{tail}(t_d)}{k}
+$$
+
 # 应用
 量子传感中涉及的各种协议可以用于量子计算中的calibration和脉冲矫正。下面分析以上各协议在qubit频率标定和信号预失真的应用。
 
@@ -591,7 +657,7 @@ qubit频率标定可以根据需求和应用场景分为很多种方式：
 下面，先介绍一个标定的总体DAG框架，在根据应用场景进行分析，最后分析当前协议在这些应用场景中的适用性和优势。
 
 ### DAG框架
-[Kelly 2008:Physical Qubit Calibration on a Directed Acyclic Graph]("C:\Users\21034\Desktop\Workspace\scholaraio\data\libraries\papers\Kelly-2018-Physical-qubit-calibration-on-a-directed-acyclic-graph")
+[Kelly 2018:Physical Qubit Calibration on a Directed Acyclic Graph]("C:\Users\21034\Desktop\Workspace\scholaraio\data\libraries\papers\Kelly-2018-Physical-qubit-calibration-on-a-directed-acyclic-graph")
 
 建立了一个全自动的qubit校准框架，使用DAG（Directed Acyclic Graph）来描述校准流程中的依赖关系。每个节点代表一个校准步骤，每条边表示一个步骤对另一个步骤的依赖关系。通过拓扑排序，可以自动确定校准的执行顺序。
 
@@ -606,6 +672,11 @@ qubit频率标定可以根据需求和应用场景分为很多种方式：
 其中，$\mathcal{P}_t$为待校准的参数，$S = (S_{check}, S_{cal})$为扫描集，$A_{check}$为检查算法，$A_{cal}$为分析函数，$\tau$为品质因数的阈值，$\theta$为超时周期。
 - **依赖关系**：若$\mathcal{C}_B$的执行依赖于$\mathcal{C}_A$，则称$\mathcal{C}_B$依赖于$\mathcal{C}_A$。依赖
 具有传递性，依赖关系形成一种引导式结构(bootstrap)，从简单的Cal开始，其输出作为更复杂的Cal的输入，逐步增强qubit的控制能力。但是，同时，依赖关系会导致校准过程的脆弱性。
+    - SQC中的依赖关系：
+![alt text](image-14.png)
+![alt text](deepseek_mermaid_20260505_8653c1.png)
+
+    可以看到，实线部分确实是一个DAG结构，虚线部分形成了一些环，这是工程中的迭代反馈过程，虽然不是严格的DAG，但可以通过一些策略来处理这些环路，如增加迭代次数限制，或引入额外的检查步骤来打破环路。
 - **系统状态**：当前标定的结果(in spec, out of spec)
 
 DAG框架需要满足以下要求：
@@ -642,7 +713,8 @@ maintain算法需要再一个合规的Cal节点被调用，其决策流程如下
 
 
 ### 闭环反馈控制
-[Vepsäläinen 2022 — Improving Qubit Coherence Using Closed-Loop Feedback]("C:\Users\21034\Desktop\Workspace\scholaraio\data\libraries\papers\Vepsalainen-2022-Improving-qubit-coherence-using-closed-loop-feedback")通过实时闭环反馈抑制qubit低频噪声，提高qubit相干性和门保真度。
+[Vepsäläinen 2022 — Improving Qubit Coherence Using Closed-Loop Feedback]("C:\Users\21034\Desktop\Workspace\scholaraio\data\libraries\papers\Vepsalainen-2022-Improving-qubit-coherence-using-closed-loop-feedback")
+<!--通过实时闭环反馈抑制qubit低频噪声，提高qubit相干性和门保真度。
 
 反馈协议分为以下三个阶段;
 ![alt text](image-8.png)
@@ -676,7 +748,75 @@ $$
 
 设频率误差为
 $e = f_{q}(V_n) - f_0 $
+-->
 
+#### 标定背景
+闭环反馈qubit频率标定的目标是实时自动化地将qubit频率精确校准到指定的工作点上，自动化的实现借助于DAG框架，与其他部分的标定形成依赖关系，qubit标定的实现借助优化算法，基于测量结果自动调整参数，达到快速收敛的目的，过程中不需要测量qubit的磁通响应关系，整个标定过程可以看做一个黑箱，其中只需外界提供目标频率点，DAG框架提供控制开关，当`calf == true`时，且输入`freq`非空，则启动频率标定算法，输出新的电流值`VO`与控制信号`VControl`，实现频率标定。
+
+实验中磁通与电压信号满足
+$$
+\Phi = \Phi_{offset} + \alpha V
+$$
+由于环境的扰动，$\alpha,\Phi_{offset}$等参数会发生漂移，如果想要依赖响应函数$f(\Phi)$进行qubit标定，则需要涉及频率-磁通响应的标定，增加了标定的复杂度和时间开销。闭环反馈控制忽略了磁通响应的标定，直接通过测量频率与电压的关系，通过优化算法实现频率标定，实际的时间开销较小。
+
+该qubit标定的依赖关系如下：
+- 完成readout标定：可以区分qubit的0态和1态
+- 完成qubit频率粗标定：利用spectroscopy等方法，得到qubit的电压区间[V_a, V_b]，其中$V_a, V_b$满足braket条件，即$r_ar_b < 0$
+- 完成了$\pi/2$脉冲标定
+具体可以参考DAG框架部分的图示。
+#### 标定流程
+标定流程可以写成如下伪代码：
+```
+f_0, epsilon_f = input() # 输入目标频率和容差
+V_a, V_b = input() # 输入电压区间
+V_n = (V_a + V_b) / 2 # 初始电压取区间中点
+r_n = measure_frequency(V_n) - f_0 # 计算初始残差
+while abs(r_n) > epsilon_f:
+    V_next = update(V_n, r_n) # 基于测量结果和优化算法，计算下一个电压值
+    if V_next < V_a or V_next > V_b:
+        V_n = (V_a + V_b) / 2 # 若优化结果超出区间，则回退到区间中点
+    else:
+        V_n = V_next
+    f_n = measure_frequency(V_n) # 测量当前电压下的频率
+    r_n = f_n - f_0 # 计算残差
+```
+ 
+##### 目标
+设置目标频率为$f_0$，当前电压$V_n$下，真实频率为$f_n = f_q(V_n)$，定义残差为
+$$
+r_n = f_n - f_0
+$$
+则目标为
+$$
+|r_n| < \epsilon_f
+$$
+其中$\epsilon_f$为频率标定的容差。
+
+##### 更新算法(`update`)
+更新有很多种思路，如果将$\min r_n$的问题看做求根问题，则可以使用二分法，牛顿迭代法等方法；如果将$\min r_n$的问题看做一个优化问题，则可以使用梯度下降法，拟牛顿法等方法。不同的方法可能需要不同的参数，但是整体流程是类似的。
+
+由于标定目标只是单点频率标定，并且为了减小时间开销，直接复用因此使用secant方法即可。
+
+##### 频率测量(`measure_frequency`)
+频率测量部分会在后续介绍
+#### 时间开销
+相比于粗扫，闭环反馈控制的时间开销较小。
+
+粗扫对于每个电压点都要做一次spectroscopy，施加可能以min记。闭环控制只需在每次迭代中施加一个Ramsey测量，且迭代次数通常较少（如5-10次），因此总的时间开销较小。
+
+具体的，每次迭代的ramsey测量的时间开销为
+$$
+T_{ramsey} \approx N_{\tau}N_{shot}(T_{reset} + \tau + T_{readout})
+$$
+其中：
+- $N_{\tau}$为ramsey测量中扫描的$\tau$点数，通常为10-20点
+- $N_{shot}$为每个$\tau$点的重复测量次数，通常为1000-10000次，若只需测实时漂移，$N_{\tau}$和$N_{shot}$可以适当减少
+- $T_{reset}$为qubit的复位时间，通常为1-10$\mu$s
+- $\tau$为ramsey测量的演化时间，通常为0.1-10$\mu$s
+- $T_{readout}$为qubit的读出时间，通常为1-10$\mu$s
+
+
+<!--
 分为工作点频率标定和磁通响应频率标定两类。前者适用于所有qubit，后者通常用于可调频qubit。
 
 下面主要基于可调频qubit进行分析。完整的标定流程为：
@@ -688,7 +828,10 @@ $e = f_{q}(V_n) - f_0 $
 $$
 \Phi(t) = \Phi_{DC} + \Phi_{Z}(t) = \alpha I_{DC} + \alpha I_Z(t)
 $$
-标定目标是确定
+标定目标是确定-->
+下面介绍两个测量频率的方法：
+- Ramsey协议
+- 瞬态磁场协议与核函数策略
 ### Ramsey协议
 Ramsey干涉是用于qubit频率标定的标准协议。
 
@@ -704,16 +847,120 @@ Ramsey干涉是用于qubit频率标定的标准协议。
 
 #### 基本思想
 
-瞬态磁场协议（Herb et al., Nat. Commun. 2025）的核心是将量子探测脉冲序列视为一个**卷积核函数** $k(t)$。测量结果 $p(t_d)$ 是待测信号 $B(t)$ 与核函数的卷积：
-
+瞬态磁场协议（Herb et al., Nat. Commun. 2025）的核心是使用两个正交的连续控制脉冲代替Ramsey脉冲：
+$$ 
+R_y(\alpha) - R_x(\alpha)
 $$
-p(t_d) = \int_{-\infty}^{\infty} k(t' - t_d) \cdot \kappa B(t') \, dt'
+在小失谐的情况下，施加该脉冲后4的激发态概率近似为
+$$
+p \approx p_0 + G_{\alpha}\delta 
 $$
 
-通过等效时间采样扫描延迟 $t_d$，得到 $p(t_d)$ 的完整曲线，再通过反卷积还原 $B(t)$。
+如果考虑失谐的时间变化，则可将脉冲看做一个时间核函数$k(t)$，测量结果是待测信号和核函数的卷积：
+$$
+p(t) = \int k(t' - t) \delta(t') dt'
+$$
+在这里，核函数就表示qubit频率在对脉冲不同时间点的敏感程度。有
+$$
+G_{\alpha} = \int k(t) dt
+$$
+
+这种方法最大的优势就是时间开销小，可以尽可能的减小脉冲宽度，以减小时间成本。不过，脉冲宽度存在理论上限，即QSL，且过短的脉冲会导致时间分辨率减小，因此使用这个脉冲进行频率测量时，最后还需用Ramsey做最终的精确矫正。
+
+#### 具体实验实现
+
+##### 核函数测量
+理论上，理想的连续$\pi/2$脉冲的核函数可以写为
+$$
+k(t) = \begin{cases} \sin\left[\Omega\left(\frac{\tau_p}{2} - |t|\right)\right] & |t| < \tau_p/2 \\ 0 & |t| > \tau_p/2 \end{cases}
+$$
+但是，实际上，会有各种非理想因素，如AWG的有限采样率，脉冲失真，系统的非线性响应等，导致实际的核函数与理论值存在偏差。因此，需要通过实验测量来获取实际的核函数。
+
+因此，在采用该方案时，qubit频率标定还有一个依赖关系，即需要先测量核函数，核函数的测量应该紧接qubit频率标定之前，因为其它标定步骤可能会影响核函数的形状。
+
+关于核函数的测量，实际可以采取数值仿真和实际测量两种方法。
+
+- **数值仿真**
+仿真需要对系统的哈密顿量进行建模，并经可能的考虑所有非理想因素，例如能级泄露，波形失真等。
+
+旋转坐标系下，Transmon qubit的哈密顿量可以写为
+$$
+H/\hbar = \Delta(t) a^{\dagger}a + \frac{\alpha}{2} a^{\dagger}a^{\dagger}aa + \frac{1}{2}(\Omega_x(t)(a + a^{\dagger}) + i\Omega_y(t)(a - a^{\dagger}))
+$$
+为了充分考虑非理想因素，必要时可以加入DRAG，BS shift等修正。
+
+哈密顿量右半部分为脉冲项，脉冲项应该满足
+$$
+R_y(\alpha) - R_{x/-x}(\alpha)
+$$
+
+另外还需添加一个小的flux偏置，即
+$$
+H_{stim} = \hbar \delta\omega(t-t_0)a^\dagger a
+$$
+$\delta \omega$可以取一个窄Gaussian，面积为
+$$
+\phi_{stim} = \int \delta\omega(t) dt
+$$
+面积足够小，以保证系统的响应在$\phi_{stim}$的线性范围内。
+
+扫描$t_0$，并在每个$t_0$处进行两次仿真，分别施加$+\delta \omega$和$-\delta \omega$，得到差分响应即为核函数
+$$
+k(t_0) = \frac{p_e\big|_{+\delta \omega} - p_e\big|_{-\delta \omega}}{2\phi_{stim}}
+$$
+为了消掉偶次误差，可以在每次实验中换脉冲的旋转轴，即$R_x(\alpha)$和$R_{-x}(\alpha)$，计算
+$$
+p_e = \frac{p_e\big|_{R_x} - p_e\big|_{R_{-x}}}{2}
+$$
+
+仿真的优势是可以根据仿真结果去选择合适的脉冲参数，如$\alpha$，$\tau_p$等，以获得更好的时间分辨率和灵敏度。同时尽可能地避免一些非理想因素的影响，如能级泄露，波形失真等。
+- **实验测量**
+实验上可以通过施加Virtual Z来实现一个小的频率偏移。Virtual Z通过控制$t_j$之后的脉冲相位整体平移$\phi_z$来实现，类似仿真的方法，扫描$t_j$，并在每个$t_j$处施加$+\phi_z$和$-\phi_z$，得到差分响应即为核函数
+$$
+k(t_j) = \frac{p_e\big|_{+\phi_z} - p_e\big|_{-\phi_z}}{2\phi_z}
+$$
+其中，$p_e$满足
+$$
+p_e = \frac{p_e\big|_{R_x} - p_e\big|_{R_{-x}}}{2}
+$$
+
+另外，也可以直接施加一个小的flux脉冲来实现频率偏移，即
+$$
+V_{stim}(t - t_j)
+$$
+则
+$$
+\delta \omega(t) = \frac{d\omega}{dV} V_{stim}
+$$
+不过，需要注意的是，由于AWG的输出信号经过了预失真处理，因此实际测得的信号包含
+$$
+p_e = k \ast h_{filt} \ast V
+$$
+
 
 该框架的关键优势在于：**核函数由脉冲序列唯一确定，反卷积框架对核函数形状无任何假设**。这意味着可以使用任意脉冲序列作为探测脉冲，只要能计算（或测量）其核函数。
 
+##### 频率测量
+在频率测量阶段，施加两种脉冲序列
+$$
+R_y(\alpha) - R_x(\alpha), \quad R_y(\alpha) - R_{-x}(\alpha)
+$$
+定义差分信号
+$$
+p_e = \frac{p_e\big|_{R_x} - p_e\big|_{R_{-x}}}{2}
+$$
+则
+$$ 
+p_e(t) = k \ast \delta \omega
+$$
+通过反卷积可以得到频率，如果考虑准静态近似，即$\delta \omega$在测量过程中近似不变，则可以直接通过积分得到频率：
+$$
+\delta \omega = \frac{p_e}{\int k(t) dt} = \frac{p_e}{G_{\alpha}}
+$$
+#### 进一步应用
+这个协议实际上比测量静态频率更为通用，其可以通过反卷积得到flux的时变波形，因此还可以用于flux的标定。例如，测量一个flux到达qubit的失真，从而对flux进行预失真标定。
+
+<!--
 #### 核函数的一般定义
 
 对于任意控制脉冲序列 $H_{\text{ctrl}}(t)$，其核函数定义为：在时刻 $t_0$ 施加一个 $\delta$ 刺激磁场时，测量结果相对于基线的变化：
@@ -886,8 +1133,11 @@ $$
 $$
 
 $R_n(t_d)$ 可预计算，$\{c_n\}$ 通过正则化最小二乘一步求解。这实现了从一次滑动测量扫描中同时提取线性灵敏度 $c_1 = \kappa$、二阶非线性 $c_2 = \kappa'/2$ 等所有标定系数。
+-->
+### 混合框架
+考虑到Ramsey框架的时间开销以及QSL框架的精度不足，可以考虑一个混合框架，先使用spectroscopy和Ramsey协议进行粗标定，得到一个初始的频率估计值；随后使用QSL框架快速接近目标频率，最后使用长Ramsey进行精确验证和微调。
 
-
+失真可以分为LP和HP失真，LP失真会阻碍高频信号，导致系统响应变慢；HP失真会阻碍低频信号，导致系统在长时间尺度下会逐渐衰减
 ## 预失真
 超导量子处理器中，通过flux-z线施加磁通信号控制qubit频率。但是，磁通信号在室温AWG产生，到传入低温SQUID环的路径中，会产生失真，从而影响门操作。因此，需要对输入的磁通信号进行预失真处理，以补偿失真。
 
@@ -921,11 +1171,55 @@ $$
 
 对于实际系统，可以找一个滤波器$h_{filt}$，使得$s_{corr} =  s \star h_{filt}$尽可能接近理想阶跃响应$s_{ideal} = u(t)$，从而实现预失真补偿。
 
-首先需要获取系统的阶跃响应$s$。下面会就此介绍两种方法：
-- cryoscope协议
-- 瞬态磁场协议
+在实际实验中，波形标定的逻辑线路可以总结为：
+- Chevron实验发现波形失真
+- 测量失真（即阶跃响应）
+- 设计预失真滤波器
+- 定量或定性验证
 
-### cryoscope协议
+下面依次介绍各个部分：
+
+### Chevron实验
+Chevron实验本质上是将两个能级调到近共振，然后看激发数是否发生交换振荡的二维谱实验，常见有两类：
+- 单比特Rabi Chevron：扫微波失谐，看Rabi振荡
+- 两比特flux Chevron：扫flux幅度和持续时间，看交换振荡
+
+#### 单比特Rabi Chevron
+进行Rabi实验，设失谐为$\Delta$，Rabi频率为$\Omega$，则激发态概率为
+$$
+p_e(t) = \frac{\Omega^2}{\Omega^2 + \Delta^2} \sin^2\left(\frac{\sqrt{\Omega^2 + \Delta^2}}{2} t\right)
+$$
+扫描脉冲频率$\omega_d$和脉冲持续时间，得到二维图像$p_e(\Delta, t)$，可以得到一个Chevron图像。
+![alt text](image-9.png)
+![alt text](image-10.png)
+上图为一个理想Chevron图像以及一个波形失真的图像，从图中可以得到以下信息：
+- qubit频率：$\Delta = 0$处的线
+- $\pi$脉冲时间：$\Delta = 0$处的第一个振荡峰的位置
+- 失真：若波形存在失真，或者有其他非理想因素，则会导致图像的变形，例如振荡频率不均匀，振荡幅度不均匀等。
+
+#### 两比特flux Chevron
+考虑一个耦合系统，哈密顿量为
+$$
+H/\hbar = \sum_{i = 1, 2}[\omega_i(t) a_i^{\dagger}a_i + \frac{\alpha_i}{2} a_i^{\dagger}a_i^{\dagger}a_ia_i] + g(a_1^{\dagger}a_2 + a_1a_2^{\dagger})
+$$
+考虑子空间$\{\ket{11}, \ket{02}\}$，子空间哈密顿量为
+$$
+H = \begin{bmatrix}\Delta/2 & \sqrt{2}g \\ \sqrt{2}g & -\Delta/2 \end{bmatrix}
+$$
+近共振时，即$\Delta \approx 0$，会发生交换振荡，激发态概率为
+$$
+p_{11}(t) = \frac{8g^2}{\Delta^2 + 8g^2} \sin^2\left(\frac{\sqrt{\Delta^2 + 8g^2}}{2} t\right)
+$$
+与Rabi类似，扫flux幅度，$\Delta$相应改变，扫持续时间，得到二维图像$p_{11}(\Delta, t)$，可以得到一个Chevron图像。
+![alt text](image-11.png)
+
+因此，通过Chevron实验可以获得qubit和脉冲的基本信息，但还不足以定量分析失真，因此需要进一步测量系统的阶跃响应。
+
+### 阶跃响应测量
+该部分直接运用之前介绍的几个磁场重建方法，如瞬态磁场协议等
+### 设计滤波器
+
+#### cryoscope协议
 之前已经介绍，cryoscope协议可以测量到达SQUID的真实磁通。如果通过AWG施加一个理想阶跃信号$V_{in}(t) = u(t)$，则通过cryoscope协议测量到的磁通$\Phi_Q(t)$即为系统的阶跃响应$s(t)$。
 
 随后通过IIR和FIR滤波器设计目标滤波器。IIR可以处理长时间尺度的失真，FIR可以处理短时间尺度的失真。

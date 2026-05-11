@@ -72,18 +72,21 @@ TODO...
 
 
 ## TODO
-- 扩展Ramsey协议，支持相位unwrap(IQ调制)，
-- 基函数比较：Fourier，B-spline，Legendre
-- [差分回波协议](./_sensing%20theory.md)
-- [CPMG协议作为带通滤波器](./_sensing%20theory.md)
-- tomo
-- 加噪声，加耗散
-- 并行优化，代码结构优化：
-    - 统一时间轴t_global，统一时间间隔，优化函数接口与扩展性
-    - 全局统一t_rabi
-    - 超导量子比特的实际架构：参考Practical Guide for Building Superconducting Quantum Devices
-- demo
-- 当脉冲时间不可忽略时，完善以上协议
+- 在重构项目中：
+    - tomo，pi补偿，delay Ramsey 
+    - qubit标定，预失真
+    - 扩展Ramsey协议，支持相位unwrap(IQ调制)，
+    - 基函数比较：Fourier，B-spline，Legendre
+    - [差分回波协议](./_sensing%20theory.md)
+    - [CPMG协议作为带通滤波器](./_sensing%20theory.md)
+    - tomo
+    - 加噪声，加耗散
+    - 并行优化，代码结构优化：
+        - 统一时间轴t_global，统一时间间隔，优化函数接口与扩展性
+        - 全局统一t_rabi
+        - *超导量子比特的实际架构：参考Practical Guide for Building Superconducting Quantum Devices
+    - demo
+    - 当脉冲时间不可忽略时，完善以上协议
 
 
 - 研究量子传感协议，是为了探索以下几种应用：

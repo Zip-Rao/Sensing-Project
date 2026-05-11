@@ -1,6 +1,6 @@
-# CLAUDE.md
+# AGENTS.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to Codex (Codex.ai/code) when working with code in this repository.
 
 ## Project overview
 
@@ -134,7 +134,7 @@ Signal (signal.py)  →  qubit.qubit_in_mag(Signal)  →  Protocol.evolve(qubit)
 
 ### R5. 子代理执行模式
 
-本项目用 **subagent-per-phase** 方式执行(详见主方案 §13 与 [`.claude/agents/refactor-phase-executor.md`](.claude/agents/refactor-phase-executor.md))。如果你正以子代理身份运行:
+本项目用 **subagent-per-phase** 方式执行(详见主方案 §13 与 [`.Codex/agents/refactor-phase-executor.md`](.Codex/agents/refactor-phase-executor.md))。如果你正以子代理身份运行:
 - 你**不能中途询问用户**。所有决策点要么自行决定(选最保守),要么 abort 并在 handoff 中标 `DECISION_NEEDED:`。
 - 拿不准时**绝不放宽 R1/R3**;宁可 abort 也不污染主分支。
 - 完成后**必须更新** `idea/refactor/_handoff_state.md`,这是与下一个子代理的唯一交接载体。

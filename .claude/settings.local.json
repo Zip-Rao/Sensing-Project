@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(python3 -m py_compile plot_signal_comparison_panel.py)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(C:\\\\Users\\\\21034\\\\anaconda3\\\\envs\\\\qutip-env\\\\python.exe *)"
     ]
   }
 }
