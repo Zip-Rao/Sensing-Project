@@ -52,7 +52,7 @@ class WienerReconstruction(Reconstruction):
         Regularisation parameter for the Wiener filter. Default 1.0.
     """
 
-    lambda_reg: float = 1.0
+    lambda_reg: float = 10.0
 
     def reconstruct(
         self,

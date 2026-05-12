@@ -64,7 +64,7 @@ class TransientSensingExperiment(Experiment):
             self.flux_signal = FluxSignal(
                 type=4,
                 t_list=t_list,
-                amplitude=0.06,
+                amplitude=0.01,
                 rise=10,
                 fall=10,
                 center=100,
