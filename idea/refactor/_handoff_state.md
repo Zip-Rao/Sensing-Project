@@ -28,6 +28,12 @@
 - [x] **P3c (PARTIAL)** — CryoscopeExperiment + Calibration 内化 (部分) (2026-05-01, commit: aab4045)
 - [x] **P4** — ControlLine + DistortionModel + PredistortionDesigner + Workflow (2026-05-01, commits: fdc55c8, d21194b)
 - [x] **P5** — TransferMatrix + ChipTopology + ZCrosstalkWorkflow + 双 qubit demo (2026-05-01, commit: 1877732)
+- [ ] **P6** — 用户可操作接口补完 (规划完成，待实施，详见 [phase_6_handbook.md](phase_6_handbook.md))
+  - [ ] P6a: `reconfigure()` 覆盖 6 层全部参数
+  - [ ] P6a: CONFIG 死字段接线 (SimulationConfig / TransmonDefaults / ControlLineDefaults)
+  - [ ] P6b: `SensingPipeline` 可组合实验管线
+  - [ ] P6b: `GateOperation` / `TwoQubitGate` qubit 级门操作
+  - [ ] P6c: Notebook 参数扫描示范 cell
 
 ---
 
@@ -109,6 +115,12 @@ baseline pickle 清单(`tests/baselines/` 内):
 20. **P5: Cavity characterization suite NOT implemented**: The optional cavity characterization three-pack (NumberSplittingExperiment, RamseyRevivalExperiment, WignerTomographyWorkflow) from handbook §3.5 was not implemented. These are paper-quality demo candidates and can be added as a future P5.1 extension.
 
 21. **P5: Compensation factor in end-to-end test < 1**: With limited parameters (n_levels=2, short t_rabi), the Wiener-reconstructed phi_B does not correlate well with the true flux, resulting in compensation factor < 1 (compensation makes things worse). This is expected with poor reconstruction quality. The algorithmic fast test demonstrates compensation factor > 100 with perfect data.
+
+22. **P5→P6: CONFIG migration incomplete for 4 of 6 layers** (discovered 2026-05-12): Commit `afe8d87` (Global config system) only wired AWG + PulseConfig to consumers. ReconstructionConfig was wired in `747cc0d`. SimulationConfig / TransmonDefaults / ControlLineDefaults remain declared but unread — changing their values in CONFIG has no effect on behaviour. See [phase_6_handbook.md §1.1](phase_6_handbook.md).
+
+23. **P5→P6: No unified user-facing parameter entry point** (2026-05-12): `reconfigure()` only accepts AWG + Pulse params. No `SensingPipeline` (measure → reconstruct → calibrate → predistort), no `GateOperation` (apply X_pi / CZ to named qubits), no parameter-sweep demo cells in notebook. Full gap analysis in [phase_6_handbook.md](phase_6_handbook.md).
+
+24. **P5→P6: HammersteinWienerReconstruction lambda_reg was 1.0 while CONFIG/Wiener were 10.0** (fixed in `747cc0d`): A silent 10× mismatch caused by hardcoded dataclass default that never read CONFIG. Now reads `CONFIG.reconstruction.lambda_reg` via `default_factory`.
 
 ---
 
