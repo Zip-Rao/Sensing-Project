@@ -114,32 +114,130 @@ class TestCryoscopeExperiment:
         assert len(result.data["varphi"]) == len(trunc_list)
 
 
-class TestCryoscopeReconstructionStub:
-    """Verify that CryoscopeReconstruction stub raises correctly."""
+class TestCryoscopeReconstruction:
+    """Smoke tests for CryoscopeReconstruction."""
 
-    def test_reconstruct_raises_not_implemented(self):
-        """CryoscopeReconstruction.reconstruct raises NotImplementedError."""
+    @staticmethod
+    def _make_mock_measurement(varphi, trunc):
+        """Create a minimal ExperimentResult-like object for testing."""
+        from sqc.simulation.result import ExperimentResult
+
+        return ExperimentResult(
+            data={"varphi": np.asarray(varphi, dtype=float)},
+            axes={"trunc": np.asarray(trunc, dtype=float)},
+            metadata={},
+            config={},
+        )
+
+    def test_calib_inverse_smoke(self):
+        """Linear calibration + linear phase → correct h reconstruction."""
         from sqc.reconstruction.cryoscope import CryoscopeReconstruction
         from sqc.calibration.base import CalibrationTable
 
-        ct = CalibrationTable(name="test")
-        cr = CryoscopeReconstruction(calibration=ct, tau=100.0)
+        # Linear calibration: φ(h) = k * h, with k = 2.0 rad/Φ₀
+        h_vals = np.array([-0.01, 0.0, 0.01])
+        phi_vals = 2.0 * h_vals  # φ = 2.0 * h
+        cal = CalibrationTable(
+            name="test", kind="phi_h",
+            inputs=h_vals, outputs=phi_vals,
+        )
 
-        with pytest.raises(NotImplementedError, match="Track B 1.1"):
-            cr.reconstruct(None)
+        # Linear phase vs time: φ(t) = α * t, where α = 0.02 rad/ns
+        # Then dφ/dt = 0.02, φ_cal(h) = dφ/dt * tau = 0.02 * tau
+        # So h = inverse(0.02 * tau) = (0.02 * tau) / 2.0
+        tau = 50.0
+        dt = 1.0
+        t = np.arange(0, 100, dt)
+        varphi = 0.02 * t  # linear phase accumulation
+
+        meas = self._make_mock_measurement(varphi, t)
+
+        recon = CryoscopeReconstruction(calibration=cal, tau=tau, method="calib_inverse")
+        result = recon.reconstruct(meas, dt=dt)
+
+        expected_h = (0.02 * tau) / 2.0  # = 0.5 Φ₀
+        assert isinstance(result, FluxSignal)
+        assert result.t_list.shape == t.shape
+        # All values should be close to expected (linear in → linear out)
+        assert np.allclose(result.signal[1:], expected_h, rtol=1e-10, atol=1e-10)
+
+    def test_sg_diff_smoke(self):
+        """SG_diff method runs and returns FluxSignal."""
+        from sqc.reconstruction.cryoscope import CryoscopeReconstruction
+        from sqc.calibration.base import CalibrationTable
+
+        h_vals = np.linspace(-0.01, 0.01, 11)
+        phi_vals = 2.0 * h_vals
+        cal = CalibrationTable(
+            name="test", kind="phi_h",
+            inputs=h_vals, outputs=phi_vals,
+        )
+
+        tau = 50.0
+        dt = 1.0
+        t = np.arange(0, 100, dt)
+        varphi = 0.02 * t
+
+        meas = self._make_mock_measurement(varphi, t)
+
+        recon = CryoscopeReconstruction(calibration=cal, tau=tau, method="SG_diff", sg_window=5)
+        result = recon.reconstruct(meas, dt=dt)
+
+        assert isinstance(result, FluxSignal)
+        assert len(result.signal) == len(t)
+        # SG should give similar result to calib_inverse for clean data
+        expected_h = (0.02 * tau) / 2.0
+        assert np.allclose(result.signal[5:-5], expected_h, rtol=1e-10, atol=1e-10)
+
+    def test_diff_smoke(self):
+        """diff method runs and returns FluxSignal."""
+        from sqc.reconstruction.cryoscope import CryoscopeReconstruction
+        from sqc.calibration.base import CalibrationTable
+
+        h_vals = np.linspace(-0.01, 0.01, 11)
+        phi_vals = 2.0 * h_vals
+        cal = CalibrationTable(
+            name="test", kind="phi_h",
+            inputs=h_vals, outputs=phi_vals,
+        )
+
+        tau = 50.0
+        dt = 1.0
+        t = np.arange(0, 100, dt)
+        varphi = 0.02 * t
+
+        meas = self._make_mock_measurement(varphi, t)
+
+        recon = CryoscopeReconstruction(calibration=cal, tau=tau, method="diff")
+        result = recon.reconstruct(meas, dt=dt)
+
+        assert isinstance(result, FluxSignal)
+        assert len(result.signal) == len(t)
+        expected_h = (0.02 * tau) / 2.0
+        assert np.allclose(result.signal[1:-1], expected_h, rtol=1e-10, atol=1e-10)
 
 
-class TestFluxResponseCalibrationStubs:
-    """Verify that FluxResponseCalibration stubs raise correctly."""
+class TestFluxResponseCalibration:
+    """Verify FluxResponseCalibration methods."""
 
-    def test_cryoscope_stub_raises(self):
-        """method='cryoscope' raises NotImplementedError."""
+    def test_cryoscope_smoke(self):
+        """method='cryoscope' runs and returns CalibrationTable(kind='phi_h')."""
         q = _make_qubit()
         from sqc.calibration.flux_response import FluxResponseCalibration
 
-        f = FluxResponseCalibration(qubit=q, method="cryoscope")
-        with pytest.raises(NotImplementedError, match="Track B 1.1"):
-            f.calibrate()
+        # Use a small h_list for speed
+        f = FluxResponseCalibration(
+            qubit=q, method="cryoscope",
+            h_list=np.linspace(-0.01, 0.01, 3),
+            tau=20.0,
+        )
+        table = f.calibrate()
+
+        assert table.kind == "phi_h"
+        assert len(table.inputs) == 3
+        assert len(table.outputs) == 3
+        assert table.fit_params["method"] == "cryoscope"
+        assert table.fit_params["tau"] == 20.0
 
     def test_transient_stub_raises(self):
         """method='transient' raises NotImplementedError."""

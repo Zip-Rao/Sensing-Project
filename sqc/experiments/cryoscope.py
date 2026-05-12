@@ -115,7 +115,8 @@ class CryoscopeExperiment(Experiment):
 
         # Compute phase via arctan2, reverse to align time axis (legacy)
         varphi = np.arctan2(p_e_Q - 0.5, p_e_I - 0.5)[::-1]
-
+        # unwrap varphi with period π to handle 2π phase jumps (legacy)
+        varphi = np.unwrap(varphi, period=np.pi)
         return ExperimentResult(
             data={
                 "varphi": varphi,

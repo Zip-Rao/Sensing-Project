@@ -2,15 +2,13 @@
 
 Calibrate the flux-frequency or flux-phase response of a Transmon qubit.
 
-Three methods are planned:
+Three methods:
   - "ramsey": scan DC flux steps, measure frequency via Ramsey (case 1)
   - "cryoscope": scan square-pulse heights, build φ(h) lookup (case 3)
   - "transient": unknown transient signal → fit Δω(Φ) polynomial (case 2)
 
-Currently only "ramsey" is implemented. The other two require Track B
-completion (Track B 1.1 for cryoscope, Track B 1.2 for transient).
-
-See _TODO_master.md 1.1 and 1.2.
+Currently "ramsey" and "cryoscope" are implemented. "transient" requires
+Track B 1.2 completion (see _TODO_master.md 1.2).
 """
 from __future__ import annotations
 
@@ -24,6 +22,7 @@ from sqc.config import CONFIG
 from sqc.calibration.base import Calibration, CalibrationTable
 from sqc.control.flux_signal import FluxSignal
 from sqc.control.sequence import create_ramsey_pulse
+from sqc.hardware.readout import IQReadoutModel
 
 
 @dataclass
@@ -39,7 +38,7 @@ class FluxResponseCalibration(Calibration):
     method : str
         Calibration method:
         - "ramsey": scan DC flux steps, measure frequency via Ramsey.
-        - "cryoscope": scan square-pulse heights, build φ(h). (Track B 1.1)
+        - "cryoscope": scan square-pulse heights, build φ(h).
         - "transient": unknown signal polynomial fitting. (Track B 1.2)
     h_list : np.ndarray or None
         Flux/height values to scan. Default linspace(-0.03, 0.03, 21).
@@ -67,13 +66,12 @@ class FluxResponseCalibration(Calibration):
         Returns
         -------
         CalibrationTable
-            With kind="f_phi" for ramsey, kind="phi_h" for cryoscope.
+            kind="f_phi" for ramsey, kind="phi_h" for cryoscope.
 
         Raises
         ------
         NotImplementedError
-            For method="cryoscope" (requires Track B 1.1) or
-            method="transient" (requires Track B 1.2).
+            For method="transient" (requires Track B 1.2).
         """
         match self.method:
             case "ramsey":
@@ -183,7 +181,7 @@ class FluxResponseCalibration(Calibration):
         )
 
     # ------------------------------------------------------------------
-    # Cryoscope-based flux response calibration (Track B 1.1)
+    # Cryoscope-based flux response calibration
     # ------------------------------------------------------------------
 
     def _calibrate_cryoscope(self) -> CalibrationTable:
@@ -191,24 +189,59 @@ class FluxResponseCalibration(Calibration):
 
         Direct port of src/protocal.py:Calibration.calibrate case 3.
 
-        **Requires Track B 1.1** (Cryoscope case 6/7 calibration).
-        The implementation in src/protocal.py case 3 works, but
-        internalizing it to sqc/calibration/ with the proper
-        CalibrationTable interface depends on the full Cryoscope
-        pipeline being complete.
+        Algorithm (per _cryoscope_implementation.md §3.3):
+        1. For each h in h_list, apply a square-wave flux pulse:
+           - h during free evolution (t_rabi[-1] to t_rabi[-1] + tau)
+           - 0 during the π/2 pulses
+        2. IQ readout via two Ramsey sequences (π/2 on X and Y axes)
+        3. Extract φ = arctan2(p_e_Q - 0.5, p_e_I - 0.5)
+        4. Unwrap phases → CalibrationTable(kind="phi_h")
 
-        Raises
-        ------
-        NotImplementedError
-            Until Track B 1.1 is complete.
+        Physics: φ(h) = 2π · Δf_Q(h) · tau  (Gao 2021 §V)
         """
-        raise NotImplementedError(
-            "FluxResponseCalibration._calibrate_cryoscope: "
-            "requires Track B 1.1 (Cryoscope case 6/7 calibration, "
-            "see _TODO_master.md 1.1). "
-            "The legacy Calibration(type=3).calibrate() in "
-            "src/protocal.py has a working implementation; use that "
-            "for now."
+        omega_d = self.qubit.frequency
+        t_pi2_end = self.t_rabi[-1]
+        t_total = 2 * t_pi2_end + self.tau
+
+        p_e_I_list: list[float] = []
+        p_e_Q_list: list[float] = []
+
+        readout = IQReadoutModel(
+            tau=self.tau, t_rabi=self.t_rabi, omega_d=omega_d,
+        )
+
+        for h in self.h_list:
+            # Build square-wave flux: h during free evolution, 0 elsewhere
+            t_sig = CONFIG.pulse.make_time(0, t_total)
+            signal = np.zeros_like(t_sig, dtype=float)
+            mask = (t_sig >= t_pi2_end) & (t_sig <= t_pi2_end + self.tau)
+            signal[mask] = float(h)
+            Phi = FluxSignal(type=8, t_list=t_sig, signal=signal)
+
+            self.qubit.qubit_in_mag(Phi, frame=1, omega_d=omega_d)
+
+            result = readout.measure(self.qubit)
+            p_e_I_list.append(result["p_e_I"])
+            p_e_Q_list.append(result["p_e_Q"])
+
+        # Extract phase and unwrap
+        p_e_I = np.asarray(p_e_I_list, dtype=float)
+        p_e_Q = np.asarray(p_e_Q_list, dtype=float)
+        varphi = np.arctan2(p_e_Q - 0.5, p_e_I - 0.5)
+        varphi = np.unwrap(varphi, period=np.pi)
+
+        return CalibrationTable(
+            name=f"flux_response_{self.method}",
+            qubit_name=getattr(self.qubit, "name", "qubit"),
+            kind="phi_h",
+            inputs=np.asarray(self.h_list, dtype=float),
+            outputs=np.asarray(varphi, dtype=float),
+            fit_params={
+                "method": "cryoscope",
+                "tau": self.tau,
+                "omega_d": float(omega_d),
+            },
+            metadata={},
         )
 
     # ------------------------------------------------------------------
