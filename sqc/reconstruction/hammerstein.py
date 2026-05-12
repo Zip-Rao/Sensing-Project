@@ -16,10 +16,11 @@ derived from the Transmon frequency formula (Gao 2021 Eq. 18):
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import numpy as np
 
+from sqc.config import CONFIG
 from sqc.reconstruction.base import Reconstruction
 from sqc.reconstruction.wiener import WienerReconstruction
 
@@ -61,11 +62,14 @@ class HammersteinWienerReconstruction(Reconstruction):
     qubit
         QubitSpec or legacy TransmonQubit providing EC, EJ, frequency.
     lambda_reg : float
-        Regularisation parameter for the inner Wiener filter. Default 1.0.
+        Regularisation parameter for the inner Wiener filter.
+        Default: ``CONFIG.reconstruction.lambda_reg``.
     """
 
     qubit: object
-    lambda_reg: float = 1.0
+    lambda_reg: float = field(
+        default_factory=lambda: CONFIG.reconstruction.lambda_reg
+    )
 
     def reconstruct(
         self,

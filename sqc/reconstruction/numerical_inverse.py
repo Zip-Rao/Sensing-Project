@@ -23,6 +23,7 @@ from typing import Literal
 import numpy as np
 from qutip import Qobj, QobjEvo, basis, expect, mesolve, qeye
 
+from sqc.config import CONFIG
 from sqc.control.flux_signal import FluxSignal
 from sqc.control.pulse import CompositePulse
 from sqc.reconstruction.base import Reconstruction
@@ -75,12 +76,24 @@ class LMReconstruction(Reconstruction):
 
     qubit: object  # TransmonQubit (duck-typed for src.qubit compat)
     control_pulse: CompositePulse
-    basis_type: BasisType = "fourier"
-    n_basis: int = 100
-    lambda_reg: float = 100.0
-    max_iter: int = 10
-    tol: float = 1e-6
-    mu_init: float = 1e-3
+    basis_type: BasisType = field(
+        default_factory=lambda: CONFIG.reconstruction.lm_basis_type
+    )
+    n_basis: int = field(
+        default_factory=lambda: CONFIG.reconstruction.lm_n_basis
+    )
+    lambda_reg: float = field(
+        default_factory=lambda: CONFIG.reconstruction.lm_lambda
+    )
+    max_iter: int = field(
+        default_factory=lambda: CONFIG.reconstruction.lm_max_iter
+    )
+    tol: float = field(
+        default_factory=lambda: CONFIG.reconstruction.lm_tol
+    )
+    mu_init: float = field(
+        default_factory=lambda: CONFIG.reconstruction.lm_mu_init
+    )
     use_adjoint: bool = True
 
     # ------------------------------------------------------------------

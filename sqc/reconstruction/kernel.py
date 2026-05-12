@@ -12,12 +12,13 @@ See _refactor_plan.md §7.3 and §14.1 (debt D2).
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional
 
 import numpy as np
 from qutip import QobjEvo, basis, mesolve
 
+from sqc.config import CONFIG
 from sqc.control.flux_signal import FluxSignal
 from sqc.control.pulse import PulseBase, CompositePulse
 
@@ -32,15 +33,21 @@ class KernelEstimator:
     Parameters
     ----------
     stim_amplitude : float
-        Amplitude of the probe stimulus (Phi_0). Default 0.0215.
+        Amplitude of the probe stimulus (Phi_0).
+        Default: ``CONFIG.reconstruction.stim_amplitude``.
     stim_width : float
-        Width of the Gaussian probe (ns). Default 3.0.
+        Width of the Gaussian probe (ns).
+        Default: ``CONFIG.reconstruction.stim_width``.
     auto_calibrate : bool
         If True, adjust amplitude per qubit. Default False.
     """
 
-    stim_amplitude: float = 0.0215
-    stim_width: float = 3.0
+    stim_amplitude: float = field(
+        default_factory=lambda: CONFIG.reconstruction.stim_amplitude
+    )
+    stim_width: float = field(
+        default_factory=lambda: CONFIG.reconstruction.stim_width
+    )
     auto_calibrate: bool = False
 
     def estimate(

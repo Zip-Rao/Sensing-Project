@@ -51,7 +51,9 @@ class CryoscopeExperiment(Experiment):
     t_rabi: np.ndarray = field(
         default_factory=lambda: CONFIG.pulse.t_rabi.copy()
     )
-    tau: float = 100.0
+    tau: float = field(
+        default_factory=lambda: CONFIG.reconstruction.cryoscope_tau
+    )
     trunc_list: np.ndarray | None = None
     omega_d: float | None = None
 
