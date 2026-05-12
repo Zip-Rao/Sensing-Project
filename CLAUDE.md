@@ -30,7 +30,27 @@ python -c "from src.qubit import TransmonQubit; from src.signal import Signal; p
 # Run the Gradio web demo
 python web_demo.py
 
-# There is no test suite or linting configuration in this project.
+# Run the v2.0 visualization demo
+python web_demo_v2.py
+
+# Run tests (pytest)
+"C:\Users\21034\anaconda3\envs\qutip-env\python.exe" -m pytest tests/ -v
+```
+
+### Conda environment path
+
+The project runs in conda env `qutip-env` at the path below. Use this **full Python path** in all bash commands (`python` may not be in PATH):
+
+```
+C:\Users\21034\anaconda3\envs\qutip-env\python.exe
+```
+
+Example usage:
+
+```bash
+"C:\Users\21034\anaconda3\envs\qutip-env\python.exe" -m pytest tests/ -v
+"C:\Users\21034\anaconda3\envs\qutip-env\python.exe" -m tests.regression.generate_baselines
+"C:\Users\21034\anaconda3\envs\qutip-env\python.exe" -c "from sqc.config import CONFIG; print(CONFIG.awg.dt)"
 ```
 
 ## Architecture: data flow
@@ -152,3 +172,65 @@ Signal (signal.py)  →  qubit.qubit_in_mag(Signal)  →  Protocol.evolve(qubit)
 - **Track A**(本次重构)受 R1–R6 全部约束。
 - 如何分辨:看 PR 是否动到 `sqc/` / `src_mirror/` / `idea/refactor/`。动了就是 Track A,不动就是 Track B。
 - Track B 的进度跟踪在 [`idea/_TODO_master.md`](idea/_TODO_master.md);Track A 的进度跟踪在 [`idea/refactor/_handoff_state.md`](idea/refactor/_handoff_state.md)。
+
+### R8. 重大改动前的安全协议
+
+涉及"重大改动"时,按以下顺序执行,**确保任何时刻都能回溯到改前状态**:
+
+1. **预先 commit 安全点**:执行 `git add -A && git commit -m "safety checkpoint: before XXX"`。如有未 commit 改动,**先 commit** 才能开始重大改动;有 untracked 文件就先 `git add` 或 `.gitignore`。
+2. **告知用户回溯路径**:明确告诉用户"如果出问题可 `git reset --hard <SHA>` 回退到此点",并给出具体 SHA。
+3. **改动过程中持续测试**:每改完一个模块就跑相应单元测试,**不要**累积 10 个改动再一起测——出错难以定位。出错时立刻定位,不前进到下一个改动。
+4. **改完整体测试**:跑 `pytest tests/ -v` 完整套件,确认全绿才声明完成。任何测试失败必须先解决,不能"先 commit 再说"。
+5. **出文档**:如改动影响 API/约定/默认值,**必须**更新 `docs/architecture.md` 对应章节(详见 R11)。
+
+**什么算"重大改动"**——满足任意一条:
+- 修改 5 个以上 `sqc/` 文件
+- 改变任意 baseline pickle 的数值
+- 修改 `sqc.config.CONFIG` 默认值
+- 引入新的全局约定(如时间轴推导规则)
+- 改变实验类/重建算法的默认行为
+- 任何会让现有测试失败的改动
+
+**反例**:仅改 docstring、仅加新文件不动旧文件、仅修 typo 等不算重大改动,可直接 commit。
+
+### R9. 全局配置规范(v2.0+)
+
+所有时间轴**必须**从 `sqc.config.CONFIG.awg.dt` 派生:
+
+- 使用 `np.arange(start, stop, dt)`,**禁止** `np.linspace(start, stop, N)` 用于时间轴
+- 模块内部辅助常量用 `_` 前缀(如 `_GT = CONFIG.awg.dt`、`_gap(duration)`),不在 `__all__` 中
+- 外部代码用 `CONFIG.pulse.t_rabi.copy()` / `CONFIG.pulse.t_global.copy()` / `CONFIG.pulse.make_time(start, end)`
+- 非时间轴的离散数组(如 `h_list = linspace(-0.03, 0.03, 21)` 的 flux 扫描点)可用 `linspace`——只有"时间"参数受此约束
+- 修改 `CONFIG` 默认值前先查 `docs/architecture.md` §10 看影响范围
+- 修改 `CONFIG` 默认值后**必须**重新生成 baseline:`"C:\Users\21034\anaconda3\envs\qutip-env\python.exe" -m tests.regression.generate_baselines`
+- 重新生成 baseline 必须在 commit message 显式说明:`"intentional physics change: regenerated baselines due to ..."`
+
+### R10. 依赖与配置文件政策
+
+- 只用以下依赖:**numpy / scipy / qutip / matplotlib / dataclasses(标准库)/ pytest(测试)/ gradio(demo)**
+- **不引入** pydantic / attrs / yaml / toml / click / pyyaml 等新依赖,除非用户明确批准
+- **不引入** yaml / toml / .ini 配置文件——所有参数通过 Python 对象传递(`sqc.config.CONFIG`)
+- 引入新依赖时必须:
+  1. 在 PR 描述里说明物理动机/技术必要性
+  2. 更新 `requirements.txt` 并钉死版本范围(如 `pydantic>=2.0,<3.0`)
+  3. 更新 `docs/architecture.md` §1.4 技术栈表
+- 任何 `pip install <new_package>` 之前**先询问用户**
+
+### R11. 文档同步要求
+
+满足以下情况之一时,**必须**同步更新 `docs/architecture.md`:
+
+- 新增 `sqc/` 文件或模块
+- 改变任何公共类/方法的签名
+- 新增/修改 `sqc.config.CONFIG` 字段
+- 引入新的约定(命名、单位、回归基线、时间轴规范等)
+- 改变扩展规范(影响 §7 扩展指南)
+- 重构改变了 R1–R10 中任意一条
+
+**更新原则**:"只增不减"——保留所有原文档内容,新增内容追加到合适章节。绝不删除既有章节。
+
+**版本号递增**:
+- `v1.x` → `v1.(x+1)`:增加章节/扩展示例(minor)
+- `v1.x` → `v2.0`:有 breaking change(如改变默认值、改变 API 签名,需大改用户使用方式)
+
+**变更记录**:在 `docs/architecture.md` 末尾"文档维护"表追加一行,记录日期+主要变更摘要。
