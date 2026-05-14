@@ -1,12 +1,14 @@
-"""sqc.calibration.delay_ramsey — DelayRamseyCalibration.
+"""sqc.reconstruction.delay_ramsey_calib — DelayRamseyCalibration.
 
-Calibrate phase-vs-flux-height φ_cal(z) for delay Ramsey.
+Calibrate phase-vs-flux-height φ_cal(z) for delay Ramsey tail measurement.
 Uses IQ readout (two Ramsey sequences with π/2 phase offset)
 to extract signed phase via arctan2, avoiding the arccos
 sign-ambiguity problem.
 
-The slope k = dφ/dz = tau_R * kappa is used to convert tail
-phase measurements to flux units.
+The slope k = dφ/dz = tau_R * kappa is used by TailReconstruction
+to convert tail phase measurements to flux units.
+
+Moved from sqc.calibration.delay_ramsey (P5 refactor).
 """
 from __future__ import annotations
 
@@ -32,7 +34,7 @@ class DelayRamseyCalibration(Calibration):
     qubit : TransmonQubit
         Qubit at flux-sensitive bias point.
     z_list : np.ndarray or None
-        Flux heights to scan (Phi_0). Default linspace(-0.02, 0.02, 21).
+        Flux heights to scan (Phi_0). Default linspace(-0.02, 0.02, 41).
     tau_R : float
         Ramsey free evolution time (ns). Default from CONFIG.
     t_rabi : np.ndarray
@@ -55,18 +57,10 @@ class DelayRamseyCalibration(Calibration):
         if self.omega_d is None:
             self.omega_d = self.qubit.frequency
         if self.z_list is None:
-            # Need fine z sampling so Δφ between consecutive points
-            # stays well below π — otherwise np.unwrap fails when
-            # arctan2 wraps. With κ·τ_R ≈ 680 rad/Φ₀ typical, Δz ≈ 0.001
-            # gives Δφ ≈ 0.68 rad, safely < π.
             self.z_list = np.linspace(-0.02, 0.02, 41)
 
     def calibrate(self) -> CalibrationTable:
         """Scan z, measure Ramsey phase φ via IQ readout, fit slope k.
-
-        Uses IQReadoutModel for signed-phase extraction (arctan2
-        of I/Q channels), avoiding the arccos sign-ambiguity of
-        single-channel p_e → φ conversion.
 
         Returns
         -------
@@ -86,7 +80,6 @@ class DelayRamseyCalibration(Calibration):
         varphi_list: list[float] = []
 
         for z in self.z_list:
-            # Constant flux of height z during free evolution window
             signal = np.zeros(len(t_sig))
             evo_start = self.t_rabi[-1]
             evo_end = self.t_rabi[-1] + self.tau_R
@@ -95,21 +88,15 @@ class DelayRamseyCalibration(Calibration):
             Phi = FluxSignal(type=8, t_list=t_sig, signal=signal)
             self.qubit.qubit_in_mag(Phi, frame=1, omega_d=self.omega_d)
 
-            # IQ readout: two Ramsey sequences with π/2 phase offset
             measured = readout.measure(self.qubit)
-            # arctan2(0.5-p_I, p_Q-0.5) = φ + π/2 (same convention as experiment)
             phi = float(np.arctan2(
                 0.5 - measured["p_e_I"], measured["p_e_Q"] - 0.5,
             ))
             varphi_list.append(phi)
 
         varphi_arr = np.asarray(varphi_list, dtype=float)
-        # Use default period=2π — calibration z points can have large
-        # phase jumps (several rad) that would trigger false unwraps
-        # with period=π (threshold π/2).
         varphi_arr = np.unwrap(varphi_arr)
 
-        # Linear fit: φ = k * z
         k, intercept = np.polyfit(self.z_list, varphi_arr, 1)
 
         return CalibrationTable(

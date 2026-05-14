@@ -115,7 +115,7 @@ class TestControlLine:
 
     def test_predistort_returns_waveform(self, step_waveform, dist):
         """predistort() should return a Waveform."""
-        from sqc.calibration.predistortion import PredistortionDesigner
+        from sqc.calibration.waveform import PredistortionDesigner
 
         line = ControlLine(
             name="Z0", kind="z", source="AWG0", target="Q0",
@@ -128,7 +128,7 @@ class TestControlLine:
 
     def test_predistort_improves_cascade(self, step_waveform, dist):
         """Predistortion should improve the forward model cascade."""
-        from sqc.calibration.predistortion import PredistortionDesigner
+        from sqc.calibration.waveform import PredistortionDesigner
 
         line = ControlLine(
             name="Z0", kind="z", source="AWG0", target="Q0",

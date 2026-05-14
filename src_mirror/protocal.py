@@ -318,14 +318,18 @@ class Calibration:
         - type 1: CalibrationTable (f_phi)
         - type 2/3: raises NotImplementedError
         """
-        from sqc.calibration.qubit_frequency import QubitFrequencyCalibration
-        from sqc.calibration.flux_response import FluxResponseCalibration
-        from sqc.calibration.delay_ramsey import DelayRamseyCalibration
+        from sqc.calibration.frequency import (
+            FluxResponseCalibration,
+            SinglePointFrequencyCalibration,
+        )
+        from sqc.reconstruction.delay_ramsey_calib import DelayRamseyCalibration
+        from sqc.reconstruction.cryoscope_calib import CryoscopeCalibration
 
         match self.type:
             case 0:  # Ramsey frequency f_01 calibration
-                cal = QubitFrequencyCalibration(
+                cal = SinglePointFrequencyCalibration(
                     qubit=self.qubit,
+                    method="ramsey",
                 )
                 return cal.calibrate()
 
@@ -342,14 +346,11 @@ class Calibration:
                     "requires Track B 1.2 (case 8). See _TODO_master.md 1.2."
                 )
 
-            case 3:  # Cryoscope φ(h) calib — requires Track B 1.1
-                raise NotImplementedError(
-                    "Calibration type=3 (cryoscope φ(h) calibration): "
-                    "requires Track B 1.1 (Cryoscope case 6/7). "
-                    "See _TODO_master.md 1.1. "
-                    "The legacy src/protocal.py:Calibration(type=3).calibrate() "
-                    "has a working implementation; use that for now."
+            case 3:  # Cryoscope φ(h) calib
+                cal = CryoscopeCalibration(
+                    qubit=self.qubit,
                 )
+                return cal.calibrate()
 
             case 4:  # Delay Ramsey φ_cal(z)
                 cal = DelayRamseyCalibration(

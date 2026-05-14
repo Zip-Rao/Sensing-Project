@@ -1,4 +1,4 @@
-"""Integration test: TransferFunctionCalibration fit accuracy.
+"""Integration test: WaveformCalibration fit accuracy.
 
 Verifies that calibration can fit a known distortion model
 to within 5% relative error on fitted parameters.
@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from sqc.calibration.transfer_function import TransferFunctionCalibration
+from sqc.calibration.waveform import WaveformCalibration
 from sqc.hardware.distortion import (
     SingleExponentialDistortion,
     MultiExponentialDistortion,
@@ -15,8 +15,8 @@ from sqc.hardware.distortion import (
 from sqc.control.waveform import Waveform
 
 
-class TestTransferFunctionCalibration:
-    """Integration tests for TransferFunctionCalibration."""
+class TestWaveformCalibration:
+    """Integration tests for WaveformCalibration."""
 
     def test_single_exp_fit_accuracy(self):
         """Fit a known single-exponential distortion; amplitude/tau within 5%."""
@@ -24,7 +24,7 @@ class TestTransferFunctionCalibration:
         true_tau = 20.0
         dist = SingleExponentialDistortion(amplitude=true_amp, tau=true_tau)
 
-        cal = TransferFunctionCalibration(
+        cal = WaveformCalibration(
             distortion=dist,
             method="simulation",
             fit_type="single_exp",
@@ -50,7 +50,7 @@ class TestTransferFunctionCalibration:
             amplitudes=true_amps, taus=true_taus,
         )
 
-        cal = TransferFunctionCalibration(
+        cal = WaveformCalibration(
             distortion=dist,
             method="simulation",
             fit_type="multi_exp",
@@ -83,7 +83,7 @@ class TestTransferFunctionCalibration:
     def test_to_distortion_model_roundtrip(self):
         """calibrate() -> to_distortion_model() should give a usable model."""
         dist = SingleExponentialDistortion(amplitude=0.08, tau=30.0)
-        cal = TransferFunctionCalibration(
+        cal = WaveformCalibration(
             distortion=dist,
             method="simulation",
             fit_type="single_exp",
@@ -101,7 +101,7 @@ class TestTransferFunctionCalibration:
     def test_calibration_table_structure(self):
         """CalibrationTable should have expected fields."""
         dist = SingleExponentialDistortion(amplitude=0.05, tau=20.0)
-        cal = TransferFunctionCalibration(
+        cal = WaveformCalibration(
             distortion=dist, method="simulation",
             fit_type="single_exp",
         )

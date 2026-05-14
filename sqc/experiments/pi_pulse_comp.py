@@ -106,10 +106,11 @@ class PiPulseCompensationExperiment(Experiment):
         n_tau = len(self.tau_list)
         n_z = len(self.z_list)
 
-        # Total simulation time: pi-pulse + buffer
-        t_total = self.t_rabi[-1] + self.T_pi + self.t_rabi[-1]
+        # Pi-pulse and compensation both start at t=0 and overlap.
+        # t_sig is also the mesolve time axis (starts at 0 → no
+        # backward extrapolation of qubit flux to t < 0).
+        t_total = self.t_rabi[-1] + self.t_rabi[-1]  # pi-pulse + post-buffer
         t_sig = CONFIG.pulse.make_time(0, t_total)
-        t_global = CONFIG.pulse.t_global.copy()
 
         psi_e = basis(self.qubit.n_levels, 1)
 
@@ -117,22 +118,17 @@ class PiPulseCompensationExperiment(Experiment):
 
         for i, tau in enumerate(self.tau_list):
             for j, z in enumerate(self.z_list):
-                # Build composite flux: tail + compensation, but ZERO
-                # outside the pi-pulse window to keep qubit on resonance
-                # during pulse edges. Flux there would detune the π-pulse.
+                # Flux: zero before/after pi-pulse; tail + z during pi-pulse
                 signal = np.zeros(len(t_sig), dtype=float)
-                # Pi-pulse window
                 pulse_mask = (
-                    (t_sig >= self.t_rabi[-1])
-                    & (t_sig <= self.t_rabi[-1] + self.T_pi)
+                    (t_sig >= 0)
+                    & (t_sig <= self.t_rabi[-1])
                 )
-                # Tail contribution during window (only where pi-pulse acts)
                 tail = np.array(
                     [self.flux_signal.value_at(tau + float(t))
                      for t in t_sig[pulse_mask]],
                     dtype=float,
                 )
-                # Compensation + tail during window; zero elsewhere
                 signal[pulse_mask] = tail + float(z)
 
                 phi_composite = FluxSignal(
@@ -143,7 +139,7 @@ class PiPulseCompensationExperiment(Experiment):
                     phi_composite, frame=1, omega_d=self.omega_bias,
                 )
 
-                # Pi-pulse Hamiltonian
+                # Pi-pulse Hamiltonian (on t_rabi, starts at t=0)
                 H_pi = create_pulse(
                     self.qubit,
                     frame=1,
@@ -166,7 +162,7 @@ class PiPulseCompensationExperiment(Experiment):
                 result = mesolve(
                     H_total,
                     self.qubit.state,
-                    t_global,
+                    t_sig,
                     [],
                     e_ops=[psi_e * psi_e.dag()],
                 )

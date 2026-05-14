@@ -13,7 +13,7 @@ from sqc.hardware.distortion import (
     SingleExponentialDistortion,
     MultiExponentialDistortion,
 )
-from sqc.calibration.predistortion import PredistortionDesigner
+from sqc.calibration.waveform import PredistortionDesigner
 from sqc.workflows.predistortion_validation import PredistortionValidationWorkflow
 
 

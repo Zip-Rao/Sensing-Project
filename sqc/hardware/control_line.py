@@ -117,6 +117,4 @@ class ControlLine:
         Waveform
             Predistorted AWG waveform.
         """
-        from sqc.calibration.predistortion import PredistortionDesigner
-
         return designer.predistort(target_waveform, self.transfer_function)

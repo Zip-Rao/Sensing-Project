@@ -120,7 +120,7 @@ class TestDelayRamseyCalibration:
 
     def test_calibrate_smoke(self):
         """calibrate() completes and returns CalibrationTable."""
-        from sqc.calibration.delay_ramsey import DelayRamseyCalibration
+        from sqc.reconstruction.delay_ramsey_calib import DelayRamseyCalibration
 
         q = _make_qubit()
         cal = DelayRamseyCalibration(

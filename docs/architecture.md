@@ -1,6 +1,6 @@
 # Sensing-Project 全栈化重构平台 — 技术文档
 
-> 版本: v2.0 | 日期: 2026-05-12 | 适用于 sqc v0.1.0
+> 版本: v2.1 | 日期: 2026-05-14 | 适用于 sqc v0.2.0
 >
 > 本文档按照 **Gao, Rol, Touzard, Wang 2021**（PRX Quantum 2, 040202）所提出的 cQED 六层全栈架构组织。
 > 每一章既给出物理动机，又详尽介绍代码模块、扩展接口与开发规范。
@@ -922,42 +922,68 @@ class CalibrationTable:
 
 | Calibration | 物理目标 | Gao 章节 | 方法 |
 |---|---|---|---|
-| `QubitFrequencyCalibration` | 标定 f₀₁ | §V.A | Ramsey 自由进动 + FFT |
 | `FluxResponseCalibration(method="ramsey")` | f(Φ) 曲线 | §V.A | 扫描 DC flux + Ramsey |
-| `FluxResponseCalibration(method="cryoscope")` | φ(h) 标定 | §V.E | 扫描方波高度 + IQ Ramsey（依赖 Track B 1.1） |
 | `FluxResponseCalibration(method="transient")` | Δω(Φ) 多项式 | (项目原创) | 已知瞬态信号扫描（依赖 Track B 1.2） |
-| `TransientFrequencyCalibration` | 多项式系数 | (项目原创) | 同上（stub，依赖 Track B 1.2） |
-| `TransferFunctionCalibration` | H(ω) 拟合 | §V.E | Cryoscope 阶跃响应 + 多指数拟合 |
-| `PredistortionDesigner` | 设计逆滤波器 | §V.E | H_inv(ω) = H*(ω) / (|H|² + λ²) |
+| `SinglePointFrequencyCalibration(method="ramsey")` | 单点 f₀₁ | §V.A | Ramsey 自由进动 + FFT |
+| `SinglePointFrequencyCalibration(method="closed_loop")` | 闭环收敛到 f_target | Vepsalainen 2022 | 割线法迭代 + Ramsey/瞬态测频 |
+| `SinglePointFrequencyCalibration(method="transient")` | 单点瞬态测频 | (项目原创) | （stub，依赖 Track B 1.2） |
+| `WaveformCalibration(method="transfer_function")` | H(ω) 拟合 | §V.E | 阶跃响应 + 多指数/FIR/IIR 拟合 |
+| `WaveformCalibration(method="predistortion")` | 设计逆滤波器 | §V.E | H_inv(ω) = H*(ω) / (|H|² + λ²) |
+| `PredistortionDesigner` | 独立预失真设计器 | §V.E | 可按需独立使用 |
+| `CalibrationScheduler` | 标定控制室 | Kelly 2018 DAG | 注册 + 依赖 + 调度 + DAG 接口 |
 
-#### 4.7.3 `QubitFrequencyCalibration` 详例
+> **v2.1 重构**（2026-05-14）：频率标定拆为两大类的统一入口 — `FluxResponseCalibration`（磁通响应 f(Φ)）和 `SinglePointFrequencyCalibration`（单点 f₀₁，含闭环反馈）；波形标定统一为 `WaveformCalibration`；新增 `CalibrationScheduler` 控制室。
+>
+> 重建前置标定（`CryoscopeCalibration` φ(h)、`DelayRamseyCalibration` φ(z)）已移入 `sqc/reconstruction/`，与各自的重建算法就近管理。
+
+#### 4.7.3 `SinglePointFrequencyCalibration` 详例
 
 ```python
-from sqc.calibration.qubit_frequency import QubitFrequencyCalibration
+from sqc.calibration.frequency import SinglePointFrequencyCalibration
 
-cal = QubitFrequencyCalibration(qubit=q)
+# 方法 1: 单次 Ramsey
+cal = SinglePointFrequencyCalibration(qubit=q, method="ramsey")
 table = cal.calibrate()
 print(table.outputs[0])    # 拟合得到的 f_01 (rad·GHz)
-print(table.fit_params["contrast"])
+
+# 方法 2: 闭环反馈 (Vepsalainen 2022)
+cal = SinglePointFrequencyCalibration(
+    qubit=q, method="closed_loop",
+    f_target=5.0 * 2 * np.pi,   # 目标频率
+    V_a=-0.03, V_b=0.03,        # 电压 bracketing
+    measure_method="ramsey",     # 每次迭代用 Ramsey 测频
+)
+table = cal.calibrate()
+print(table.fit_params["V_opt"])     # 收敛到的偏置电压
+print(table.fit_params["n_iter"])    # 迭代次数
 ```
 
-**算法**：
-1. 在零磁通下运行 Ramsey（扫描 tau）
-2. FFT 找 p_e(tau) 的主频，得到 detuning
-3. f_01 = ω_d + detuning
+**闭环算法**（割线法，每次迭代调用 `_measure_frequency(flux)` 分发到 Ramsey 或瞬态法）：
+1. 初始 V_n = (V_a + V_b) / 2，测 r_n = f(V_n) - f_target
+2. 割线更新 V_next = V_n - r_n · (V_n - V_prev) / (r_n - r_prev)
+3. 越界则回退中点；收敛 |r_n| < epsilon_f 退出
 
-#### 4.7.4 `PredistortionDesigner` 详例
+#### 4.7.4 `WaveformCalibration` + `PredistortionDesigner` 详例
 
 ```python
-from sqc.calibration.predistortion import PredistortionDesigner
+from sqc.calibration.waveform import PredistortionDesigner, WaveformCalibration
 from sqc.hardware.distortion import SingleExponentialDistortion
 
 # 已知失真模型
 dist = SingleExponentialDistortion(amplitude=0.05, tau=20.0)
 
-# 设计补偿
+# 方法 1: 独立使用 PredistortionDesigner
 designer = PredistortionDesigner(method="fir_inverse", n_taps=64, regularization=1e-4)
 inverse_model = designer.design(dist, dt=0.5)
+
+# 方法 2: 通过 WaveformCalibration 统一入口
+cal = WaveformCalibration(
+    method="predistortion",
+    transfer_model=dist,
+    predistortion_method="auto",
+)
+table = cal.calibrate()
+inverse_model = table.fit_params["inverse_model"]
 
 # 应用预失真
 predistorted = designer.predistort(target_waveform, dist)
@@ -1582,10 +1608,13 @@ sqc.config.CONFIG = sqc.config.Config(
 | `CryoscopeReconstruction` | `sqc.reconstruction.cryoscope` | Cryoscope 反演 |
 | `Calibration` | `sqc.calibration.base` | 标定 ABC |
 | `CalibrationTable` | `sqc.calibration.base` | 标定结果 |
-| `QubitFrequencyCalibration` | `sqc.calibration.qubit_frequency` | f01 标定 |
-| `FluxResponseCalibration` | `sqc.calibration.flux_response` | f(Φ) 标定 |
-| `TransferFunctionCalibration` | `sqc.calibration.transfer_function` | H(ω) 标定 |
-| `PredistortionDesigner` | `sqc.calibration.predistortion` | 预失真设计器 |
+| `FluxResponseCalibration` | `sqc.calibration.frequency` | f(Φ) 磁通响应标定 |
+| `SinglePointFrequencyCalibration` | `sqc.calibration.frequency` | 单点 f₀₁ 标定（含闭环） |
+| `WaveformCalibration` | `sqc.calibration.waveform` | 波形标定（传输函数+预失真） |
+| `PredistortionDesigner` | `sqc.calibration.waveform` | 预失真设计器 |
+| `CalibrationScheduler` | `sqc.calibration.scheduler` | 标定控制室 |
+| `CryoscopeCalibration` | `sqc.reconstruction.cryoscope_calib` | φ(h) 重建前置标定 |
+| `DelayRamseyCalibration` | `sqc.reconstruction.delay_ramsey_calib` | φ(z) 重建前置标定 |
 | `Workflow` | `sqc.workflows.base` | 顶层流程 ABC |
 | `PredistortionValidationWorkflow` | `sqc.workflows.predistortion_validation` | 预失真验证 |
 | `ZCrosstalkWorkflow` | `sqc.workflows.z_crosstalk` | Z 串扰提取 |
@@ -1996,6 +2025,7 @@ mesolve(H_list, psi0, t_array, c_ops, e_ops)
 |---|---|---|
 | v1.0 | 2026-05-01 | 初版，覆盖六层架构与基本扩展指南 |
 | v2.0 | 2026-05-12 | 引入全局配置（§10）；按 Gao 2021 章节重组（§12 附录）；每个模块扩展物理对应与扩展点；新增 R1 硬约束说明；测试统计更新到 228 |
+| v2.1 | 2026-05-14 | 标定模块重构：frequency.py（FluxResponseCalibration + SinglePointFrequencyCalibration 含闭环反馈）、waveform.py（WaveformCalibration + PredistortionDesigner）、scheduler.py（CalibrationScheduler 控制室）；重建前置标定 CryoscopeCalibration/DelayRamseyCalibration 移入 reconstruction/；删除 qubit_frequency.py/flux_response.py/transfer_function.py/predistortion.py/delay_ramsey.py |
 
 下一步阅读：
 - 完整设计背景：[`idea/refactor/_refactor_plan.md`](../idea/refactor/_refactor_plan.md)

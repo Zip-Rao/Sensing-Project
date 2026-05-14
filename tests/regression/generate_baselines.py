@@ -273,7 +273,7 @@ def _baseline_predistortion() -> dict:
     import numpy as np
     from sqc.control.waveform import Waveform
     from sqc.hardware.distortion import SingleExponentialDistortion
-    from sqc.calibration.predistortion import PredistortionDesigner
+    from sqc.calibration.waveform import PredistortionDesigner
     from sqc.workflows.predistortion_validation import PredistortionValidationWorkflow
 
     np.random.seed(42)

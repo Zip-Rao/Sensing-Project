@@ -64,8 +64,8 @@ class PredistortionValidationWorkflow(Workflow):
             Keys: target, on_chip_uncorrected, on_chip_corrected,
             awg_predistorted, metrics.
         """
-        from sqc.calibration.predistortion import PredistortionDesigner
-        from sqc.calibration.transfer_function import TransferFunctionCalibration
+        from sqc.calibration.waveform import PredistortionDesigner
+        from sqc.calibration.waveform import WaveformCalibration
 
         # Resolve designer
         designer = self.designer
@@ -81,7 +81,7 @@ class PredistortionValidationWorkflow(Workflow):
         # 3. Calibrate transfer function (in simulation, measure directly)
         # Auto-detect best fit_type based on distortion type
         fit_type = self._infer_fit_type(self.true_distortion)
-        cal = TransferFunctionCalibration(
+        cal = WaveformCalibration(
             distortion=self.true_distortion,
             method="simulation",
             fit_type=fit_type,

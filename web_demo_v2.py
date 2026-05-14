@@ -271,7 +271,7 @@ def render_architecture_layered():
         ("workflows",     "Top-level Pipelines",   8.4,
          "PredistortionValidation  •  ZCrosstalk",                        "🔬"),
         ("calibration",   "Calibration Workflows", 7.2,
-         "QubitFrequency  •  FluxResponse  •  TransferFunction  •  PredistortionDesigner", "🎯"),
+         "FluxResponse  •  SinglePointFrequency  •  Waveform  •  PredistortionDesigner", "🎯"),
         ("reconstruction","Waveform Recovery",     6.0,
          "Wiener  •  Hammerstein  •  LM  •  Cryoscope  •  RamseyIQ  •  KernelEstimator", "🔄"),
         ("experiments",   "Sensing Protocols",     4.8,
@@ -817,7 +817,7 @@ def run_distortion_demo(dist_amp, dist_tau, pulse_amp, pulse_width, pulse_center
         dist = SingleExponentialDistortion(amplitude=dist_amp, tau=dist_tau)
         distorted = dist.apply_to_waveform(target)
 
-        from sqc.calibration.predistortion import PredistortionDesigner
+        from sqc.calibration.waveform import PredistortionDesigner
         designer = PredistortionDesigner(method="fir_inverse", n_taps=64,
                                           regularization=1e-4)
         dt_step = float(t[1] - t[0])
@@ -966,7 +966,7 @@ STACK_REFERENCES = {
         ("control",       "from sqc.control.waveform import Waveform"),
         ("hardware",      "from sqc.hardware.distortion import SingleExponentialDistortion"),
         ("hardware",      "from sqc.hardware.control_line import ControlLine"),
-        ("calibration",   "from sqc.calibration.predistortion import PredistortionDesigner"),
+        ("calibration",   "from sqc.calibration.waveform import PredistortionDesigner"),
         ("workflows",     "from sqc.workflows.predistortion_validation import PredistortionValidationWorkflow"),
     ],
     "Quantify Z-crosstalk between two qubits": [
@@ -1076,7 +1076,7 @@ def build_app():
           <td>PredistortionValidationWorkflow • ZCrosstalkWorkflow</td></tr>
       <tr style="background:#F8FAFC;"><td><span class="layer-badge badge-calibration">calibration</span></td>
           <td><code>sqc/calibration/</code></td>
-          <td>QubitFrequencyCalibration • FluxResponseCalibration • TransferFunctionCalibration • PredistortionDesigner</td></tr>
+          <td>FluxResponseCalibration • SinglePointFrequencyCalibration • WaveformCalibration • PredistortionDesigner • CalibrationScheduler</td></tr>
       <tr><td><span class="layer-badge badge-reconstruction">reconstruction</span></td>
           <td><code>sqc/reconstruction/</code></td>
           <td>KernelEstimator • WienerReconstruction • HammersteinWienerReconstruction • LMReconstruction • CryoscopeReconstruction</td></tr>

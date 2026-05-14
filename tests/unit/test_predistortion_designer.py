@@ -16,7 +16,7 @@ from sqc.hardware.distortion import (
     IIRDistortion,
     FIRDistortion,
 )
-from sqc.calibration.predistortion import PredistortionDesigner
+from sqc.calibration.waveform import PredistortionDesigner
 
 
 @pytest.fixture

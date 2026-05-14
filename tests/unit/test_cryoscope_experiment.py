@@ -216,11 +216,11 @@ class TestFluxResponseCalibration:
     def test_cryoscope_smoke(self):
         """method='cryoscope' runs and returns CalibrationTable(kind='phi_h')."""
         q = _make_qubit()
-        from sqc.calibration.flux_response import FluxResponseCalibration
+        from sqc.reconstruction.cryoscope_calib import CryoscopeCalibration
 
         # Use a small h_list for speed
-        f = FluxResponseCalibration(
-            qubit=q, method="cryoscope",
+        f = CryoscopeCalibration(
+            qubit=q,
             h_list=np.linspace(-0.01, 0.01, 3),
             tau=20.0,
         )
@@ -235,7 +235,7 @@ class TestFluxResponseCalibration:
     def test_transient_stub_raises(self):
         """method='transient' raises NotImplementedError."""
         q = _make_qubit()
-        from sqc.calibration.flux_response import FluxResponseCalibration
+        from sqc.calibration.frequency import FluxResponseCalibration
 
         f = FluxResponseCalibration(qubit=q, method="transient")
         with pytest.raises(NotImplementedError, match="Track B 1.2"):
@@ -248,8 +248,8 @@ class TestTransientFrequencyCalibrationStub:
     def test_calibrate_raises_not_implemented(self):
         """TransientFrequencyCalibration.calibrate raises NotImplementedError."""
         q = _make_qubit()
-        from sqc.calibration.qubit_frequency import TransientFrequencyCalibration
+        from sqc.calibration.frequency import SinglePointFrequencyCalibration
 
-        tc = TransientFrequencyCalibration(qubit=q)
+        tc = SinglePointFrequencyCalibration(qubit=q, method="transient")
         with pytest.raises(NotImplementedError, match="Track B 1.2"):
             tc.calibrate()
