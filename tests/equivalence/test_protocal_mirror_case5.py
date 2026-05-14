@@ -28,11 +28,19 @@ def _make_qubit(n_levels=2):
 
 
 @pytest.mark.slow
+@pytest.mark.xfail(
+    reason="sqc IQ formula fixed (atan2(0.5-pI, pQ-0.5)); "
+    "src/ has legacy buggy formula (atan2(pQ-0.5, pI-0.5)). "
+    "src/ frozen by R1 — divergence is intentional."
+)
 def test_protocal_mirror_case_5_cryoscope_equivalence():
     """Case 5 (Cryoscope): old vs new varphi must match.
 
     Uses a reduced truncation set (5 points) for speed.
     Full equivalence with 120 truncation points would take ~10 min.
+
+    Currently xfail: sqc uses corrected IQ phase formula, src/ uses
+    legacy buggy version.  See 2026-05-13 IQ formula fix.
     """
     from src.protocal import Protocal as OldProtocal
     from src_mirror.protocal import Protocal as NewProtocal

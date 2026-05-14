@@ -58,7 +58,8 @@ class FluxResponseCalibration(Calibration):
 
     def __post_init__(self):
         if self.h_list is None:
-            self.h_list = np.linspace(-0.03, 0.03, 21)
+            # 51 points ensures Δφ < π between adjacent h for tau ≤ 100 ns
+            self.h_list = np.linspace(-0.03, 0.03, 51)
 
     def calibrate(self) -> CalibrationTable:
         """Run the calibration and return a CalibrationTable.
@@ -187,17 +188,27 @@ class FluxResponseCalibration(Calibration):
     def _calibrate_cryoscope(self) -> CalibrationTable:
         """Scan square-pulse height h, build φ(h) lookup table.
 
-        Direct port of src/protocal.py:Calibration.calibrate case 3.
+        Uses **gate-respecting square-wave signal** (flux = h only during
+        free evolution, 0 during π/2 pulses). This gives the clean physical
+        calibration:
 
-        Algorithm (per _cryoscope_implementation.md §3.3):
-        1. For each h in h_list, apply a square-wave flux pulse:
-           - h during free evolution (t_rabi[-1] to t_rabi[-1] + tau)
-           - 0 during the π/2 pulses
-        2. IQ readout via two Ramsey sequences (π/2 on X and Y axes)
-        3. Extract φ = arctan2(p_e_Q - 0.5, p_e_I - 0.5)
-        4. Unwrap phases → CalibrationTable(kind="phi_h")
+            φ_cal(h) = Δω(h) · τ
+
+        For cryoscope reconstruction, this is correct because we extract
+        the instantaneous Δω(h(t_d)) = dφ/dt_d from the measurement, and
+        invert via h(t_d) = φ_cal⁻¹(dφ/dt_d · τ).
+
+        Algorithm:
+        1. For each h, apply square-wave flux (h during τ, 0 during pulses)
+        2. IQ readout → raw φ = arctan2(0.5 - p_e^I, p_e^Q - 0.5)
+        3. **Model-guided unwrap**: use analytical Δω(h) · τ as anchor
+        4. → CalibrationTable(kind="phi_h")
 
         Physics: φ(h) = 2π · Δf_Q(h) · tau  (Gao 2021 §V)
+
+        Model-guided unwrap is needed because at typical τ values (50-100 ns)
+        and qubit sensitivities (~40 GHz·2π/Φ₀), the phase wraps multiple
+        times across the h_list range — naive np.unwrap cannot resolve this.
         """
         omega_d = self.qubit.frequency
         t_pi2_end = self.t_rabi[-1]
@@ -211,7 +222,9 @@ class FluxResponseCalibration(Calibration):
         )
 
         for h in self.h_list:
-            # Build square-wave flux: h during free evolution, 0 elsewhere
+            # Square-wave: h only during free evolution, 0 during pulses.
+            # This isolates the calibration to pure free-evolution dynamics,
+            # giving φ_cal(h) = Δω(h)·τ.
             t_sig = CONFIG.pulse.make_time(0, t_total)
             signal = np.zeros_like(t_sig, dtype=float)
             mask = (t_sig >= t_pi2_end) & (t_sig <= t_pi2_end + self.tau)
@@ -224,11 +237,14 @@ class FluxResponseCalibration(Calibration):
             p_e_I_list.append(result["p_e_I"])
             p_e_Q_list.append(result["p_e_Q"])
 
-        # Extract phase and unwrap
+        # Extract raw phase in (-π, π]
         p_e_I = np.asarray(p_e_I_list, dtype=float)
         p_e_Q = np.asarray(p_e_Q_list, dtype=float)
-        varphi = np.arctan2(p_e_Q - 0.5, p_e_I - 0.5)
-        varphi = np.unwrap(varphi, period=np.pi)
+        varphi_raw = np.arctan2(0.5 - p_e_I, p_e_Q - 0.5)
+
+        # Model-guided unwrap: snap raw phases to the nearest 2π-equivalent
+        # of the analytical Δω(h)·τ
+        varphi = self._unwrap_with_model(varphi_raw, omega_d)
 
         return CalibrationTable(
             name=f"flux_response_{self.method}",
@@ -243,6 +259,53 @@ class FluxResponseCalibration(Calibration):
             },
             metadata={},
         )
+
+    def _unwrap_with_model(
+        self,
+        varphi_raw: np.ndarray,
+        omega_d: float,
+    ) -> np.ndarray:
+        """Resolve 2π ambiguities in φ(h) using analytical Transmon model.
+
+        At each h_i, compute the expected phase from qubit dispersion:
+            φ_th(h_i) = (ω_q(Φ_bias + h_i) - ω_d) · τ
+        then choose the 2π-equivalent of varphi_raw[i] closest to φ_th[i]:
+            varphi_unwrapped[i] = varphi_raw[i] + 2π · round((φ_th[i] - varphi_raw[i])/(2π))
+
+        This resolves wraps even when adjacent samples are insufficient
+        for naive unwrap (e.g., when |dφ/dh · Δh| > π).
+
+        Parameters
+        ----------
+        varphi_raw : np.ndarray
+            Raw phases in (-π, π] from arctan2.
+        omega_d : float
+            Drive frequency (angular, GHz·2π).
+
+        Returns
+        -------
+        np.ndarray
+            Unwrapped phases consistent with the analytical model.
+        """
+        # Compute expected angular detuning Δω(h) at each h_i
+        # ω_q(Φ_bias + h) - ω_d using the Transmon dispersion
+        EC = self.qubit.EC
+        EJ0 = getattr(self.qubit, "EJ_0", self.qubit.EJ)
+        if hasattr(self.qubit, "flux_bias"):
+            flux_bias = self.qubit.flux_bias
+        elif hasattr(self.qubit, "flux"):
+            flux_bias = self.qubit.flux
+        else:
+            flux_bias = 0.0
+
+        total_flux = flux_bias + np.asarray(self.h_list, dtype=float)
+        omega_q = np.sqrt(8.0 * EJ0 * np.abs(np.cos(np.pi * total_flux)) * EC) - EC
+        delta_omega = omega_q - omega_d
+        varphi_theory = delta_omega * self.tau  # rad
+
+        # Snap each varphi_raw[i] to nearest 2π-equivalent of varphi_theory[i]
+        n_wraps = np.round((varphi_theory - varphi_raw) / (2.0 * np.pi))
+        return varphi_raw + 2.0 * np.pi * n_wraps
 
     # ------------------------------------------------------------------
     # Transient-based flux response calibration (Track B 1.2)

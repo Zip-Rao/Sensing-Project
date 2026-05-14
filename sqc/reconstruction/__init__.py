@@ -16,6 +16,7 @@ from .wiener import (
 from .hammerstein import HammersteinWienerReconstruction
 from .numerical_inverse import LMReconstruction
 from .cryoscope import CryoscopeReconstruction
+from .tail import TailReconstruction
 
 __all__ = [
     "Reconstruction",
@@ -31,4 +32,5 @@ __all__ = [
     "HammersteinWienerReconstruction",
     "LMReconstruction",
     "CryoscopeReconstruction",
+    "TailReconstruction",
 ]

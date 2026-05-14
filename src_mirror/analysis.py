@@ -49,6 +49,7 @@ from sqc.reconstruction.wiener import (
 from sqc.reconstruction.hammerstein import HammersteinWienerReconstruction
 from sqc.reconstruction.numerical_inverse import LMReconstruction
 from sqc.reconstruction.cryoscope import CryoscopeReconstruction
+from sqc.reconstruction.tail import TailReconstruction
 from sqc.simulation.result import (
     ExperimentResult,
     extract_expectation,
@@ -495,3 +496,45 @@ class Analysis:
             "The measurement-only CryoscopeExperiment (case 5) is "
             "available via Protocal(type=5).evolve() in this mirror layer."
         )
+
+    # ------------------------------------------------------------------
+    # Tail reconstruction (delay Ramsey / pi-pulse compensation)
+    # ------------------------------------------------------------------
+
+    def get_tail_from_delay_ramsey(self, measurement, calibration=None):
+        """Reconstruct tail flux from delay Ramsey measurement.
+
+        Parameters
+        ----------
+        measurement : ExperimentResult
+            From DelayRamseyExperiment.run(). Must have data["varphi"]
+            and axes["t_d"].
+        calibration : CalibrationTable or None
+            Phase-to-flux calibration (kind="phi_z").
+
+        Returns
+        -------
+        FluxSignal
+            Reconstructed tail flux waveform.
+        """
+        recon = TailReconstruction(
+            calibration=calibration, method="delay_ramsey",
+        )
+        return recon.reconstruct(measurement)
+
+    def get_tail_from_pi_pulse_comp(self, measurement):
+        """Reconstruct tail flux from pi-pulse compensation measurement.
+
+        Parameters
+        ----------
+        measurement : ExperimentResult
+            From PiPulseCompensationExperiment.run(). Must have
+            data["z_star"] and axes["tau"].
+
+        Returns
+        -------
+        FluxSignal
+            Reconstructed tail flux waveform.
+        """
+        recon = TailReconstruction(method="pi_pulse_comp")
+        return recon.reconstruct(measurement)

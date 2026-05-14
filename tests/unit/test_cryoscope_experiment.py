@@ -115,7 +115,7 @@ class TestCryoscopeExperiment:
 
 
 class TestCryoscopeReconstruction:
-    """Smoke tests for CryoscopeReconstruction."""
+    """Smoke tests for CryoscopeReconstruction (unified API)."""
 
     @staticmethod
     def _make_mock_measurement(varphi, trunc):
@@ -129,49 +129,14 @@ class TestCryoscopeReconstruction:
             config={},
         )
 
-    def test_calib_inverse_smoke(self):
-        """Linear calibration + linear phase → correct h reconstruction."""
+    def test_calibration_inversion(self):
+        """inversion='calibration': linear cal + linear phase → correct h."""
         from sqc.reconstruction.cryoscope import CryoscopeReconstruction
         from sqc.calibration.base import CalibrationTable
 
-        # Linear calibration: φ(h) = k * h, with k = 2.0 rad/Φ₀
         h_vals = np.array([-0.01, 0.0, 0.01])
-        phi_vals = 2.0 * h_vals  # φ = 2.0 * h
-        cal = CalibrationTable(
-            name="test", kind="phi_h",
-            inputs=h_vals, outputs=phi_vals,
-        )
-
-        # Linear phase vs time: φ(t) = α * t, where α = 0.02 rad/ns
-        # Then dφ/dt = 0.02, φ_cal(h) = dφ/dt * tau = 0.02 * tau
-        # So h = inverse(0.02 * tau) = (0.02 * tau) / 2.0
-        tau = 50.0
-        dt = 1.0
-        t = np.arange(0, 100, dt)
-        varphi = 0.02 * t  # linear phase accumulation
-
-        meas = self._make_mock_measurement(varphi, t)
-
-        recon = CryoscopeReconstruction(calibration=cal, tau=tau, method="calib_inverse")
-        result = recon.reconstruct(meas, dt=dt)
-
-        expected_h = (0.02 * tau) / 2.0  # = 0.5 Φ₀
-        assert isinstance(result, FluxSignal)
-        assert result.t_list.shape == t.shape
-        # All values should be close to expected (linear in → linear out)
-        assert np.allclose(result.signal[1:], expected_h, rtol=1e-10, atol=1e-10)
-
-    def test_sg_diff_smoke(self):
-        """SG_diff method runs and returns FluxSignal."""
-        from sqc.reconstruction.cryoscope import CryoscopeReconstruction
-        from sqc.calibration.base import CalibrationTable
-
-        h_vals = np.linspace(-0.01, 0.01, 11)
         phi_vals = 2.0 * h_vals
-        cal = CalibrationTable(
-            name="test", kind="phi_h",
-            inputs=h_vals, outputs=phi_vals,
-        )
+        cal = CalibrationTable(name="test", kind="phi_h", inputs=h_vals, outputs=phi_vals)
 
         tau = 50.0
         dt = 1.0
@@ -180,41 +145,69 @@ class TestCryoscopeReconstruction:
 
         meas = self._make_mock_measurement(varphi, t)
 
-        recon = CryoscopeReconstruction(calibration=cal, tau=tau, method="SG_diff", sg_window=5)
+        recon = CryoscopeReconstruction(calibration=cal, tau=tau)
+        result = recon.reconstruct(meas, dt=dt)
+
+        expected_h = (0.02 * tau) / 2.0
+        assert isinstance(result, FluxSignal)
+        assert result.t_list.shape == t.shape
+        assert np.allclose(result.signal[1:], expected_h, rtol=1e-10, atol=1e-10)
+
+    def test_calibration_with_sg(self):
+        """inversion='calibration' + use_sg_filter=True."""
+        from sqc.reconstruction.cryoscope import CryoscopeReconstruction
+        from sqc.calibration.base import CalibrationTable
+
+        h_vals = np.linspace(-0.01, 0.01, 11)
+        phi_vals = 2.0 * h_vals
+        cal = CalibrationTable(name="test", kind="phi_h", inputs=h_vals, outputs=phi_vals)
+
+        tau = 50.0
+        dt = 1.0
+        t = np.arange(0, 100, dt)
+        varphi = 0.02 * t
+
+        meas = self._make_mock_measurement(varphi, t)
+
+        recon = CryoscopeReconstruction(
+            calibration=cal, tau=tau,
+            inversion="calibration", use_sg_filter=True, sg_window=5,
+        )
         result = recon.reconstruct(meas, dt=dt)
 
         assert isinstance(result, FluxSignal)
-        assert len(result.signal) == len(t)
-        # SG should give similar result to calib_inverse for clean data
         expected_h = (0.02 * tau) / 2.0
         assert np.allclose(result.signal[5:-5], expected_h, rtol=1e-10, atol=1e-10)
 
-    def test_diff_smoke(self):
-        """diff method runs and returns FluxSignal."""
+    def test_response_inversion(self):
+        """inversion='response': uses qubit dispersion to map Δf → h."""
         from sqc.reconstruction.cryoscope import CryoscopeReconstruction
-        from sqc.calibration.base import CalibrationTable
+        from sqc.devices.transmon import TransmonQubit
 
-        h_vals = np.linspace(-0.01, 0.01, 11)
-        phi_vals = 2.0 * h_vals
-        cal = CalibrationTable(
-            name="test", kind="phi_h",
-            inputs=h_vals, outputs=phi_vals,
+        q = TransmonQubit(
+            EC=0.2 * 2 * np.pi, EJ=10.0 * 2 * np.pi,
+            T1=100e3, T2=50e3,
+            flux=np.arctan(np.sqrt(2)) / np.pi,  # optimal sensitivity point
+            n_levels=3,
         )
 
         tau = 50.0
         dt = 1.0
         t = np.arange(0, 100, dt)
-        varphi = 0.02 * t
+        # Constant Δf = 0.01 GHz → h ≈ 0.01 / |κ| (linear regime)
+        delta_f = 0.01  # GHz
+        varphi = 2.0 * np.pi * delta_f * t  # φ = 2π·Δf·t
 
         meas = self._make_mock_measurement(varphi, t)
 
-        recon = CryoscopeReconstruction(calibration=cal, tau=tau, method="diff")
+        recon = CryoscopeReconstruction(qubit=q, tau=tau, inversion="response")
         result = recon.reconstruct(meas, dt=dt)
 
         assert isinstance(result, FluxSignal)
         assert len(result.signal) == len(t)
-        expected_h = (0.02 * tau) / 2.0
-        assert np.allclose(result.signal[1:-1], expected_h, rtol=1e-10, atol=1e-10)
+        # dφ/dt = 2π·Δf, so Δf reconstructed ≈ 0.01 GHz
+        # h should be positive and small (qubit at work point with negative sensitivity)
+        assert np.all(np.abs(result.signal[1:-1]) < 0.1)
 
 
 class TestFluxResponseCalibration:

@@ -31,6 +31,8 @@ from sqc.experiments.ramsey import RamseyExperiment
 from sqc.experiments.echo import DiffEchoExperiment
 from sqc.experiments.transient import TransientSensingExperiment
 from sqc.experiments.cryoscope import CryoscopeExperiment
+from sqc.experiments.delay_ramsey import DelayRamseyExperiment
+from sqc.experiments.pi_pulse_comp import PiPulseCompensationExperiment
 from sqc.reconstruction.kernel import KernelEstimator
 
 
@@ -47,7 +49,7 @@ class Protocal:
         ----------
         type : int
             Protocol type: 0=Rabi, 1=Ramsey, 2=DiffEcho, 3=CPMG (stub),
-            4=Transient, 5=Cryoscope (stub).
+            4=Transient, 5=Cryoscope, 6=DelayRamsey, 7=PiPulseComp.
         **kwargs
             Protocol parameters.
         """
@@ -183,6 +185,43 @@ class Protocal:
                     [list(result.data["p_e_I"]), list(result.data["p_e_Q"])],
                 )
 
+            case 6:  # Delay Ramsey
+                t_rabi = np.linspace(0, 10, 20)
+                tau_R = 20.0
+                exp = DelayRamseyExperiment(
+                    qubit=qubit,
+                    t_rabi=t_rabi,
+                    tau_R=tau_R,
+                )
+                result = exp.run()
+                # Returns: (t_d, varphi, varphi_raw, varphi_base,
+                #            p_e_I, p_e_Q, flux_signal)
+                return (
+                    result.axes["t_d"],
+                    result.data["varphi"],
+                    result.data["varphi_raw"],
+                    result.data["varphi_base"],
+                    result.data["p_e_I"],
+                    result.data["p_e_Q"],
+                    exp.flux_signal,
+                )
+
+            case 7:  # Pi-pulse compensation
+                t_rabi = np.linspace(0, 10, 20)
+                exp = PiPulseCompensationExperiment(
+                    qubit=qubit,
+                    t_rabi=t_rabi,
+                )
+                result = exp.run()
+                # Returns: (tau, z, p_e_2d, z_star, flux_signal)
+                return (
+                    result.axes["tau"],
+                    result.axes["z"],
+                    result.data["p_e"],
+                    result.data["z_star"],
+                    exp.flux_signal,
+                )
+
             case _:
                 raise ValueError(f"Unknown protocol type {self.type}")
 
@@ -281,6 +320,7 @@ class Calibration:
         """
         from sqc.calibration.qubit_frequency import QubitFrequencyCalibration
         from sqc.calibration.flux_response import FluxResponseCalibration
+        from sqc.calibration.delay_ramsey import DelayRamseyCalibration
 
         match self.type:
             case 0:  # Ramsey frequency f_01 calibration
@@ -310,6 +350,12 @@ class Calibration:
                     "The legacy src/protocal.py:Calibration(type=3).calibrate() "
                     "has a working implementation; use that for now."
                 )
+
+            case 4:  # Delay Ramsey φ_cal(z)
+                cal = DelayRamseyCalibration(
+                    qubit=self.qubit,
+                )
+                return cal.calibrate()
 
             case _:
                 raise ValueError(f"Unknown calibration type {self.type}")

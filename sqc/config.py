@@ -200,6 +200,12 @@ class ReconstructionConfig:
     # Cryoscope
     cryoscope_tau: float = 100.0       #: ns — calibration square-pulse length
 
+    # delay Ramsey
+    delay_ramsey_tau: float = 20.0     #: ns — default Ramsey free evolution for delay Ramsey
+
+    # pi-pulse compensation
+    pi_pulse_T_pi: float = 10.0        #: ns — default pi-pulse width for compensation
+
 
 # ══════════════════════════════════════════════════════════════════════════
 # 6 — Top-level Config (singleton)

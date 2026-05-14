@@ -536,3 +536,30 @@ def create_cryoscope_pulse(
         )
     )
     return CompositePulse(pulses)
+
+
+# ---------------------------------------------------------------------------
+# Pi-pulse compensation factory
+# ---------------------------------------------------------------------------
+
+
+def create_pi_pulse_compensation_pulse(
+    t_rabi, T_pi, omega_d, phase=0.0, qubit=None
+):
+    """Build a pi-pulse for the pi-pulse compensation protocol.
+
+    This creates only the microwave drive Hamiltonian (pi-pulse).
+    The compensation flux is applied separately via the qubit's flux
+    signal (qubit_in_mag) — it is NOT part of this control sequence.
+
+    Delegates to create_pulse(angle=pi).
+    """
+    return create_pulse(
+        qubit,
+        frame=1,
+        type=1,
+        t_list=np.asarray(t_rabi, dtype=float),
+        omega_d=omega_d,
+        phase=phase,
+        angle=np.pi,
+    )
