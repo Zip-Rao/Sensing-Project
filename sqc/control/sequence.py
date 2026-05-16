@@ -52,7 +52,8 @@ class PulseSequence:
 # ---------------------------------------------------------------------------
 
 def create_pulse(
-    qubit, frame, type, t_list, omega_d, phase, angle=None, **kwargs
+    qubit, frame, type, t_list, omega_d, phase, angle=None, trigger=0.0,
+    **kwargs,
 ):
     """Create a single Pulse with auto-calibrated amplitude.
 
@@ -71,6 +72,8 @@ def create_pulse(
         Rotation axis phase (rad).
     angle : float or None
         Target rotation angle (rad). If given, amplitude is auto-scaled.
+    trigger : float
+        Global start time (ns).
     **kwargs
         Passed to Signal constructor.
 
@@ -81,7 +84,8 @@ def create_pulse(
     """
     Omega_signal = Signal(type=type, t_list=t_list, **kwargs)
     Omega_pulse = Pulse(
-        frame, omega_d, phase, Omega=Omega_signal, is_rwa=True, qubit=qubit
+        frame, omega_d, phase, Omega=Omega_signal, is_rwa=True, qubit=qubit,
+        trigger=trigger,
     )
     current_angle = Omega_pulse.get_angle_simple()
     # Adjust amplitude for target angle
@@ -90,7 +94,10 @@ def create_pulse(
     # Re-generate
     kwargs["amplitude"] = Omega_signal.params["amplitude"]
     signal = Signal(type=type, t_list=t_list, **kwargs)
-    pulse = Pulse(frame, omega_d, phase, Omega=signal, is_rwa=True, qubit=qubit)
+    pulse = Pulse(
+        frame, omega_d, phase, Omega=signal, is_rwa=True, qubit=qubit,
+        trigger=trigger,
+    )
     H_t = pulse.hamiltonian
     return QobjEvo(H_t, tlist=t_list)
 
@@ -102,8 +109,13 @@ def create_ramsey_pulse(
     phase1=np.pi / 2,
     phase2=0.0,
     qubit=None,
+    trigger=0.0,
 ):
     """Build Ramsey sequence: pi/2 - tau - pi/2.
+
+    Each sub-pulse is assigned an absolute ``trigger`` (relative to
+    global t=0).  The first pi/2 starts at ``trigger``; the second
+    pi/2 starts at ``trigger + t_rabi[-1] + tau``.
 
     Parameters
     ----------
@@ -119,6 +131,8 @@ def create_ramsey_pulse(
         Second pi/2 phase (rad).
     qubit : TransmonQubit or None
         Qubit for n_levels resolution. If None, defaults to 2-level.
+    trigger : float
+        Global start time of the sequence (ns).
 
     Returns
     -------
@@ -134,7 +148,9 @@ def create_ramsey_pulse(
         t_list=t_rabi,
         amplitude=(np.pi / 2.0) / (t_rabi[-1] - t_rabi[0]),
     )
+    cur = float(trigger)
     pulses = []
+    # First pi/2
     pulses.append(
         Pulse(
             frame=1,
@@ -143,8 +159,11 @@ def create_ramsey_pulse(
             Omega=Omega_1,
             is_rwa=True,
             qubit=qubit,
+            trigger=cur,
         )
     )
+    cur += float(t_rabi[-1])
+    # Gap (free evolution)
     if tau != 0.0 and Omega_0 is not None:
         pulses.append(
             Pulse(
@@ -154,8 +173,11 @@ def create_ramsey_pulse(
                 Omega=Omega_0,
                 is_rwa=True,
                 qubit=qubit,
+                trigger=cur,
             )
         )
+        cur += tau
+    # Second pi/2
     pulses.append(
         Pulse(
             frame=1,
@@ -164,6 +186,7 @@ def create_ramsey_pulse(
             Omega=Omega_1,
             is_rwa=True,
             qubit=qubit,
+            trigger=cur,
         )
     )
     return CompositePulse(pulses)
@@ -180,6 +203,7 @@ def create_diff_echo_pulse(
     phase2=np.pi / 2,
     phase3=np.pi / 2,
     qubit=None,
+    trigger=0.0,
 ):
     """Build differential echo sequence.
 
@@ -201,6 +225,9 @@ def create_diff_echo_pulse(
         Drive frequency.
     phase1, phase2, phase3 : float
         Pulse phases (rad).
+    qubit : TransmonQubit or None
+    trigger : float
+        Global start time of the sequence (ns).
 
     Returns
     -------
@@ -225,6 +252,7 @@ def create_diff_echo_pulse(
         t_list=t_rabi,
         amplitude=np.pi / (t_rabi[-1] - t_rabi[0]),
     )
+    cur = float(trigger)
     pulses = []
     # First pi/2
     pulses.append(
@@ -235,9 +263,12 @@ def create_diff_echo_pulse(
             Omega=Omega_1,
             is_rwa=True,
             qubit=qubit,
+            trigger=cur,
         )
     )
+    cur += float(t_rabi[-1] - t_rabi[0])
     for _ in range(k):
+        # tau gap
         pulses.append(
             Pulse(
                 frame=1,
@@ -246,8 +277,11 @@ def create_diff_echo_pulse(
                 Omega=Omega_0,
                 is_rwa=True,
                 qubit=qubit,
+                trigger=cur,
             )
         )
+        cur += tau
+        # pi
         pulses.append(
             Pulse(
                 frame=1,
@@ -256,8 +290,11 @@ def create_diff_echo_pulse(
                 Omega=Omega_2,
                 is_rwa=True,
                 qubit=qubit,
+                trigger=cur,
             )
         )
+        cur += float(t_rabi[-1] - t_rabi[0])
+        # tau'
         pulses.append(
             Pulse(
                 frame=1,
@@ -266,8 +303,11 @@ def create_diff_echo_pulse(
                 Omega=Omega_01,
                 is_rwa=True,
                 qubit=qubit,
+                trigger=cur,
             )
         )
+        cur += t_rep + t_int - t_rabi[-1] + t_rabi[0]
+        # pi
         pulses.append(
             Pulse(
                 frame=1,
@@ -276,8 +316,11 @@ def create_diff_echo_pulse(
                 Omega=Omega_2,
                 is_rwa=True,
                 qubit=qubit,
+                trigger=cur,
             )
         )
+        cur += float(t_rabi[-1] - t_rabi[0])
+        # tau''
         pulses.append(
             Pulse(
                 frame=1,
@@ -286,8 +329,10 @@ def create_diff_echo_pulse(
                 Omega=Omega_02,
                 is_rwa=True,
                 qubit=qubit,
+                trigger=cur,
             )
         )
+        cur += t_rep - tau - t_int - (t_rabi[-1] - t_rabi[0])
     # Final pi/2
     pulses.append(
         Pulse(
@@ -297,13 +342,15 @@ def create_diff_echo_pulse(
             Omega=Omega_1,
             is_rwa=True,
             qubit=qubit,
+            trigger=cur,
         )
     )
     return CompositePulse(pulses)
 
 
 def create_echo_pulse(
-    t_rabi, tau, omega_d=0.0, phase1=0.0, phase2=0.0, phase3=0.0
+    t_rabi, tau, omega_d=0.0, phase1=0.0, phase2=0.0, phase3=0.0,
+    trigger=0.0,
 ):
     """Build spin-echo sequence: pi/2 - tau - pi - tau - pi/2.
 
@@ -313,6 +360,8 @@ def create_echo_pulse(
     tau : float
     omega_d : float
     phase1, phase2, phase3 : float
+    trigger : float
+        Global start time of the sequence (ns).
 
     Returns
     -------
@@ -329,62 +378,53 @@ def create_echo_pulse(
         t_list=t_rabi,
         amplitude=np.pi / (t_rabi[-1] - t_rabi[0]),
     )
+    cur = float(trigger)
     pulses = []
     # pi/2
     pulses.append(
         Pulse(
-            frame=1,
-            omega_d=omega_d,
-            phase=phase1,
-            Omega=Omega_1,
-            is_rwa=True,
+            frame=1, omega_d=omega_d, phase=phase1,
+            Omega=Omega_1, is_rwa=True, trigger=cur,
         )
     )
+    cur += float(t_rabi[-1] - t_rabi[0])
     # tau
     pulses.append(
         Pulse(
-            frame=1,
-            omega_d=omega_d,
-            phase=0.0,
-            Omega=Omega_0,
-            is_rwa=True,
+            frame=1, omega_d=omega_d, phase=0.0,
+            Omega=Omega_0, is_rwa=True, trigger=cur,
         )
     )
+    cur += tau
     # pi
     pulses.append(
         Pulse(
-            frame=1,
-            omega_d=omega_d,
-            phase=phase2,
-            Omega=Omega_2,
-            is_rwa=True,
+            frame=1, omega_d=omega_d, phase=phase2,
+            Omega=Omega_2, is_rwa=True, trigger=cur,
         )
     )
+    cur += float(t_rabi[-1] - t_rabi[0])
     # tau
     pulses.append(
         Pulse(
-            frame=1,
-            omega_d=omega_d,
-            phase=0.0,
-            Omega=Omega_0,
-            is_rwa=True,
+            frame=1, omega_d=omega_d, phase=0.0,
+            Omega=Omega_0, is_rwa=True, trigger=cur,
         )
     )
+    cur += tau
     # pi/2
     pulses.append(
         Pulse(
-            frame=1,
-            omega_d=omega_d,
-            phase=phase3,
-            Omega=Omega_1,
-            is_rwa=True,
+            frame=1, omega_d=omega_d, phase=phase3,
+            Omega=Omega_1, is_rwa=True, trigger=cur,
         )
     )
     return CompositePulse(pulses)
 
 
 def create_cpmg_pulse(
-    t_rabi, tau, n, omega_d, phase1=0.0, phase2=np.pi / 2, phase3=np.pi / 2
+    t_rabi, tau, n, omega_d, phase1=0.0, phase2=np.pi / 2, phase3=np.pi / 2,
+    trigger=0.0,
 ):
     """Build CPMG sequence: pi/2 - [tau/2 - pi - tau - pi - tau/2] - pi/2.
 
@@ -396,6 +436,8 @@ def create_cpmg_pulse(
         Number of pi pulses.
     omega_d : float
     phase1, phase2, phase3 : float
+    trigger : float
+        Global start time of the sequence (ns).
 
     Returns
     -------
@@ -413,70 +455,62 @@ def create_cpmg_pulse(
         t_list=t_rabi,
         amplitude=np.pi / (t_rabi[-1] - t_rabi[0]),
     )
+    cur = float(trigger)
     pulses = []
     # pi/2
     pulses.append(
         Pulse(
-            frame=1,
-            omega_d=omega_d,
-            phase=phase1,
-            Omega=Omega_2,
-            is_rwa=True,
+            frame=1, omega_d=omega_d, phase=phase1,
+            Omega=Omega_2, is_rwa=True, trigger=cur,
         )
     )
-    pulses.append(
-        Pulse(
-            frame=1,
-            omega_d=omega_d,
-            phase=0.0,
-            Omega=Omega_0,
-            is_rwa=True,
-        )
-    )
-    for _ in range(n):
-        pulses.append(
-            Pulse(
-                frame=1,
-                omega_d=omega_d,
-                phase=phase2,
-                Omega=Omega_3,
-                is_rwa=True,
-            )
-        )
-        pulses.append(
-            Pulse(
-                frame=1,
-                omega_d=omega_d,
-                phase=0.0,
-                Omega=Omega_1,
-                is_rwa=True,
-            )
-        )
+    cur += float(t_rabi[-1] - t_rabi[0])
     # tau/2
     pulses.append(
         Pulse(
-            frame=1,
-            omega_d=omega_d,
-            phase=0.0,
-            Omega=Omega_0,
-            is_rwa=True,
+            frame=1, omega_d=omega_d, phase=0.0,
+            Omega=Omega_0, is_rwa=True, trigger=cur,
         )
     )
+    cur += tau / 2
+    for _ in range(n):
+        # pi
+        pulses.append(
+            Pulse(
+                frame=1, omega_d=omega_d, phase=phase2,
+                Omega=Omega_3, is_rwa=True, trigger=cur,
+            )
+        )
+        cur += float(t_rabi[-1] - t_rabi[0])
+        # tau
+        pulses.append(
+            Pulse(
+                frame=1, omega_d=omega_d, phase=0.0,
+                Omega=Omega_1, is_rwa=True, trigger=cur,
+            )
+        )
+        cur += tau
+    # tau/2
+    pulses.append(
+        Pulse(
+            frame=1, omega_d=omega_d, phase=0.0,
+            Omega=Omega_0, is_rwa=True, trigger=cur,
+        )
+    )
+    cur += tau / 2
     # pi/2
     pulses.append(
         Pulse(
-            frame=1,
-            omega_d=omega_d,
-            phase=phase3,
-            Omega=Omega_2,
-            is_rwa=True,
+            frame=1, omega_d=omega_d, phase=phase3,
+            Omega=Omega_2, is_rwa=True, trigger=cur,
         )
     )
     return CompositePulse(pulses)
 
 
 def create_cryoscope_pulse(
-    t_rabi, tau, omega_d, phase1=np.pi / 2, phase2=0.0
+    t_rabi, tau, omega_d, phase1=np.pi / 2, phase2=0.0,
+    trigger=0.0,
 ):
     """Build Cryoscope sequence: pi/2 - tau - pi/2.
 
@@ -489,6 +523,8 @@ def create_cryoscope_pulse(
         First pi/2 phase (rad).
     phase2 : float
         Second pi/2 phase (rad).
+    trigger : float
+        Global start time of the sequence (ns).
 
     Returns
     -------
@@ -504,35 +540,29 @@ def create_cryoscope_pulse(
         t_list=t_rabi,
         amplitude=(np.pi / 2.0) / (t_rabi[-1] - t_rabi[0]),
     )
+    cur = float(trigger)
     pulses = []
     # pi/2-Y
     pulses.append(
         Pulse(
-            frame=1,
-            omega_d=omega_d,
-            phase=phase1,
-            Omega=Omega_1,
-            is_rwa=True,
+            frame=1, omega_d=omega_d, phase=phase1,
+            Omega=Omega_1, is_rwa=True, trigger=cur,
         )
     )
+    cur += float(t_rabi[-1] - t_rabi[0])
     # tau
     pulses.append(
         Pulse(
-            frame=1,
-            omega_d=omega_d,
-            phase=0.0,
-            Omega=Omega_0,
-            is_rwa=True,
+            frame=1, omega_d=omega_d, phase=0.0,
+            Omega=Omega_0, is_rwa=True, trigger=cur,
         )
     )
+    cur += tau
     # pi/2
     pulses.append(
         Pulse(
-            frame=1,
-            omega_d=omega_d,
-            phase=phase2,
-            Omega=Omega_1,
-            is_rwa=True,
+            frame=1, omega_d=omega_d, phase=phase2,
+            Omega=Omega_1, is_rwa=True, trigger=cur,
         )
     )
     return CompositePulse(pulses)
@@ -544,7 +574,7 @@ def create_cryoscope_pulse(
 
 
 def create_pi_pulse_compensation_pulse(
-    t_rabi, T_pi, omega_d, phase=0.0, qubit=None
+    t_rabi, T_pi, omega_d, phase=0.0, qubit=None, trigger=0.0,
 ):
     """Build a pi-pulse for the pi-pulse compensation protocol.
 
@@ -562,4 +592,5 @@ def create_pi_pulse_compensation_pulse(
         omega_d=omega_d,
         phase=phase,
         angle=np.pi,
+        trigger=trigger,
     )

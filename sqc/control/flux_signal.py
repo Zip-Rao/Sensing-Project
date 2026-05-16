@@ -42,11 +42,12 @@ class FluxSignal(Waveform):
     """
 
     def __init__(
-        self, type: int = 0, t_list=None, **kwargs
+        self, type: int = 0, t_list=None, trigger: float = 0.0, **kwargs
     ) -> None:
         # Store type and parameters
         self._type: int = type
         self._params: dict = self._fill_default_params(type, kwargs)
+        self.trigger: float = trigger
 
         # Build basis functions for type 6 BEFORE generating samples
         self._basis_functions: list = []
@@ -349,6 +350,30 @@ class FluxSignal(Waveform):
         if t_array[0] <= t <= t_array[-1]:
             return float(signal_arr[idx])
         return 0.0
+
+    def samples_on(self, t_global: np.ndarray) -> np.ndarray:
+        """Project signal samples onto a global time axis.
+
+        Computes local time t_loc = t_global - self.trigger, then
+        linearly interpolates self.samples onto t_global within the
+        signal's local time window [0, t_list[-1]].  Outside that
+        window the contribution is zero.
+
+        Parameters
+        ----------
+        t_global : np.ndarray
+            Global time axis (ns).
+
+        Returns
+        -------
+        np.ndarray
+            Signal values at each global time point, shape (len(t_global),).
+        """
+        out = np.zeros(len(t_global), dtype=float)
+        t_loc = t_global - self.trigger
+        mask = (t_loc >= self.t_list[0]) & (t_loc <= self.t_list[-1])
+        out[mask] = np.interp(t_loc[mask], self.t_list, self.samples)
+        return out
 
     def copy(self) -> "FluxSignal":
         """Create a deep copy of this signal.

@@ -72,6 +72,7 @@ class Pulse(PulseBase):
         Omega=None,
         is_rwa: bool = True,
         qubit=None,
+        trigger: float = 0.0,
     ) -> None:
         self.frame: int = frame
         self.omega_d: float = omega_d
@@ -79,6 +80,7 @@ class Pulse(PulseBase):
         self.Omega = Omega
         self.is_rwa: bool = is_rwa
         self.qubit = qubit
+        self.trigger: float = trigger
 
         if qubit is not None:
             self.n_levels: int = qubit.n_levels
@@ -197,6 +199,49 @@ class Pulse(PulseBase):
                 )
                 H = [[H1, coeff_rwa], [H_cr1, coeff_cr1], [H_cr2, coeff_cr2]]
         return H, t_list
+
+    # -- Global time axis projection ----------------------------------------
+
+    def hamiltonian_on(self, t_global: np.ndarray) -> list:
+        """Project local Hamiltonian onto global time axis.
+
+        Computes t_loc = t_global - self.trigger, then linearly
+        interpolates the local coefficients onto t_global within the
+        pulse's local time window [0, t_list[-1]].  Outside that
+        window the contribution is zero.
+
+        Complex coefficients (rotating frame) are interpolated
+        separately on real and imaginary parts.
+
+        Parameters
+        ----------
+        t_global : np.ndarray
+            Global time axis (ns).
+
+        Returns
+        -------
+        list
+            QuTiP list-format Hamiltonian [[op, coeffs], ...] where
+            each coeffs array has length len(t_global).
+        """
+        H_local = self.hamiltonian
+        result = []
+        t_loc = t_global - self.trigger
+        mask = (t_loc >= self.t_list[0]) & (t_loc <= self.t_list[-1])
+        for op, coeff_local in H_local:
+            if np.iscomplexobj(coeff_local):
+                coeff_global = np.zeros(len(t_global), dtype=complex)
+                coeff_global[mask] = (
+                    np.interp(t_loc[mask], self.t_list, coeff_local.real)
+                    + 1j * np.interp(t_loc[mask], self.t_list, coeff_local.imag)
+                )
+            else:
+                coeff_global = np.zeros(len(t_global), dtype=float)
+                coeff_global[mask] = np.interp(
+                    t_loc[mask], self.t_list, coeff_local
+                )
+            result.append([op, coeff_global])
+        return result
 
     # -- Rotation angle -----------------------------------------------------
 
@@ -437,6 +482,28 @@ class CompositePulse(PulseBase):
                 hamiltonian.append([op, coeff_global])
             curr += duration
         return hamiltonian, t_global
+
+    def hamiltonian_on(self, t_global: np.ndarray) -> list:
+        """Collect all child pulse contributions on the global time axis.
+
+        Each child Pulse carries its own ``trigger``; this method simply
+        delegates to each child's ``hamiltonian_on(t_global)`` and merges
+        the resulting H-lists.
+
+        Parameters
+        ----------
+        t_global : np.ndarray
+            Global time axis (ns).
+
+        Returns
+        -------
+        list
+            QuTiP list-format Hamiltonian (merged from all child pulses).
+        """
+        merged = []
+        for pulse in self.pulses:
+            merged.extend(pulse.hamiltonian_on(t_global))
+        return merged
 
     def plot(self):
         """Plot the composite pulse envelope."""
