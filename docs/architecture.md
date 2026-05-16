@@ -1098,10 +1098,62 @@ results = wf.run()
 4. 频域解卷积：H_BA(ω) = Φ_B(ω) · V_A*(ω) / (|V_A|² + λ²)
 5. 设计补偿脉冲，重新测量验证
 
-#### 4.8.3 扩展点
+#### 4.8.3 `SensingWorkflow` (P6d) — 统一科研入口
+
+```python
+from sqc.workflows import SensingWorkflow
+
+wf = SensingWorkflow()
+wf.configure(
+    protocol="transient",           # 协议: transient|ramsey|echo|cryoscope|delay_ramsey
+    signal_type=4,                  # FluxSignal type 0-8
+    signal_amplitude=0.01,          # Phi0
+    reconstruction="wiener",        # 算法: wiener|hammerstein|lm|iq|unwrap
+    lambda_reg=5.0,
+    t_rabi_duration=20,
+    n_levels=2,
+)
+
+# 一键执行
+result = wf.run(measure=True, reconstruct=True, calibrate=False)
+
+# 参数扫描
+sweep = wf.sweep("signal.amplitude", [0.005, 0.01, 0.02])
+
+# 算法对比
+cmp_res = wf.compare(methods=["wiener", "hammerstein", "lm"])
+
+# 可视化
+wf.plot()
+```
+
+**`run()` 三开关**：
+
+| 开关 | 行为 | 产出 |
+|---|---|---|
+| `measure=True` | 构造 Experiment → mesolve | ExperimentResult (p_e, Delta p, kernel) |
+| `reconstruct=True` | 构造 Reconstruction → reconstruct() | FluxSignal (B(t)) |
+| `calibrate=True` | 先标定再测量 (仅 cryoscope/delay_ramsey) | CalibrationTable |
+
+**协议自动映射**（用户不需要知道底层类名）：
+
+| `protocol=` | Experiment 类 | Reconstruction 类 |
+|---|---|---|
+| `"transient"` | TransientSensingExperiment | TransientReconstruction |
+| `"ramsey"` | RamseyExperiment | RamseyReconstruction |
+| `"echo"` | DiffEchoExperiment | EchoReconstruction |
+| `"cryoscope"` | CryoscopeExperiment | CryoscopeReconstruction |
+| `"delay_ramsey"` | DelayRamseyExperiment | DelayRamseyReconstruction |
+
+**返回值**：`WorkflowResult` (config_snapshot, measurement, reconstructed_signal, calibration)。另有 `SweepResult`、`CompareResult` 供参数扫描和算法对比。
+
+**预留科研接口** (stub, raise NotImplementedError)：`pipeline()`, `multi_qubit()`, `crosstalk()`, `save()`, `load()`, `diff()`, `benchmark()`, `find_optimal_work_point()`, `detectability_limit()`, `noise_characterize()`, `cross_validate()`。
+
+#### 4.8.4 扩展点
 
 - **添加新顶层 workflow**（如完整 RB workflow、双比特门优化 workflow）：继承 `Workflow` ABC，实现 `run() → dict`。
 - **修改现有 workflow 的某一步**：直接覆写对应的子调用，例如把 `TransferFunctionCalibration` 换成自定义算法。
+- **实现 stub 方法**：`SensingWorkflow` 的 11 个 stub 方法可按需实现，详见 `idea/refactor/phase_6_handbook.md` §6d.8。
 
 ---
 
@@ -1662,6 +1714,10 @@ sqc.config.CONFIG = sqc.config.Config(
 | `Workflow` | `sqc.workflows.base` | 顶层流程 ABC |
 | `PredistortionValidationWorkflow` | `sqc.workflows.predistortion_validation` | 预失真验证 |
 | `ZCrosstalkWorkflow` | `sqc.workflows.z_crosstalk` | Z 串扰提取 |
+| `SensingWorkflow` | `sqc.workflows.sensing` | 统一科研入口 (P6d) |
+| `WorkflowResult` | `sqc.workflows.sensing` | run() 返回值 |
+| `SweepResult` | `sqc.workflows.sensing` | sweep() 返回值 |
+| `CompareResult` | `sqc.workflows.sensing` | compare() 返回值 |
 
 ### 8.2 关键函数签名
 
@@ -1672,7 +1728,8 @@ CONFIG.awg.dt                                       # 0.5 ns
 CONFIG.pulse.t_rabi                                 # np.ndarray
 CONFIG.pulse.t_global                               # np.ndarray
 CONFIG.transmon.to_dict()                           # dict for TransmonQubit
-reconfigure(sample_rate=4.0, t_rabi_duration=20) -> Config
+reconfigure(sample_rate=4.0, t_rabi_duration=20, lambda_reg=5.0,
+            n_levels=3, atol=1e-10, ...) -> Config  # 覆盖全部 6 层
 
 # HamiltonianBuilder
 HamiltonianBuilder.build(qubit, flux_signal, pulse, frame, omega_d)
@@ -1833,7 +1890,7 @@ exp = RamseyExperiment(qubit=q, t_rabi=cfg2.pulse.t_rabi)
 - `sqc/calibration/`: QubitFrequency, FluxResponse
 - `sqc/control/`: sequence.py (free-evolution gaps), flux_signal.py (default t_signal)
 - `sqc/hardware/`: readout.py (t_rabi)
-- `sqc/workflows/`: z_crosstalk.py (t_rabi)
+- `sqc/workflows/`: z_crosstalk.py (t_rabi), sensing.py (全 6 层参数 + pulse/hardware 时间轴)
 
 ### 10.5 配置 API 详解
 
@@ -2070,6 +2127,7 @@ mesolve(H_list, psi0, t_array, c_ops, e_ops)
 | v2.1 | 2026-05-14 | 标定模块重构：frequency.py（FluxResponseCalibration + SinglePointFrequencyCalibration 含闭环反馈）、waveform.py（WaveformCalibration + PredistortionDesigner）、scheduler.py（CalibrationScheduler 控制室）；重建前置标定移入 reconstruction/ | 
 | v2.2 | 2026-05-14 | 重建模块重构：按传感协议统一接口 — ramsey.py (RamseyReconstruction)、echo.py (EchoReconstruction)、transient.py (TransientReconstruction wiener/hammerstein/lm)、cryoscope.py、delay_ramsey.py、pi_pulse_comp.py；消除 _qubit_inverse_frequency / _build_h_for_signal 重复；删除 wiener/hammerstein/numerical_inverse/cryoscope_calib/delay_ramsey_calib/tail.py |
 | v2.3 | 2026-05-15 | 频率标定双模人工失谐测频：`_fit_ramsey_frequency` 拆分 `_fft_peak` + `_run_ramsey_sweep` + 编排层，支持单扫（`f_artificial`=float）和双扫（`f_artificial`=None）两种模式；闭环反馈新增 step_method=bisection 和 bracket_tightening 参数；_measure_frequency 切换双扫提高鲁棒性；瞬态测频 `_measure_frequency_transient` 完成实现。实验层新增 DelayRamseyExperiment 和 PiPulseCompensationExperiment，均支持 t_fall 参数；PiPulseComp z* 提取新增抛物线插值。IQ 读出新增 `_resample_hamiltonian` 统一时间网格 + max_step 选项消除插值伪影 |
+| v2.4 | 2026-05-16 | **P6**：用户可操作接口补完。P6a: `reconfigure()` 扩展至覆盖全部 6 层 CONFIG (AWG/Pulse/Reconstruction/Simulation/Transmon/ControlLine)。P6d: `SensingWorkflow` 统一科研入口 — `configure()` + `run(measure, reconstruct, calibrate)` + `sweep(param, values)` + `compare(methods)` + `plot()` + 11 个科研接口 stub。新增 `WorkflowResult`/`SweepResult`/`CompareResult` 数据结构。P6c: `Simulation_sqc.ipynb` 新增参数扫描演示 cell（扫幅度、扫 λ、扫 flux bias、reconfigure() 演示）。测试: +30 单元测试 (tests/unit/test_workflow.py)。 |
 
 下一步阅读：
 - 完整设计背景：[`idea/refactor/_refactor_plan.md`](../idea/refactor/_refactor_plan.md)
