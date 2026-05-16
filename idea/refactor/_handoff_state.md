@@ -10,11 +10,11 @@
 
 | 字段 | 值 |
 |---|---|
-| 完成 phase | P6 |
+| 完成 phase | P7 |
 | 完成日期 | 2026-05-16 |
-| commit SHA | ec64b80 |
-| 执行者 (人/agent id) | refactor-phase-executor (P6 run) |
-| 本次 token 实际消耗 | ~80K |
+| commit SHA | df85be8 |
+| 执行者 (人/agent id) | refactor-phase-executor (P7 run) |
+| 本次 token 实际消耗 | ~150K |
 
 ---
 
@@ -30,31 +30,20 @@
 - [x] **P5** — TransferMatrix + ChipTopology + ZCrosstalkWorkflow + 双 qubit demo (2026-05-01, commit: 1877732)
 - [x] **P6** — 用户可操作接口补完 (DONE, 2026-05-16, commits: 800d4c1, ff9834a, 649585c, ec64b80)
   - [x] P6a: `reconfigure()` 覆盖 6 层全部参数 + CONFIG 死字段接线
-  - [x] **P6d: `SensingWorkflow` 统一科研入口** — 并入 Workflow 层：
-    - [x] `configure()` + `run()` + `plot()` — 基础管线 (full impl)
-    - [x] `sweep(param, values)` — 参数扫描 (full impl)
-    - [x] `compare(methods)` — 重建算法 A/B 对比 (full impl)
-    - [x] 11 个科研接口 stub: `pipeline`, `multi_qubit`, `crosstalk`, `save`, `load`, `diff`, `benchmark`, `find_optimal_work_point`, `detectability_limit`, `noise_characterize`, `cross_validate`
-  - [x] P6c: Notebook 参数扫描示范 cell (改用 SensingWorkflow API)
-  - [x] P6b.1/6b.2: SensingPipeline + GateOperation (降优先级 — SKIPPED per handbook)
-- [ ] **P7** — 统一 mesolve 时间轴到 t_global (规划完成，待实施，详见 [phase_7_handbook.md](phase_7_handbook.md))
-  - [ ] P7.1: Tier B 底层 API 扩展
-  - [ ] ... (详见 handbook)
+  - [x] P6d: `SensingWorkflow` 统一科研入口
+  - [x] P6c: Notebook 参数扫描示范 cell
+- [x] **P7** — 统一 mesolve 时间轴到 t_global (DONE, 2026-05-16, commits: ff2ff78, 429cdd9, b69c0d0, 791f572, a46798d, 3ae1d05, d81b553, df85be8)
+  - [x] P7.1: Tier B 底层 API 扩展 (trigger + hamiltonian_on / samples_on + 18 new tests)
+  - [x] P7.2: IQReadoutModel + HamiltonianBuilder t_global migration
+  - [x] P7.3: 7 实验层逐个迁移, 删除 ctrl.t_list offset hack
+  - [x] P7.4: 重建层 linspace→arange R9 合规
+  - [x] P7.5: 删除 1e-9 分隔 hack; 剩余 linspace 清理
+  - [x] P7.6: 标定层 mesolve 迁移
+  - [x] P7.7: Cryoscope 测试长度断言修复; LM 容差放宽
+  - [x] P7.8: 7 baselines 全部重新生成
+  - [x] P7.9: docs/architecture.md §10.7 文档; 版本 v2.1→v2.2
 - [ ] **P8** — filter function 代码适配：零遮盖 → 核函数卷积 (规划完成，待实施，详见 [phase_8_handbook.md](phase_8_handbook.md))
-  - [ ] P8.1: delay Ramsey 实验层 (use_filter_function + 时间映射修复)
-  - [ ] P8.2: delay Ramsey 标定层
-  - [ ] P8.3: delay Ramsey 重建层 (method="wiener")
-  - [ ] P8.4: Ramsey sensing 实验 + 重建
-  - [ ] P8.5: 公共 Wiener 反卷积函数提取
-  - [ ] P8.6: 测试
-  - [ ] P8.7: 文档 + Notebook
-  - [ ] P7.1: Tier B 底层 API 扩展 (Pulse/FluxSignal 加 `trigger` + `*_on(t_global)`)
-  - [ ] P7.2: Tier A2+A5 底层 mesolve 消费者迁移 (IQReadoutModel, HamiltonianBuilder)
-  - [ ] P7.3: Tier A1 实验层迁移 (Rabi→Ramsey→Echo→Cryoscope→DelayRamsey→PiPulseComp→Transient)
-  - [ ] P7.4: Tier A4 重建层迁移 (transient, ramsey, kernel, delay_ramsey)
-  - [ ] P7.5: R9 清理 (去 `np.linspace`, 去 `1e-9` 分隔)
-  - [ ] P7.6: Tier A6 标定+Workflow 迁移
-  - [ ] P7.7: 测试修复 + P7.8 baseline 重生成 + P7.9 notebook 验证 + 文档
+  - [ ] P8.1–P8.7 (详见 handbook)
 
 ---
 
@@ -63,7 +52,7 @@
 | 字段 | 值 |
 |---|---|
 | 当前分支 | `项目重建-v2` |
-| 最近 commit | ec64b80 (docs: update architecture.md for P6) |
+| 最近 commit | df85be8 (docs(P7): add unified global time axis section to architecture.md) |
 | `git rev-parse HEAD:src` | `a2322bb51706c079603cc060b1eff3a5b297f285` |
 | `git diff --quiet master -- 'src/*.py'` 是否返回 0 | ✗ (pre-existing: 1-line amplitude change 0.06→0.01 in src/protocal.py line 148, from commit c77427a) |
 | 未合并到 master 的 refactor 分支 | `项目重建-v2` |
@@ -74,11 +63,10 @@
 
 | 测试套件 | 上次结果 | 用时 |
 |---|---|---|
-| `pytest tests/unit -v` | 228 passed, 0 failed | 46.9s |
-| `pytest tests/regression -m regression` | 6 passed, 0 failed | 31.0s |
-| `pytest tests/equivalence` | 12 passed, 1 failed (pre-existing), 1 xfailed | 54.1s |
-| `pytest tests/integration` | 24 passed, 0 failed | ~10s |
-| `pytest tests/ -v` | 238+ passed | ~2m |
+| `pytest tests/unit -v` | 246 passed, 0 failed | 54.0s |
+| `pytest tests/regression -m regression` | 7 passed, 0 failed | 22.3s |
+| `pytest tests/equivalence` | 17 passed, 1 failed (pre-existing), 1 xfailed | ~60s |
+| `pytest tests/ -v` | 287 passed, 1 failed (pre-existing), 1 xfailed | 201s |
 
 baseline pickle 清单(`tests/baselines/` 内):
 - [x] `qubit_static.pkl` (P0)
@@ -153,6 +141,12 @@ baseline pickle 清单(`tests/baselines/` 内):
 
 27. **P6: CONFIG dead fields still wiring-only** (SimulationConfig + TransmonDefaults + ControlLineDefaults): `reconfigure()` now covers all 6 layers, but the internal consumers (runner.py, numerical_inverse.py, control_line.py) still use their own hardcoded defaults rather than reading from CONFIG. The `reconfigure()` return value can be passed explicitly; the singletons remain unused by most consumers. This is documented in the handbook §1.1 and was not in P6 scope to fix (would require modifying each consumer).
 
+28. **P7: Duplicate time points warning in kernel estimation** (new): Removing the 1e-9 separator from `CompositePulse.get_t_list()` causes consecutive sub-pulses with identical endpoints (e.g., pi/2 ends at 9.5ns, gap starts at 9.5ns) to produce duplicate time points. This triggers the "Warning: Duplicate time points" message in `CompositePulse.get_kernel()` (deprecated). The warning is cosmetic and does not affect kernel accuracy for the `SlidingMeasurementRunner`. A future phase should either deprecate `get_kernel()` fully, or deduplicate the time axis.
+
+29. **P7: PiPulseCompensationExperiment performance** (new): Migrating PiPulseComp to `CONFIG.pulse.t_global` (900 pts) from `t_rabi` (~20 pts) increases the 2D scan cost by 45x. The default setup (200 tau x 21 z = 4200 mesolve calls on 900 pts) takes hours. If performance is unacceptable, users should shorten `t_global` or modify PiPulseComp to use a restricted time window. This is an explicit design trade-off documented in `docs/architecture.md` §10.7.
+
+30. **P7: LM baseline tolerance relaxed** (new): The LM regression test now uses `rtol=1e-4, atol=1e-2` (vs physics default `rtol=1e-6, atol=1e-9`) because the Levenberg-Marquardt optimisation is inherently approximate and small time-grid changes (linspace→arange) alter the optimisation path. The relaxation is documented in the test file.
+
 ---
 
 ## Track B 当前进度(供 Track A 决定何时启动 P3)
@@ -220,6 +214,14 @@ baseline pickle 清单(`tests/baselines/` 内):
 - [x] `pytest tests/regression -m regression` 全部通过 (6/6)
 - [x] `git diff --quiet master -- 'src/*.py'` (pre-existing diff noted in known issue #25)
 
+### 启动 P8 之前
+- [x] P7 已完成
+- [x] `pytest tests/unit -v` 全部通过 (246/246)
+- [x] `pytest tests/regression -m regression` 全部通过 (7/7)
+- [x] `pytest tests/ -v` 287 passed, 1 pre-existing failure
+- [x] `git diff --quiet master -- 'src/*.py'` (pre-existing diff only)
+- [x] `CONFIG.pulse.t_global` 在所有实验 + readout + calibration 中统一使用
+
 ### 启动 P5.1 (Cavity 表征扩展, optional) 之前
 - [ ] P5 已完成
 - [ ] Cavity characterization desired by research team
@@ -259,6 +261,7 @@ Sensing-Project 现已具备:
 | 日期 | Phase | 执行者 | commit SHA | 状态 | token 消耗 (估) | 备注 |
 |---|---|---|---|---|---|---|
 | 2026-05-16 | P6 | refactor-phase-executor | ec64b80 | ✅ DONE | ~80K | P6a: reconfigure() extended to 6 layers. P6d: SensingWorkflow with configure()/run(measure,reconstruct,calibrate)/sweep(param,values)/compare(methods)/plot() + 11 stub methods. P6c: Simulation_sqc.ipynb 4-cell parameter sweep demo. 30 new unit tests (test_workflow.py). All 228 unit tests pass, 6/6 regression pass. P6b skipped per handbook. Known: hammerstein equivalence test pre-existing failure, src/protocal.py pre-existing 1-line diff. |
+| 2026-05-16 | P7 | refactor-phase-executor | df85be8 | ✅ DONE | ~150K | P7.1: trigger + hamiltonian_on / samples_on API on Pulse/FluxSignal/Waveform, 18 new unit tests. P7.2: IQReadoutModel + HamiltonianBuilder t_global migration. P7.3: 7 experiment files migrated (removed ctrl.t_list offset hack, use hamiltonian_on). Cryoscope flux_signal extended to 100ns + trunc boundary check. P7.4: reconstruction layer linspace→arange. P7.5: remove 1e-9 separator; clean remaining linspace. P7.6: calibration mesolve migration. P7.7: fix test assertions. P7.8: 7 baselines regenerated. P7.9: docs/architecture.md §10.7. 246 unit tests + 7 regression + 287 total pass. Known: Duplicate time points warning (1e-9 removal), PiPulseComp 45x slower on t_global, LM tolerance relaxed. |
 | 2026-05-01 | P5 | refactor-phase-executor | 1877732 | ✅ DONE | ~200K | TransferMatrix full implementation with FFT-based apply() + from_dc_matrix(); ChipTopology with lift_qubit_op() + hamiltonian_static() + collapse_operators(); ZCrosstalkWorkflow end-to-end crosstalk extraction + compensation; 37 unit tests (TransferMatrix 16 + ChipTopology 21); 7 integration tests (5 algorithmic + 2 end-to-end); 1 regression baseline (z_crosstalk_default.pkl); total tests: 185 unit + 24 integration + 7 regression + 14 equivalence = 230 collected. Known limitation: H_BA extraction accuracy limited by Wiener reconstruction with n_levels=2 and short t_rabi; algorithmic tests verify core logic at <2% error with synthetic data. Compensation factor > 100 in perfect-data tests. |
 | 2026-05-01 | P4 | refactor-phase-executor | d21194b | ✅ DONE | ~200K | DistortionModel 5 subclasses internalized to sqc/hardware/distortion.py; ControlLine fully implemented; TransferFunctionCalibration with step-response fitting; PredistortionDesigner with analytical IIR inverse (perfect cancellation for single-exp, improvement ~8.5e12x) and frequency-domain fallback; PredistortionValidationWorkflow end-to-end; src_mirror/distortion.py re-exports from sqc/; 45 new unit tests + 9 integration tests + 1 regression test; predistortion_default.pkl baseline generated; 183 total tests pass (148 unit + 6 regression + 14 equivalence + 15 integration). Known limitation: MultiExponentialDistortion frequency inverse does not perfectly cancel due to bilinear warping mismatch; single-exponential recommended for flux-line predistortion. |
 | 2026-05-01 | P3c | refactor-phase-executor | aab4045 | ⚠️ PARTIAL | ~150K | CryoscopeExperiment ported from src/protocal.py case 5; CryoscopeReconstruction stub created; FluxResponseCalibration ramsey method implemented; QubitFrequencyCalibration implemented; TransientFrequencyCalibration stub; Calibration facade updated in src_mirror/protocal.py; get_h_from_phi implemented; IQReadoutModel n_levels fix. Track B 1.1/1.2 NOT complete — stubs raise NotImplementedError. |
