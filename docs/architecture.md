@@ -1,6 +1,6 @@
 # Sensing-Project 全栈化重构平台 — 技术文档
 
-> 版本: v2.1 | 日期: 2026-05-14 | 适用于 sqc v0.2.0
+> 版本: v2.2 | 日期: 2026-05-16 | 适用于 sqc v0.2.0
 >
 > 本文档按照 **Gao, Rol, Touzard, Wang 2021**（PRX Quantum 2, 040202）所提出的 cQED 六层全栈架构组织。
 > 每一章既给出物理动机，又详尽介绍代码模块、扩展接口与开发规范。
@@ -1948,6 +1948,63 @@ def _gap(duration): ...        # 仅在 sequence.py 内部使用
 
 外部代码应通过 `CONFIG.awg.dt` 或 `CONFIG.pulse.make_time(...)` 获取等价功能，不要 import `_GT` 或 `_gap`。
 
+### 10.7 v2.0: 统一全局时间轴策略 (P7)
+
+从 v2.0 起，所有 mesolve 调用统一使用 `CONFIG.pulse.t_global` 作为积分时间轴。此设计解决了时间轴混用导致的静默截断 bug 和 API 不一致。
+
+#### 核心机制: `trigger` + 局部时间轴
+
+每个 `Pulse` / `FluxSignal` 持有:
+- **`trigger: float`** -- 该对象在全局时间轴上的起始时刻 (ns)。local t=0 对应 global t=trigger。
+- **`t_list: np.ndarray`** -- 局部时间轴，永远从 0 起（`arange(0, duration, dt)`）。
+
+#### 投影方法
+
+- `Pulse.hamiltonian_on(t_global)` -- 将局部哈密顿量系数线性插值到全局时间轴上，窗口外置零。
+- `FluxSignal.samples_on(t_global)` -- 将局部信号采样插值到全局时间轴上，窗口外置零。
+- `CompositePulse.hamiltonian_on(t_global)` -- 收集所有子脉冲的投影。
+
+#### 统一实验模板
+
+```python
+t_global = CONFIG.pulse.t_global
+
+# 1) 磁通信号投影到 t_global
+flux_samples_global = self.flux_signal.samples_on(t_global)
+flux_global = FluxSignal(type=8, t_list=t_global, signal=flux_samples_global)
+self.qubit.qubit_in_mag(flux_global, frame=1, omega_d=self.omega_d)
+
+# 2) 控制脉冲投影到 t_global (子脉冲自带 trigger)
+ctrl = create_ramsey_pulse(t_rabi, tau, omega_d, trigger=0.0)
+H_ctrl = ctrl.hamiltonian_on(t_global)
+
+# 3) 合并 H, 在统一 t_global 上 mesolve
+H = (QobjEvo(self.qubit.H_list, tlist=t_global, order=1)
+     + QobjEvo(H_ctrl, tlist=t_global, order=1))
+result = mesolve(H, self.qubit.state, t_global, [], e_ops=[...])
+```
+
+#### 已移除的反模式
+
+| 旧写法 (pre-P7) | 新写法 (P7+) |
+|---|---|
+| `ctrl.t_list -= t_rabi[-1]` 手动偏移 | `create_ramsey_pulse(..., trigger=0.0)` 每个子脉冲自带 trigger |
+| `QobjEvo(..., tlist=qubit.mag_signal.t_list)` 不同 tlist | `QobjEvo(..., tlist=t_global)` 统一 t_global |
+| `np.linspace(start, end, N)` 生成时间轴 | `np.arange(start, end, dt)` 或 `CONFIG.pulse.make_time()` |
+| `CompositePulse.get_t_list()` 累加 + `1e-9` 分隔 | `CompositePulse.hamiltonian_on(t_global)` 子脉冲投影 |
+
+#### 工厂函数 trigger 参数
+
+所有 `create_*_pulse` 函数支持 `trigger=0.0` 参数:
+```python
+ctrl = create_ramsey_pulse(t_rabi, tau, omega_d, trigger=30.0)
+# pi/2 at t=30, gap at t=30+t_rabi[-1], pi/2 at t=30+t_rabi[-1]+tau
+```
+
+#### 性能权衡
+
+`CONFIG.pulse.t_global` 默认 900 点 (dt=0.5ns, -50ns to 400ns)，比旧的每个实验独立时间轴长 5-6x。这是明确的设计取舍：统一 API 先于性能优化。若性能不可接受，可单独 PR 缩短 `t_global`。
+
 ---
 
 ## 11. 设计原则与约定
@@ -2124,6 +2181,7 @@ mesolve(H_list, psi0, t_array, c_ops, e_ops)
 |---|---|---|
 | v1.0 | 2026-05-01 | 初版，覆盖六层架构与基本扩展指南 |
 | v2.0 | 2026-05-12 | 引入全局配置（§10）；按 Gao 2021 章节重组（§12 附录）；每个模块扩展物理对应与扩展点；新增 R1 硬约束说明；测试统计更新到 228 |
+| v2.2 | 2026-05-16 | P7: 统一 mesolve 时间轴到 t_global (§10.7)；Pulse/FluxSignal 加 trigger + hamiltonian_on/samples_on；工厂函数加 trigger 参数；去 np.linspace 时间轴、去 1e-9 分隔 hack；7 baselines 重生成；287+ 测试通过 |
 | v2.1 | 2026-05-14 | 标定模块重构：frequency.py（FluxResponseCalibration + SinglePointFrequencyCalibration 含闭环反馈）、waveform.py（WaveformCalibration + PredistortionDesigner）、scheduler.py（CalibrationScheduler 控制室）；重建前置标定移入 reconstruction/ | 
 | v2.2 | 2026-05-14 | 重建模块重构：按传感协议统一接口 — ramsey.py (RamseyReconstruction)、echo.py (EchoReconstruction)、transient.py (TransientReconstruction wiener/hammerstein/lm)、cryoscope.py、delay_ramsey.py、pi_pulse_comp.py；消除 _qubit_inverse_frequency / _build_h_for_signal 重复；删除 wiener/hammerstein/numerical_inverse/cryoscope_calib/delay_ramsey_calib/tail.py |
 | v2.3 | 2026-05-15 | 频率标定双模人工失谐测频：`_fit_ramsey_frequency` 拆分 `_fft_peak` + `_run_ramsey_sweep` + 编排层，支持单扫（`f_artificial`=float）和双扫（`f_artificial`=None）两种模式；闭环反馈新增 step_method=bisection 和 bracket_tightening 参数；_measure_frequency 切换双扫提高鲁棒性；瞬态测频 `_measure_frequency_transient` 完成实现。实验层新增 DelayRamseyExperiment 和 PiPulseCompensationExperiment，均支持 t_fall 参数；PiPulseComp z* 提取新增抛物线插值。IQ 读出新增 `_resample_hamiltonian` 统一时间网格 + max_step 选项消除插值伪影 |
