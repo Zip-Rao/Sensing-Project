@@ -237,28 +237,170 @@ CONFIG = Config()
 # Convenience: configure AWG sample_rate and have all pulse times follow
 # ══════════════════════════════════════════════════════════════════════════
 
-def reconfigure(sample_rate: float | None = None,
-                t_rabi_duration: float | None = None,
-                t_global_start: float | None = None,
-                t_global_end: float | None = None,
-                **kwargs) -> Config:
+def reconfigure(
+    # ── AWG ────────────────────────────────────────────────────────────
+    sample_rate: float | None = None,
+    # ── Pulse ──────────────────────────────────────────────────────────
+    t_rabi_duration: float | None = None,
+    t_global_start: float | None = None,
+    t_global_end: float | None = None,
+    # ── Reconstruction ─────────────────────────────────────────────────
+    lambda_reg: float | None = None,
+    stim_amplitude: float | None = None,
+    stim_width: float | None = None,
+    lm_n_basis: int | None = None,
+    lm_max_iter: int | None = None,
+    lm_tol: float | None = None,
+    lm_mu_init: float | None = None,
+    lm_basis_type: str | None = None,
+    lm_lambda: float | None = None,
+    cryoscope_tau: float | None = None,
+    delay_ramsey_tau: float | None = None,
+    pi_pulse_T_pi: float | None = None,
+    # ── Simulation ─────────────────────────────────────────────────────
+    atol: float | None = None,
+    rtol: float | None = None,
+    # ── Transmon ───────────────────────────────────────────────────────
+    EC: float | None = None,
+    EJ: float | None = None,
+    T1: float | None = None,
+    T2: float | None = None,
+    flux_bias: float | None = None,
+    n_levels: int | None = None,
+    # ── ControlLine ────────────────────────────────────────────────────
+    impedance: float | None = None,
+    attenuation_db: float | None = None,
+    delay: float | None = None,
+    # ── Generic fall-through ───────────────────────────────────────────
+    **kwargs,
+) -> Config:
     """Return a **new** ``Config`` with updated parameters.
 
-    The global ``CONFIG`` singleton is *not* modified.  Use this to
-    create a per-notebook or per-experiment configuration::
+    The global ``CONFIG`` singleton is *not* modified.  Pass only the
+    parameters you wish to change; all others inherit from the current
+    ``CONFIG``.
 
-        cfg = reconfigure(sample_rate=4.0, t_rabi_duration=20)
-        exp = RamseyExperiment(qubit=q, pulse_cfg=cfg.pulse)
+    Examples
+    --------
+    Single-point tuning::
+
+        cfg = reconfigure(sample_rate=4.0, lambda_reg=5.0, n_levels=3)
+
+    Then use ``cfg.pulse.t_rabi``, ``cfg.reconstruction.*``,
+    ``cfg.transmon.to_dict()`` etc. downstream::
+
+        qubit = TransmonQubit(**cfg.transmon.to_dict())
+        exp = RamseyExperiment(qubit=qubit, t_rabi=cfg.pulse.t_rabi)
+
+    Verification
+    ------------
+    - ``reconfigure(lambda_reg=5.0).reconstruction.lambda_reg == 5.0``
+    - ``reconfigure().reconstruction == CONFIG.reconstruction``
+    - ``CONFIG`` itself is unchanged.
     """
+    # ── AWG ────────────────────────────────────────────────────────────
     awg = AWGConfig(
         sample_rate=sample_rate if sample_rate is not None else CONFIG.awg.sample_rate,
-        voltage_range=kwargs.get("voltage_range", CONFIG.awg.voltage_range),
-        resolution=kwargs.get("resolution", CONFIG.awg.resolution),
+        voltage_range=kwargs.pop("voltage_range", CONFIG.awg.voltage_range),
+        resolution=kwargs.pop("resolution", CONFIG.awg.resolution),
     )
+
+    # ── Pulse ──────────────────────────────────────────────────────────
     pulse = PulseConfig(
         dt=awg.dt,
         t_rabi_duration=t_rabi_duration if t_rabi_duration is not None else CONFIG.pulse.t_rabi_duration,
         t_global_start=t_global_start if t_global_start is not None else CONFIG.pulse.t_global_start,
         t_global_end=t_global_end if t_global_end is not None else CONFIG.pulse.t_global_end,
     )
-    return Config(awg=awg, pulse=pulse)
+
+    # ── Reconstruction ─────────────────────────────────────────────────
+    reconstruction = CONFIG.reconstruction
+    rec_fields = {}
+    if lambda_reg is not None:
+        rec_fields["lambda_reg"] = lambda_reg
+    if stim_amplitude is not None:
+        rec_fields["stim_amplitude"] = stim_amplitude
+    if stim_width is not None:
+        rec_fields["stim_width"] = stim_width
+    if lm_n_basis is not None:
+        rec_fields["lm_n_basis"] = lm_n_basis
+    if lm_max_iter is not None:
+        rec_fields["lm_max_iter"] = lm_max_iter
+    if lm_tol is not None:
+        rec_fields["lm_tol"] = lm_tol
+    if lm_mu_init is not None:
+        rec_fields["lm_mu_init"] = lm_mu_init
+    if lm_basis_type is not None:
+        rec_fields["lm_basis_type"] = lm_basis_type
+    if lm_lambda is not None:
+        rec_fields["lm_lambda"] = lm_lambda
+    if cryoscope_tau is not None:
+        rec_fields["cryoscope_tau"] = cryoscope_tau
+    if delay_ramsey_tau is not None:
+        rec_fields["delay_ramsey_tau"] = delay_ramsey_tau
+    if pi_pulse_T_pi is not None:
+        rec_fields["pi_pulse_T_pi"] = pi_pulse_T_pi
+    if rec_fields:
+        reconstruction = CONFIG.reconstruction.__class__(
+            **{f.name: rec_fields.get(f.name, getattr(CONFIG.reconstruction, f.name))
+               for f in CONFIG.reconstruction.__dataclass_fields__.values()}
+        )
+
+    # ── Simulation ─────────────────────────────────────────────────────
+    simulation = CONFIG.simulation
+    sim_fields = {}
+    if atol is not None:
+        sim_fields["atol"] = atol
+    if rtol is not None:
+        sim_fields["rtol"] = rtol
+    if sim_fields:
+        simulation = CONFIG.simulation.__class__(
+            **{f.name: sim_fields.get(f.name, getattr(CONFIG.simulation, f.name))
+               for f in CONFIG.simulation.__dataclass_fields__.values()}
+        )
+
+    # ── Transmon ───────────────────────────────────────────────────────
+    transmon = CONFIG.transmon
+    tmon_fields = {}
+    if EC is not None:
+        tmon_fields["EC"] = EC
+    if EJ is not None:
+        tmon_fields["EJ"] = EJ
+    if T1 is not None:
+        tmon_fields["T1"] = T1
+    if T2 is not None:
+        tmon_fields["T2"] = T2
+    if flux_bias is not None:
+        tmon_fields["flux_bias"] = flux_bias
+    if n_levels is not None:
+        tmon_fields["n_levels"] = n_levels
+    if tmon_fields:
+        transmon = CONFIG.transmon.__class__(
+            **{f.name: tmon_fields.get(f.name, getattr(CONFIG.transmon, f.name))
+               for f in CONFIG.transmon.__dataclass_fields__.values()
+               if f.name not in ("F01_RANGE", "EJ_EC_RANGE", "ALPHA_RANGE")}
+        )
+
+    # ── ControlLine ────────────────────────────────────────────────────
+    control_line = CONFIG.control_line
+    cl_fields = {}
+    if impedance is not None:
+        cl_fields["impedance"] = impedance
+    if attenuation_db is not None:
+        cl_fields["attenuation_db"] = attenuation_db
+    if delay is not None:
+        cl_fields["delay"] = delay
+    if cl_fields:
+        control_line = CONFIG.control_line.__class__(
+            **{f.name: cl_fields.get(f.name, getattr(CONFIG.control_line, f.name))
+               for f in CONFIG.control_line.__dataclass_fields__.values()}
+        )
+
+    return Config(
+        awg=awg,
+        pulse=pulse,
+        reconstruction=reconstruction,
+        simulation=simulation,
+        transmon=transmon,
+        control_line=control_line,
+    )
