@@ -82,11 +82,9 @@ def _run_ramsey_sweep(
             phase1=0.0, phase2=phase2,
             qubit=qubit,
         )
-        ctrl.t_list = ctrl.t_list - t_rabi[-1]
-
         H = (
             QobjEvo(qubit.H_list, tlist=qubit.mag_signal.t_list, order=1)
-            + QobjEvo(ctrl.hamiltonian, tlist=ctrl.t_list, order=1)
+            + QobjEvo(ctrl.hamiltonian_on(t_global), tlist=t_global, order=1)
         )
         result = mesolve(
             H, qubit.state, t_global, [],
@@ -621,17 +619,14 @@ class SinglePointFrequencyCalibration(Calibration):
             phase1=np.pi / 2, phase2=np.pi,
             qubit=self.qubit,
         )
-        ctrl_x.t_list = ctrl_x.t_list - self.t_rabi[-1]
-        ctrl_mx.t_list = ctrl_mx.t_list - self.t_rabi[-1]
-
-        # -- run both measurements ---------------------------------------
+        # -- run both measurements (P7: use hamiltonian_on on t_global) ---
         psi_e = basis(n_levels, 1)
         H_base = QobjEvo(
             self.qubit.H_list, tlist=self.qubit.mag_signal.t_list, order=1,
         )
 
         H_x = H_base + QobjEvo(
-            ctrl_x.hamiltonian, tlist=ctrl_x.t_list, order=1,
+            ctrl_x.hamiltonian_on(self.t_global), tlist=self.t_global, order=1,
         )
         res_x = mesolve(
             H_x, self.qubit.state, self.t_global, [],
@@ -640,7 +635,7 @@ class SinglePointFrequencyCalibration(Calibration):
         p_x = float(res_x.expect[0][-1])
 
         H_mx = H_base + QobjEvo(
-            ctrl_mx.hamiltonian, tlist=ctrl_mx.t_list, order=1,
+            ctrl_mx.hamiltonian_on(self.t_global), tlist=self.t_global, order=1,
         )
         res_mx = mesolve(
             H_mx, self.qubit.state, self.t_global, [],
