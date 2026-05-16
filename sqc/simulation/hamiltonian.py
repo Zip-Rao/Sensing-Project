@@ -75,7 +75,8 @@ class HamiltonianBuilder:
 
         # Determine time axis and frequency coefficients
         if flux_signal is None:
-            t_global = np.linspace(0, 100, 100)
+            from sqc.config import CONFIG
+            t_global = CONFIG.pulse.make_time(0, 100)
             freq_coeffs = np.full(len(t_global), spec.frequency())
         else:
             t_global = np.asarray(flux_signal.t_list, dtype=float)

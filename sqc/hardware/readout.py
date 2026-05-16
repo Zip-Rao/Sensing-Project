@@ -160,6 +160,8 @@ class IQReadoutModel(ReadoutModel):
 
         from sqc.control.sequence import create_ramsey_pulse
 
+        t_global = CONFIG.pulse.t_global
+
         ctrl_I = create_ramsey_pulse(
             t_rabi, tau, omega_d=omega_d,
             phase1=np.pi / 2, phase2=0.0,
@@ -171,24 +173,23 @@ class IQReadoutModel(ReadoutModel):
             qubit=qubit,
         )
 
-        # Resample pulse Hamiltonians onto the qubit's signal time grid
-        # so both QobjEvo objects share a single tlist.  Eliminates
-        # interpolation artefacts when pulse and signal grids differ.
-        t_sig = np.asarray(qubit.mag_signal.t_list, dtype=float)
-        H_I_resampled = _resample_hamiltonian(ctrl_I.hamiltonian,
-                                              ctrl_I.t_list, t_sig)
-        H_Q_resampled = _resample_hamiltonian(ctrl_Q.hamiltonian,
-                                              ctrl_Q.t_list, t_sig)
+        # Project control Hamiltonians onto the unified global time axis.
+        H_I_on = ctrl_I.hamiltonian_on(t_global)
+        H_Q_on = ctrl_Q.hamiltonian_on(t_global)
 
-        t_evolve = t_sig
+        # Resample qubit H_list onto the global time grid.  (After the
+        # experiment layer is migrated in P7.3, qubit.H_list will already
+        # be defined on t_global and this becomes a trivial identity.)
+        t_sig = np.asarray(qubit.mag_signal.t_list, dtype=float)
+        H_q_resampled = _resample_hamiltonian(qubit.H_list, t_sig, t_global)
 
         H_I = (
-            QobjEvo(H_I_resampled, tlist=t_evolve, order=1)
-            + QobjEvo(qubit.H_list, tlist=t_evolve, order=1)
+            QobjEvo(H_q_resampled, tlist=t_global, order=1)
+            + QobjEvo(H_I_on, tlist=t_global, order=1)
         )
         H_Q = (
-            QobjEvo(H_Q_resampled, tlist=t_evolve, order=1)
-            + QobjEvo(qubit.H_list, tlist=t_evolve, order=1)
+            QobjEvo(H_q_resampled, tlist=t_global, order=1)
+            + QobjEvo(H_Q_on, tlist=t_global, order=1)
         )
 
         psi_e = basis(qubit.n_levels, 1)
@@ -198,11 +199,11 @@ class IQReadoutModel(ReadoutModel):
         # edges (where Hamiltonian coefficients change sharply).
         _dt = float(CONFIG.awg.dt)
         result_I = mesolve(
-            H_I, qubit.state, t_evolve, [], e_ops=e_ops,
+            H_I, qubit.state, t_global, [], e_ops=e_ops,
             options={"store_states": True, "max_step": _dt},
         )
         result_Q = mesolve(
-            H_Q, qubit.state, t_evolve, [], e_ops=e_ops,
+            H_Q, qubit.state, t_global, [], e_ops=e_ops,
             options={"store_states": True, "max_step": _dt},
         )
 
