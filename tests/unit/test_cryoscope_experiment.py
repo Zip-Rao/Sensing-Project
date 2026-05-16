@@ -34,7 +34,8 @@ class TestCryoscopeExperiment:
         q = _make_qubit()
         exp = CryoscopeExperiment(qubit=q, tau=20.0, t_rabi=np.linspace(0, 5, 10))
         assert exp.flux_signal is not None
-        assert len(exp.flux_signal.t_list) == 160
+        # P7: default flux_signal extended from 80 ns (160 pts) to 100 ns (200 pts)
+        assert len(exp.flux_signal.t_list) == 200
         assert len(exp.trunc_list) > 0
 
     def test_accepts_custom_signal(self):

@@ -12,7 +12,8 @@ from qutip import QobjEvo, basis, mesolve
 
 from sqc.config import CONFIG
 from sqc.experiments.base import Experiment
-from sqc.control.sequence import create_pulse
+from sqc.control.pulse import Pulse
+from sqc.control.flux_signal import FluxSignal
 
 
 @dataclass
@@ -26,7 +27,7 @@ class RabiExperiment(Experiment):
     qubit : TransmonQubit
         Qubit (src or sqc version).
     t_rabi : np.ndarray or None
-        Rabi time axis (ns). Default linspace(0, 40, 1000).
+        Rabi time axis (ns). Default arange(0, 40, dt).
     omega_d : float or None
         Drive frequency (rad*GHz). Default qubit.frequency.
     """
@@ -42,27 +43,35 @@ class RabiExperiment(Experiment):
             self.omega_d = self.qubit.frequency
 
     def build_sequence(self):
-        """Build Rabi pulse (QobjEvo)."""
-        return create_pulse(
-            self.qubit, frame=1, type=1,
-            t_list=self.t_rabi, omega_d=self.omega_d,
-            phase=0.0,
+        """Build Rabi pulse as a Pulse object (with trigger=0)."""
+        Omega = FluxSignal(
+            type=1, t_list=self.t_rabi,
+            amplitude=(np.pi / 2.0) / (self.t_rabi[-1] - self.t_rabi[0]),
+        )
+        return Pulse(
+            frame=1, omega_d=self.omega_d, phase=0.0,
+            Omega=Omega, is_rwa=True, qubit=self.qubit, trigger=0.0,
         )
 
     def run(self):
-        """Execute Rabi experiment.
+        """Execute Rabi experiment on unified global time axis.
 
         Returns
         -------
         qutip.Result
             Raw mesolve result (matches legacy case 0 return type).
         """
+        t_global = CONFIG.pulse.t_global
         psi_e = basis(self.qubit.n_levels, 1)
         H_0 = self.qubit.get_hamiltonian_rwa(self.omega_d)
-        H_pulse = self.build_sequence()
-        H_rabi = QobjEvo(H_0) + QobjEvo(H_pulse, tlist=self.t_rabi)
+        rabi_pulse = self.build_sequence()
+        H_rabi = (
+            QobjEvo(H_0, tlist=t_global)
+            + QobjEvo(rabi_pulse.hamiltonian_on(t_global),
+                       tlist=t_global, order=1)
+        )
         result = mesolve(
-            H_rabi, self.qubit.state, self.t_rabi, [],
+            H_rabi, self.qubit.state, t_global, [],
             e_ops=[psi_e * psi_e.dag()],
         )
         return result

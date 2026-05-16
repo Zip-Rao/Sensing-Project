@@ -99,19 +99,24 @@ class DiffEchoExperiment(Experiment):
         return None
 
     def run(self) -> ExperimentResult:
-        """Execute differential echo experiment.
+        """Execute differential echo experiment on unified global time axis.
 
         Returns
         -------
         ExperimentResult
         """
-        # Build composite flux signal: k*2 copies
+        t_global = self.t_global
+
+        # Build composite flux signal: k*2 copies, then project onto t_global.
         phi_list = [self.flux_signal.copy() for _ in range(2 * self.k)]
         composite_phi = CompositeSignal(phi_list)
-
-        # Couple flux to qubit
+        flux_global = FluxSignal(
+            type=8, t_list=t_global,
+            signal=composite_phi.samples_on(t_global),
+            trigger=0.0,
+        )
         self.qubit.qubit_in_mag(
-            composite_phi, frame=1, omega_d=self.omega_d
+            flux_global, frame=1, omega_d=self.omega_d
         )
 
         psi_e = basis(self.qubit.n_levels, 1)
@@ -123,22 +128,21 @@ class DiffEchoExperiment(Experiment):
                 k=self.k, omega_d=self.omega_d,
                 qubit=self.qubit,
             )
-            ctrl.t_list = ctrl.t_list - self.t_rabi[-1]
 
             H = (
                 QobjEvo(
                     self.qubit.H_list,
-                    tlist=self.qubit.mag_signal.t_list,
+                    tlist=t_global,
                     order=1,
                 )
                 + QobjEvo(
-                    ctrl.hamiltonian,
-                    tlist=ctrl.t_list,
+                    ctrl.hamiltonian_on(t_global),
+                    tlist=t_global,
                     order=1,
                 )
             )
             result = mesolve(
-                H, self.qubit.state, self.t_global, [],
+                H, self.qubit.state, t_global, [],
                 e_ops=[psi_e * psi_e.dag()],
             )
             p_e = result.expect[0][-1]

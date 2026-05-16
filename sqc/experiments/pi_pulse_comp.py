@@ -16,13 +16,12 @@ Protocol:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Literal
 
 import numpy as np
 from qutip import QobjEvo, basis, mesolve
 
 from sqc.control.flux_signal import FluxSignal
-from sqc.control.sequence import create_pulse
+from sqc.control.pulse import Pulse
 from sqc.config import CONFIG
 from sqc.experiments.base import Experiment
 from sqc.simulation.result import ExperimentResult
@@ -95,7 +94,7 @@ class PiPulseCompensationExperiment(Experiment):
         return None
 
     def run(self) -> ExperimentResult:
-        """Execute pi-pulse compensation experiment.
+        """Execute pi-pulse compensation experiment on unified t_global.
 
         Returns
         -------
@@ -107,58 +106,56 @@ class PiPulseCompensationExperiment(Experiment):
         """
         n_tau = len(self.tau_list)
         n_z = len(self.z_list)
+        t_global = CONFIG.pulse.t_global
 
-        # Use the pi-pulse time axis as both signal and mesolve tlist.
-        # This avoids QobjEvo extrapolation of the pulse beyond its
-        # intended duration (no global change to create_pulse needed).
-        t_sig = np.asarray(self.t_rabi, dtype=float).copy()
+        psi_e = basis(self.qubit.n_levels, 1)  # type: ignore[arg-type]
 
-        psi_e = basis(self.qubit.n_levels, 1)
+        # Pre-build the pi-pulse (trigger=0, so it starts at t=0 on global).
+        Omega_pi = FluxSignal(
+            type=1, t_list=self.t_rabi,
+            amplitude=np.pi / (self.t_rabi[-1] - self.t_rabi[0]),
+        )
+        pi_pulse = Pulse(
+            frame=1, omega_d=self.omega_bias, phase=0.0,
+            Omega=Omega_pi, is_rwa=True, qubit=self.qubit, trigger=0.0,
+        )
+        H_pi_global = pi_pulse.hamiltonian_on(t_global)
 
         p_e_2d = np.zeros((n_tau, n_z), dtype=float)
 
         for i, tau in enumerate(self.tau_list):
+            # Sample the tail value at delay tau (constant during pi-pulse).
+            tail_val = float(self.flux_signal.value_at(
+                self.t_fall + tau + 0.0
+            ))
             for j, z in enumerate(self.z_list):
-                # Flux: tail + z during entire pi-pulse duration
-                tail = np.array(
-                    [self.flux_signal.value_at(self.t_fall + tau + float(t))
-                     for t in t_sig],
-                    dtype=float,
-                )
-                signal = tail + float(z)
+                flux_val = tail_val + float(z)
 
-                phi_composite = FluxSignal(
-                    type=8, t_list=t_sig, signal=signal,
+                # Flux is non-zero only during the pi-pulse window.
+                flux_samples = np.zeros(len(t_global), dtype=float)
+                pulse_mask = (
+                    (t_global >= 0.0)
+                    & (t_global <= float(self.t_rabi[-1]))
                 )
+                flux_samples[pulse_mask] = flux_val
 
+                phi = FluxSignal(
+                    type=8, t_list=t_global, signal=flux_samples,
+                    trigger=0.0,
+                )
                 self.qubit.qubit_in_mag(
-                    phi_composite, frame=1, omega_d=self.omega_bias,
-                )
-
-                # Pi-pulse Hamiltonian (on t_rabi, starts at t=0)
-                H_pi = create_pulse(
-                    self.qubit,
-                    frame=1,
-                    type=1,
-                    t_list=t_sig,
-                    omega_d=self.omega_bias,
-                    phase=0.0,
-                    angle=np.pi,
+                    phi, frame=1, omega_d=self.omega_bias,
                 )
 
                 H_total = (
-                    QobjEvo(
-                        self.qubit.H_list,
-                        tlist=self.qubit.mag_signal.t_list,
-                        order=1,
-                    )
-                    + H_pi
+                    QobjEvo(self.qubit.H_list, tlist=t_global, order=1)
+                    + QobjEvo(H_pi_global, tlist=t_global, order=1)
                 )
 
                 result = mesolve(
                     H_total,
                     self.qubit.state,
-                    t_sig,
+                    t_global,
                     [],
                     e_ops=[psi_e * psi_e.dag()],
                 )

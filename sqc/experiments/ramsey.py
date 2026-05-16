@@ -83,23 +83,32 @@ class RamseyExperiment(Experiment):
         return None
 
     def run(self) -> ExperimentResult:
-        """Execute Ramsey experiment.
+        """Execute Ramsey experiment on unified global time axis.
 
         Returns
         -------
         ExperimentResult
             With data["p_e"], axes["tau"], data["flux_samples"].
         """
-        # 1. Couple flux to qubit (matching legacy side effect)
+        t_global = self.t_global
+
+        # 1. Project flux signal onto global time axis and couple to qubit
+        flux_samples_global = self.flux_signal.samples_on(t_global)
+        flux_global = FluxSignal(
+            type=8, t_list=t_global, signal=flux_samples_global,
+            trigger=0.0,
+        )
         self.qubit.qubit_in_mag(
-            self.flux_signal, frame=1, omega_d=self.omega_d
+            flux_global, frame=1, omega_d=self.omega_d
         )
 
         psi_e = basis(self.qubit.n_levels, 1)
         p_e_list = np.zeros(len(self.tau_list))
 
         for i, tau in enumerate(self.tau_list):
-            # Build Ramsey pulse sequence: pi/2 - tau - pi/2
+            # Build Ramsey pulse sequence: pi/2 - tau - pi/2.
+            # Each sub-pulse carries its own global trigger, so we no
+            # longer need the ``ctrl.t_list -= ...`` offset hack.
             ctrl = create_ramsey_pulse(
                 self.t_rabi, tau,
                 omega_d=self.omega_d,
@@ -107,23 +116,21 @@ class RamseyExperiment(Experiment):
                 phase2=self.phase2,
                 qubit=self.qubit,
             )
-            # Align time axis: time 0 = end of first pi/2 pulse
-            ctrl.t_list = ctrl.t_list - self.t_rabi[-1]
 
             H = (
                 QobjEvo(
                     self.qubit.H_list,
-                    tlist=self.qubit.mag_signal.t_list,
+                    tlist=t_global,
                     order=1,
                 )
                 + QobjEvo(
-                    ctrl.hamiltonian,
-                    tlist=ctrl.t_list,
+                    ctrl.hamiltonian_on(t_global),
+                    tlist=t_global,
                     order=1,
                 )
             )
             result = mesolve(
-                H, self.qubit.state, self.t_global, [],
+                H, self.qubit.state, t_global, [],
                 e_ops=[psi_e * psi_e.dag()],
             )
             p_e_list[i] = result.expect[0][-1]

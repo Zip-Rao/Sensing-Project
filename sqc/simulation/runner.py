@@ -18,6 +18,7 @@ from typing import Optional
 import numpy as np
 from qutip import Qobj, QobjEvo, basis, expect, mesolve, qeye
 
+from sqc.config import CONFIG
 from .result import ExperimentResult
 
 
@@ -153,9 +154,10 @@ class SlidingMeasurementRunner(RunnerBase):
         # Compute scan list (delay axis)
         if scan_list is None:
             delay_start = phi_tlist[0] - 0.5 * pulse_tlist[-1]
-            delay_end = phi_tlist[-1] + 0.5 * pulse_tlist[-1]
             n_samples = len(phi_tlist) + len(pulse_tlist) - 1
-            scan_list = np.linspace(delay_start, delay_end, n_samples)
+            _dt = float(CONFIG.awg.dt)
+            scan_start = np.floor(delay_start / _dt) * _dt
+            scan_list = np.arange(scan_start, scan_start + n_samples * _dt, _dt)[:n_samples]
 
         # Pre-compute qubit_t array (one qubit per time point under flux)
         qubit_t = qubit.qubit_under_mag(phi_signal)
@@ -236,7 +238,9 @@ class SlidingMeasurementRunner(RunnerBase):
                 t_delay + 0.5 * pulse_tlist[-1],
             )
             N_ev = len(phi_signal.t_list) + len(pulse_tlist) - 1
-            t_evole = np.linspace(t_start_ev, t_end_ev, N_ev)
+            _dt = float(CONFIG.awg.dt)
+            t_start_grid = np.floor(t_start_ev / _dt) * _dt
+            t_evole = np.arange(t_start_grid, t_start_grid + N_ev * _dt, _dt)[:N_ev]
 
         if H is None:
             H_pulse = lambda t: control_pulse.get_hamiltonian_at(t)
@@ -314,7 +318,9 @@ class SlidingMeasurementRunner(RunnerBase):
             t_delay + 0.5 * pulse_tlist[-1],
         )
         N = len(phi_signal.t_list) + len(pulse_tlist) - 1
-        t_evole = np.linspace(t_start, t_end, N)
+        _dt = float(CONFIG.awg.dt)
+        t_start_grid = np.floor(t_start / _dt) * _dt
+        t_evole = np.arange(t_start_grid, t_start_grid + N * _dt, _dt)[:N]
 
         freq_coeffs = np.zeros(N)
         EJ_coeffs = np.zeros(N)

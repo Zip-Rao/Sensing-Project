@@ -61,13 +61,25 @@ class CryoscopeExperiment(Experiment):
         if self.omega_d is None:
             self.omega_d = self.qubit.frequency
         if self.flux_signal is None:
+            # Extended to 100 ns to prevent silent truncation failures
+            # when the user lengthens trunc_list beyond the signal window.
             self.flux_signal = FluxSignal(
                 type=2,
-                t_list=CONFIG.pulse.make_time(0, 80),
+                t_list=CONFIG.pulse.make_time(0, 100),
                 amplitude=0.01,
             )
         if self.trunc_list is None:
-            self.trunc_list = self.flux_signal.t_list[140:20:-1]
+            self.trunc_list = self.flux_signal.t_list[180:40:-1]
+
+        # -- boundary sanity check -------------------------------------------
+        _t_max = float(self.flux_signal.t_list[-1])
+        _bad = [t for t in self.trunc_list if t > _t_max]
+        if _bad:
+            raise ValueError(
+                f"trunc_list contains values ({_bad}) beyond "
+                f"flux_signal.t_list[-1] ({_t_max} ns). "
+                f"Extend flux_signal.t_list or shorten trunc_list."
+            )
 
     def build_sequence(self):
         """Cryoscope sequence is constructed per-truncation in run()."""

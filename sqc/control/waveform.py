@@ -70,6 +70,27 @@ class Waveform:
         idx = int(np.argmin(np.abs(self.t_list - t)))
         return float(self.samples[idx])
 
+    def samples_on(self, t_global: np.ndarray) -> np.ndarray:
+        """Project samples onto a global time axis.
+
+        Linearly interpolates self.samples onto *t_global* within
+        ``[self.t_list[0], self.t_list[-1]]``; zero outside.
+
+        Parameters
+        ----------
+        t_global : np.ndarray
+            Global time points (ns).
+
+        Returns
+        -------
+        np.ndarray
+            Interpolated values, shape ``(len(t_global),)``.
+        """
+        out = np.zeros(len(t_global), dtype=float)
+        mask = (t_global >= self.t_list[0]) & (t_global <= self.t_list[-1])
+        out[mask] = np.interp(t_global[mask], self.t_list, self.samples)
+        return out
+
     def truncate(self, t_start: float, t_end: float) -> "Waveform":
         """Return a NEW waveform with samples zeroed outside [t_start, t_end].
 
