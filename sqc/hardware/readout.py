@@ -67,6 +67,46 @@ class IdealProjectiveReadout(ReadoutModel):
 
 
 # ---------------------------------------------------------------------------
+# helpers
+# ---------------------------------------------------------------------------
+
+def _resample_hamiltonian(hamiltonian, src_tlist, dst_tlist):
+    """Resample a list-format Hamiltonian onto a new time grid.
+
+    Parameters
+    ----------
+    hamiltonian : list
+        QuTiP list-format Hamiltonian: ``[H0, [H1, c1], [H2, c2], ...]``.
+    src_tlist : array-like
+        Original time points matching the coefficient arrays.
+    dst_tlist : array-like
+        Target time grid to interpolate onto.
+
+    Returns
+    -------
+    list
+        New list-format Hamiltonian with coefficients resampled onto
+        ``dst_tlist``.
+    """
+    import numpy as np
+    src = np.asarray(src_tlist, dtype=float)
+    dst = np.asarray(dst_tlist, dtype=float)
+    out = []
+    for term in hamiltonian:
+        if isinstance(term, list) and len(term) == 2:
+            op, coeffs_src = term
+            c_src = np.asarray(coeffs_src, dtype=complex)
+            if c_src.ndim == 0 or len(c_src) == 1:
+                c_dst = np.full(len(dst), complex(c_src))
+            else:
+                c_dst = np.interp(dst, src, c_src.real).astype(complex)
+            out.append([op, c_dst])
+        else:
+            out.append(term)
+    return out
+
+
+# ---------------------------------------------------------------------------
 # IQReadoutModel
 # ---------------------------------------------------------------------------
 
@@ -131,33 +171,39 @@ class IQReadoutModel(ReadoutModel):
             qubit=qubit,
         )
 
-        t_evolve = ctrl_I.t_list
+        # Resample pulse Hamiltonians onto the qubit's signal time grid
+        # so both QobjEvo objects share a single tlist.  Eliminates
+        # interpolation artefacts when pulse and signal grids differ.
+        t_sig = np.asarray(qubit.mag_signal.t_list, dtype=float)
+        H_I_resampled = _resample_hamiltonian(ctrl_I.hamiltonian,
+                                              ctrl_I.t_list, t_sig)
+        H_Q_resampled = _resample_hamiltonian(ctrl_Q.hamiltonian,
+                                              ctrl_Q.t_list, t_sig)
+
+        t_evolve = t_sig
 
         H_I = (
-            QobjEvo(ctrl_I.hamiltonian, tlist=ctrl_I.t_list, order=1)
-            + QobjEvo(qubit.H_list, tlist=qubit.mag_signal.t_list, order=1)
+            QobjEvo(H_I_resampled, tlist=t_evolve, order=1)
+            + QobjEvo(qubit.H_list, tlist=t_evolve, order=1)
         )
         H_Q = (
-            QobjEvo(ctrl_Q.hamiltonian, tlist=ctrl_Q.t_list, order=1)
-            + QobjEvo(qubit.H_list, tlist=qubit.mag_signal.t_list, order=1)
+            QobjEvo(H_Q_resampled, tlist=t_evolve, order=1)
+            + QobjEvo(qubit.H_list, tlist=t_evolve, order=1)
         )
 
         psi_e = basis(qubit.n_levels, 1)
         e_ops = [psi_e * psi_e.dag()]
 
+        # max_step prevents the adaptive stepper from skipping over pulse
+        # edges (where Hamiltonian coefficients change sharply).
+        _dt = float(CONFIG.awg.dt)
         result_I = mesolve(
             H_I, qubit.state, t_evolve, [], e_ops=e_ops,
-            options={"store_states": True},
+            options={"store_states": True, "max_step": _dt},
         )
         result_Q = mesolve(
             H_Q, qubit.state, t_evolve, [], e_ops=e_ops,
-            options={"store_states": True},
-        )
-
-        # Print state at t=10 ns (matching legacy debug print)
-        idx = np.searchsorted(t_evolve, 10.0)
-        print(
-            f"State at t={t_evolve[idx]:.2f} ns: {result_I.states[idx]}"
+            options={"store_states": True, "max_step": _dt},
         )
 
         return {

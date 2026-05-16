@@ -47,7 +47,7 @@ from sqc.experiments.echo import DiffEchoExperiment
 from sqc.experiments.transient import TransientSensingExperiment
 from sqc.experiments.cryoscope import CryoscopeExperiment
 from sqc.reconstruction.kernel import KernelEstimator
-from sqc.reconstruction.wiener import WienerReconstruction
+from sqc.reconstruction.transient import TransientReconstruction
 from sqc.hardware.distortion import (
     SingleExponentialDistortion, MultiExponentialDistortion, FIRDistortion,
 )
@@ -744,7 +744,7 @@ def run_reconstruction(EC, EJ, T1, T2, flux, n_levels, recon_method, lambda_reg)
             result = exp.run()
 
         if recon_method == "Wiener Deconvolution":
-            recon = WienerReconstruction(lambda_reg=lambda_reg)
+            recon = TransientReconstruction(method="wiener", lambda_reg=lambda_reg)
             dt = result.axes["scan"][1] - result.axes["scan"][0]
             phi_rec = recon.reconstruct(
                 measurement=ExperimentResult(
@@ -960,7 +960,7 @@ STACK_REFERENCES = {
         ("control",       "from sqc.control.flux_signal import FluxSignal"),
         ("experiments",   "from sqc.experiments.transient import TransientSensingExperiment"),
         ("reconstruction","from sqc.reconstruction.kernel import KernelEstimator"),
-        ("reconstruction","from sqc.reconstruction.wiener import WienerReconstruction"),
+        ("reconstruction","from sqc.reconstruction.transient import TransientReconstruction"),
     ],
     "Predistort a flux pulse": [
         ("control",       "from sqc.control.waveform import Waveform"),
@@ -980,7 +980,7 @@ STACK_REFERENCES = {
         ("devices",       "from sqc.devices.transmon import TransmonQubit"),
         ("control",       "from sqc.control.pulse import CompositePulse"),
         ("reconstruction","from sqc.reconstruction.basis import generate_basis_functions"),
-        ("reconstruction","from sqc.reconstruction.numerical_inverse import LMReconstruction"),
+        ("reconstruction","from sqc.reconstruction.transient import TransientReconstruction"),
     ],
 }
 
@@ -1079,7 +1079,7 @@ def build_app():
           <td>FluxResponseCalibration • SinglePointFrequencyCalibration • WaveformCalibration • PredistortionDesigner • CalibrationScheduler</td></tr>
       <tr><td><span class="layer-badge badge-reconstruction">reconstruction</span></td>
           <td><code>sqc/reconstruction/</code></td>
-          <td>KernelEstimator • WienerReconstruction • HammersteinWienerReconstruction • LMReconstruction • CryoscopeReconstruction</td></tr>
+          <td>RamseyReconstruction • EchoReconstruction • TransientReconstruction • CryoscopeReconstruction • DelayRamseyReconstruction • PiPulseCompReconstruction</td></tr>
       <tr style="background:#F8FAFC;"><td><span class="layer-badge badge-experiments">experiments</span></td>
           <td><code>sqc/experiments/</code></td>
           <td>RabiExperiment • RamseyExperiment • DiffEchoExperiment • TransientSensingExperiment • CryoscopeExperiment</td></tr>

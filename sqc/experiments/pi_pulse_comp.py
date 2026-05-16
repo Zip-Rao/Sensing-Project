@@ -77,6 +77,8 @@ class PiPulseCompensationExperiment(Experiment):
     t_rabi: np.ndarray = field(
         default_factory=lambda: CONFIG.pulse.t_rabi.copy()
     )
+    t_fall: float = 0.0
+    """Falling-edge time in the flux signal (ns). tau is relative to this."""
 
     def __post_init__(self):
         if self.omega_bias is None:
@@ -106,11 +108,10 @@ class PiPulseCompensationExperiment(Experiment):
         n_tau = len(self.tau_list)
         n_z = len(self.z_list)
 
-        # Pi-pulse and compensation both start at t=0 and overlap.
-        # t_sig is also the mesolve time axis (starts at 0 → no
-        # backward extrapolation of qubit flux to t < 0).
-        t_total = self.t_rabi[-1] + self.t_rabi[-1]  # pi-pulse + post-buffer
-        t_sig = CONFIG.pulse.make_time(0, t_total)
+        # Use the pi-pulse time axis as both signal and mesolve tlist.
+        # This avoids QobjEvo extrapolation of the pulse beyond its
+        # intended duration (no global change to create_pulse needed).
+        t_sig = np.asarray(self.t_rabi, dtype=float).copy()
 
         psi_e = basis(self.qubit.n_levels, 1)
 
@@ -118,18 +119,13 @@ class PiPulseCompensationExperiment(Experiment):
 
         for i, tau in enumerate(self.tau_list):
             for j, z in enumerate(self.z_list):
-                # Flux: zero before/after pi-pulse; tail + z during pi-pulse
-                signal = np.zeros(len(t_sig), dtype=float)
-                pulse_mask = (
-                    (t_sig >= 0)
-                    & (t_sig <= self.t_rabi[-1])
-                )
+                # Flux: tail + z during entire pi-pulse duration
                 tail = np.array(
-                    [self.flux_signal.value_at(tau + float(t))
-                     for t in t_sig[pulse_mask]],
+                    [self.flux_signal.value_at(self.t_fall + tau + float(t))
+                     for t in t_sig],
                     dtype=float,
                 )
-                signal[pulse_mask] = tail + float(z)
+                signal = tail + float(z)
 
                 phi_composite = FluxSignal(
                     type=8, t_list=t_sig, signal=signal,
@@ -144,7 +140,7 @@ class PiPulseCompensationExperiment(Experiment):
                     self.qubit,
                     frame=1,
                     type=1,
-                    t_list=np.asarray(self.t_rabi, dtype=float),
+                    t_list=t_sig,
                     omega_d=self.omega_bias,
                     phase=0.0,
                     angle=np.pi,
@@ -168,11 +164,22 @@ class PiPulseCompensationExperiment(Experiment):
                 )
                 p_e_2d[i, j] = float(result.expect[0][-1])
 
-        # Extract optimal z for each tau
-        z_star = np.asarray(
-            [self.z_list[int(np.argmax(p_e_2d[i]))] for i in range(n_tau)],
-            dtype=float,
-        )
+        # Extract optimal z for each tau (parabolic interpolation for
+        # sub-resolution peak; avoids staircase plateaus from coarse z_list).
+        z_star = np.empty(n_tau, dtype=float)
+        dz = float(self.z_list[1] - self.z_list[0])
+        for i in range(n_tau):
+            j = int(np.argmax(p_e_2d[i]))
+            if 0 < j < n_z - 1:
+                # sub-resolution via parabola vertex
+                pl, pc, pr = p_e_2d[i, j - 1], p_e_2d[i, j], p_e_2d[i, j + 1]
+                denom = pr - 2.0 * pc + pl
+                if abs(denom) > 1e-15:
+                    z_star[i] = self.z_list[j] - 0.5 * dz * (pr - pl) / denom
+                else:
+                    z_star[i] = self.z_list[j]
+            else:
+                z_star[i] = self.z_list[j]
 
         return ExperimentResult(
             data={

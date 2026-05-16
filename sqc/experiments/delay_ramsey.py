@@ -75,6 +75,8 @@ class DelayRamseyExperiment(Experiment):
     run_baseline: bool = False  # Default off: numerical noise at zero
                                 # detuning makes arctan2(0, 0) unstable.
                                 # Use calibration intercept instead.
+    t_fall: float = 0.0
+    """Falling-edge time in the flux signal (ns). t_d is relative to this."""
 
     def __post_init__(self):
         if self.omega_d is None:
@@ -110,15 +112,17 @@ class DelayRamseyExperiment(Experiment):
             omega_d=self.omega_d,
         )
 
-        # Baseline measurement (zero flux)
-        varphi_base: float | None = None
+        # Baseline measurement (zero flux). Store I/Q components for
+        # complex-space subtraction (avoids arctan2(0,0) singularity
+        # when signal is small at large t_d).
+        p_e_I_base: float | None = None
+        p_e_Q_base: float | None = None
         if self.run_baseline:
             Phi_zero = FluxSignal(type=0, t_list=t_sig)
             self.qubit.qubit_in_mag(Phi_zero, frame=1, omega_d=self.omega_d)
             base_meas = readout.measure(self.qubit)
-            varphi_base = float(np.arctan2(
-                0.5 - base_meas["p_e_I"], base_meas["p_e_Q"] - 0.5
-            ))
+            p_e_I_base = float(base_meas["p_e_I"])
+            p_e_Q_base = float(base_meas["p_e_Q"])
 
         p_e_I_list: list[float] = []
         p_e_Q_list: list[float] = []
@@ -133,7 +137,7 @@ class DelayRamseyExperiment(Experiment):
                 & (t_sig <= self.t_rabi[-1] + self.tau_R)
             )
             signal[free_mask] = np.array(
-                [self.flux_signal.value_at(t_d + float(t))
+                [self.flux_signal.value_at(self.t_fall + t_d + float(t))
                  for t in t_sig[free_mask]],
                 dtype=float,
             )
@@ -150,13 +154,30 @@ class DelayRamseyExperiment(Experiment):
         p_e_I = np.asarray(p_e_I_list, dtype=float)
         p_e_Q = np.asarray(p_e_Q_list, dtype=float)
 
-        # Compute phase via arctan2 (same convention as calibration)
-        varphi_raw = np.arctan2(0.5 - p_e_I, p_e_Q - 0.5)
-        varphi_raw = np.unwrap(varphi_raw)
+        # Raw phase via arctan2 (uncorrected).
+        varphi_raw_unwrapped = np.unwrap(
+            np.arctan2(0.5 - p_e_I, p_e_Q - 0.5)
+        )
 
-        varphi = varphi_raw.copy()
-        if varphi_base is not None:
-            varphi = varphi_raw - varphi_base
+        # Baseline-corrected phase: subtract the constant arctan2 offset
+        # BEFORE unwrap, so points near zero signal stay near 0 instead of
+        # at the noise floor (~3π/4).  Then unwrap can correctly resolve
+        # 2π branches over the large-signal region.
+        varphi_base: float | None = None
+        if p_e_I_base is not None:
+            varphi_base = float(np.arctan2(
+                0.5 - p_e_I_base, p_e_Q_base - 0.5
+            ))
+            varphi_shifted = (
+                np.arctan2(0.5 - p_e_I, p_e_Q - 0.5) - varphi_base
+            )
+            # Wrap into [-π, π] before unwrap to avoid spurious 2π jumps
+            varphi_shifted = (varphi_shifted + np.pi) % (2 * np.pi) - np.pi
+            varphi = np.unwrap(varphi_shifted)
+        else:
+            varphi = varphi_raw_unwrapped
+
+        varphi_raw = varphi_raw_unwrapped
 
         return ExperimentResult(
             data={

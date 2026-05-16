@@ -538,8 +538,184 @@ $$
 
 ## Walsh协议
 
+## 核函数与卷积测量：统一理论框架
+
+### 问题：当 flux 与脉冲不可分离时
+
+前面各协议的分析基于调制函数 $y(t) \in \{0, \pm 1\}$，其隐含假设：**脉冲是瞬时的**（$T_\pi \to 0$），脉冲期间 qubit 对失谐无响应，灵敏度的跳变是阶跃式的。
+
+这一假设在以下条件成立时是合理的：
+- 信号变化的时间尺度 $\gg$ 脉冲时长
+- 或实验上可以将 flux 信号的触发窗口严格限制在自由演化期内（如 Cryoscope：flux 在第一 $\pi/2$ 之后触发、第二 $\pi/2$ 之前截断；如 π 脉冲补偿：关心的是共振条件是否满足，脉冲期相位细节不重要）
+
+但当**flux 信号连续存在、无法与脉冲在时间上分离**时，脉冲期间的频率偏移会被脉冲动力学感受到，调制函数 $y(t)$ 不再准确。此时需要将 $y(t)$ 推广为 **filter function（核函数）$k(t)$**。
+
+### 哪些协议不可避免地需要核函数
+
+| 协议 | 脉冲结构 | 为何不可避免 |
+|------|---------|-------------|
+| **瞬态磁场协议** | 两个 $\pi/2$ 首尾相连（$\tau=0$） | 脉冲**本身就是探头**，不存在"自由演化期"，flux 必然穿过整个脉冲序列 |
+| **delay Ramsey** | $\pi/2$—$\tau_R$—$\pi/2$，在 tail 上滑动扫描 | tail 是方波关断后的连续衰减信号，**不能为 Ramsey 序列暂停** |
+| **Ramsey（sensing 模式）** | $\pi/2$—$\tau_R$—$\pi/2$，$\tau_R$ 较短 | 当 $\tau_R$ 与 $T_{\pi/2}$ 可比时，脉冲边沿区间占序列总时长的显著比例，灵敏度的连续过渡不可忽略 |
+
+以下协议**不需要**核函数：
+
+| 协议 | 原因 |
+|------|------|
+| **Cryoscope** | flux 在第一 $\pi/2$ 之后触发、第二 $\pi/2$ 之前截断，仅存在于自由演化期 |
+| **Ramsey（频率标定模式）** | $\tau_R \sim \mu\text{s} \gg T_{\pi/2}$，脉冲边沿贡献可忽略；且信号为准静态 |
+| **Echo / CPMG** | $\tau \gg T_\pi$，脉冲边沿贡献可忽略 |
+| **π 脉冲补偿** | 关心的是 $\pi$ 脉冲共振条件（翻转与否），不依赖脉冲期间的相位细节 |
+
+### 核心结论
+
+对于上述需要核函数的协议，测量结果可**统一**表达为卷积：
+
+$$
+\Delta P_e(t_d) = \kappa \cdot (k * \Phi)(t_d)
+$$
+
+- $k(t)$ 由脉冲序列唯一确定，描述了 qubit 在时刻 $t$ 对频率扰动的瞬时灵敏度
+- 不同协议的区别**仅在于 $k(t)$ 的形状**
+- 信号重建等价于**反卷积**
+
+以下各节给出具体推导。
+
+---
+
 ## 瞬态磁场协议
-瞬态磁场测量通过两个连续的$\pi/2$脉冲实现，通过计算脉冲序列的核函数，可以突破脉冲宽度的分辨率限制。
+
+瞬态磁场测量通过两个连续的$\pi/2$脉冲实现，通过计算脉冲序列的核函数（filter function / kernel），将测量结果表达为待测信号与核函数的卷积，从而通过反卷积突破脉冲宽度的分辨率限制。
+
+### 从哈密顿量到卷积结构
+
+#### 1. 旋转系哈密顿量
+
+Transmon qubit 在旋转坐标系下，经 RWA 近似，二能级截断后的哈密顿量为
+
+$$
+H(t) = \frac{1}{2}\delta\omega(t)\,\sigma_z + H_{\text{ctrl}}(t)
+$$
+
+其中 $\delta\omega(t) = \omega_q(\Phi(t)) - \omega_d$ 为瞬时失谐，控制项为
+
+$$
+H_{\text{ctrl}}(t) = \frac{\Omega(t)}{2}\bigl(\cos\phi(t)\,\sigma_x + \sin\phi(t)\,\sigma_y\bigr)
+$$
+
+$\Omega(t)$ 为 Rabi 包络，$\phi(t)$ 为脉冲相位。脉冲开启时 $\Omega(t) \neq 0$，自由演化时 $\Omega = 0$。
+
+#### 2. 小失谐微扰展开
+
+当 $|\delta\omega| \ll \Omega$ 时，失谐项可视为对理想脉冲动力学的微扰。记 $U_0(t_2, t_1)$ 为 $\delta\omega = 0$ 时的演化算符（仅含控制脉冲），将完整演化算符按 Dyson 级数展开至一阶：
+
+$$
+U(T, 0) = U_0(T, 0) - \frac{i}{2}\int_0^T U_0(T, t')\,\sigma_z\,U_0(t', 0)\,\delta\omega(t')\,dt' + \mathcal{O}(\delta\omega^2)
+$$
+
+初始态 $|0\rangle$ 在理想脉冲下的末态为叠加态
+
+$$
+|\psi_0\rangle = U_0(T, 0)|0\rangle = \frac{|0\rangle + e^{i\phi_0}|1\rangle}{\sqrt{2}}
+$$
+
+其中 $\phi_0$ 由脉冲序列的相位选择决定。
+
+末态激发概率 $P_e = |\langle 1|U(T,0)|0\rangle|^2$ 展开至 $\delta\omega$ 一阶：
+
+$$
+P_e = \underbrace{|\langle 1|\psi_0\rangle|^2}_{P_e^{(0)} = 1/2} + \Delta P_e
+$$
+
+$$
+\Delta P_e = \int_0^T k(t)\,\delta\omega(t)\,dt
+$$
+
+其中 $k(t)$ 即为**核函数（kernel / filter function）**：
+
+$$
+\boxed{k(t) \equiv \Im\Bigl[\langle 0|U_0^\dagger(T,0)\,\sigma_z\,U_0(T,t)\,\sigma_z\,U_0(t,0)|0\rangle\Bigr]}
+$$
+
+**物理含义**：$k(t)$ 是 qubit 在时刻 $t$ 对频率扰动 $\delta\omega(t)$ 的瞬时灵敏度——在 $t$ 时刻施加一个小的 $\delta$ 函数式频率偏移，测量结果的相对变化即为 $k(t)$。
+
+#### 3. 卷积结构
+
+当待测信号 $\delta\omega(t)$ 随时间变化时，脉冲序列整体在时间轴上平移至延迟 $t_d$ 处（等效采样），则
+
+$$
+\Delta P_e(t_d) = \int k(t - t_d)\,\delta\omega(t)\,dt = (k * \delta\omega)(t_d)
+$$
+
+即**测量结果是核函数与待测信号的卷积**。在线性色散近似 $\delta\omega(t) \approx \kappa\,\Phi(t)$ 下：
+
+$$
+\boxed{\Delta P_e(t_d) = \kappa \cdot (k * \Phi)(t_d)}
+$$
+
+#### 4. 核函数的形状
+
+**（a）理想瞬时脉冲**（$\Omega \to \infty$，$T_{\pi/2} \to 0$）
+
+对于 $R_y(\pi/2)$—$R_x(\pi/2)$ 序列（两个 $\pi/2$ 首尾相连，中间无间隙），核函数有解析形式：
+
+$$
+k(t) = \begin{cases}
+\sin\!\bigl[\Omega(\tau_p/2 - |t|)\bigr], & |t| < \tau_p/2 \\[4pt]
+0, & |t| > \tau_p/2
+\end{cases}
+$$
+
+其中 $\tau_p$ 为单个脉冲时长。核函数呈单峰正弦形，FWHM $\approx 0.59\,\tau_p$。
+
+**（b）有限间隙 Ramsey**（两 $\pi/2$ 间插入自由演化 $\tau$）
+
+核函数由三段组成：正弦上升沿 — 平坦 plateau（高度为 1，宽度 $\approx\tau$） — 正弦下降沿。
+
+**（c）一般情况**
+
+对于任意脉冲序列（Echo、CPMG 等），核函数可通过上述 $k(t)$ 定义式数值计算，无需解析形式。核函数**由脉冲序列唯一确定**，反卷积框架对 $k(t)$ 的形状无任何假设。
+
+#### 5. 核函数的数值计算（$\delta$ 刺激法）
+
+实际计算中，$\delta$ 函数用窄高斯脉冲近似。对脉冲序列时间轴上的每个采样点 $t_j$ 施加一个窄高斯频率刺激：
+
+$$
+H_{\text{stim}}(t) = \frac{\varepsilon}{2} \exp\!\left[-\frac{(t - t_j)^2}{2\sigma^2}\right] \sigma_z, \quad \sigma \ll \tau_p,\; \varepsilon \ll \Omega
+$$
+
+分别施加 $+\varepsilon$ 和 $-\varepsilon$，计算差分响应：
+
+$$
+k(t_j) = \frac{P_e|_{+\varepsilon} - P_e|_{-\varepsilon}}{2\varepsilon\cdot\sqrt{2\pi}\sigma}
+$$
+
+扫描 $t_j$ 覆盖整个脉冲序列，即得完整核函数。这是在 `sqc/control/sequence.py` 中 `get_kernel()` 的实现原理。
+
+#### 6. 从核函数到信号重建：Wiener 反卷积
+
+测得 $\Delta P_e(t_d)$ 后，通过 Wiener 反卷积还原 $\Phi(t)$：
+
+$$
+\Phi = \frac{1}{\kappa}\,\mathcal{F}^{-1}\!\left[\frac{\hat{K}^*(\omega)}{|\hat{K}(\omega)|^2 + \lambda^2}\,\Delta\hat{P}_e(\omega)\right]
+$$
+
+其中 $\hat{K}(\omega) = \mathcal{F}[k](\omega)$，$\lambda$ 为正则化参数。此即 `sqc/reconstruction/wiener.py` 的数学基础。
+
+若色散非线性不可忽略（大信号），则需使用 Hammerstein-Wiener 模型或 LM 数值反演（`sqc/reconstruction/hammerstein.py` / `numerical_inverse.py`）。
+
+#### 7. 与标准 Ramsey 框架的统一
+
+| | 标准 Ramsey | 瞬态磁场协议 |
+|---|---|---|
+| 测的是什么 | $\int \delta\omega\,dt$（积分） | $(k*\delta\omega)(t_d)$（卷积） |
+| 核函数形状 | rect（矩形窗，宽度 $\tau_R$） | 由脉冲序列决定 |
+| 时间分辨率 | $\tau_R$（窗口宽度） | 反卷积恢复，可达采样间隔 |
+| 灵敏度 | $\propto \tau_R$（可任意延长） | $\propto \int k\,dt \approx \tau_p$（有限） |
+| 适用场景 | 静态/慢变频率标定 | 快速瞬态波形测量 |
+
+两者的数学关系：标准 Ramsey 是瞬态磁场协议在 $k(t) = \text{rect}(t/\tau_R)$ 时的特例。瞬态协议通过缩短脉冲获得高时间分辨率（代价是灵敏度降低），标准 Ramsey 通过延长 $\tau_R$ 获得高灵敏度（代价是分辨率降低）。反卷积可以部分恢复被宽核函数模糊的分辨率，但会放大高频噪声。
+
 ## cryoscope协议
 cryoscope将qubit作为片上示波器，可以达到脉冲宽度的分辨率。
 
@@ -623,14 +799,15 @@ $$
 
 扫描$t_d$，得到相位$\phi(t_d)$，
 
-不施加方波，重复上述实验，得到baseline相位$\phi_{base}$，则拖尾引入的相位为
+不施加方波，重复上述实验，得到baseline相位$\phi_{base}$，则有
 $$
-\phi_{tail}(t_d) = \phi - \phi_{base} = \int_{t_d}^{t_d+\tau_R} \delta \omega(t) dt
+\begin{aligned}
+\phi - \phi_{base} &= \int_{t_d}^{t_d+\tau_R} (\omega(\Phi_{op} + \Phi_{tail}) - \omega_d) dt'  - \int_{t_d}^{t_d+\tau_R} (\omega(\Phi_{op}) - \omega_d) dt' \\
+&\approx \int_{t_d}^{t_d+\tau_R} \kappa \Phi_{tail}(t') dt' \\
+&=\phi_{tail}(t_d)
+\end{aligned} 
 $$
-由此得到拖尾和相位的关系为
-$$
-\braket{\Phi_{tail}} = \int_{t_d}^{t_d+\tau_R} \Phi_{tail}(t) dt = \frac{\phi_{tail}}{\tau_R \kappa_{\Phi_b}}
-$$
+仿真层面上，脉冲频率严格设置为$\omega_q(\Phi_{op})$，因此baseline相位为零，因此不必做baseline。
 
 随后做相位标定，在baseline下，在Ramsey序列的自由演化阶段施加一个高度为$z$的flux，进行Ramsey实验得到相位$\phi_{cal}(z)$，相位满足
 $$
@@ -843,9 +1020,113 @@ Ramsey干涉是用于qubit频率标定的标准协议。
 
 首先扫描qubit能谱，获得$f_{01}$的初始估计值$f_{guess}$。随后在该频率附近进行Ramsey测量，设置脉冲频率$f_d = f_{guess}$，则失谐为$\Delta f = f_{01} - f_d$，扫描延迟时间$\tau$，得到Ramsey振荡图像。则振荡频率即为失谐$f_{fit} = |\Delta f|$，从而得到$f_{01} = f_d \pm | f_{fit} |$。
 
-为了避免正负号，引入认为失谐。即将原来第二个脉冲的旋转轴绕Z轴旋转一个小角度$\phi =2\pi f_a \tau$。此时，拟合的振荡频率为$f_{fit} = \Delta f + f_a$
+为了避免正负号，引入人为失谐。即将原来第二个脉冲的旋转轴绕Z轴旋转一个小角度$\phi =2\pi f_a \tau$。此时，拟合的振荡频率为$f_{fit} = \Delta f + f_a$
 
 响应曲线只需选定一组磁通偏置电压点，在每个电压点进行定点标定，得到该电压点的频率。随后对所有电压点的频率进行拟合，得到响应曲线$f(\Phi)$。
+
+#### 失谐提取方法
+
+从Ramsey振荡数据$p_e(\tau)$中提取失谐$\Delta f$，有三种常用方法：FFT+插值、时域拟合、IQ解调。
+
+##### 方法一：FFT + 二次子格点插值（代码实现方案）
+
+Ramsey信号的理论形式为：
+
+$$
+p_e(\tau) = \frac{1}{2}\left[1 + e^{-\tau/T_2^*}\cos(2\pi\Delta f \cdot \tau + \phi_0)\right]
+$$
+
+振荡频率即为$|\Delta f|$。对去均值后的信号$p_{\text{centered}}(\tau) = p_e(\tau) - \overline{p_e}$做实数FFT：
+
+$$
+P(f_k) = \left|\sum_{n=0}^{N-1} p_{\text{centered}}(\tau_n)\, e^{-2\pi i k n / N_{\text{fft}}}\right|, \quad f_k = \frac{k}{N_{\text{fft}}\,\Delta\tau}
+$$
+
+取$\arg\max_k P(f_k)$得到峰值bin位置$k_{\text{peak}}$。FFT的频率分辨率为$\delta f = 1/(N_{\text{fft}}\Delta\tau)$，受限于$\Delta\tau$和补零长度，通常为MHz量级——直接取峰值bin的精度不足以满足标定需求（目标精度~kHz）。
+
+**二次子格点插值**（quadratic sub-bin interpolation）：利用峰值及其左右邻居三点$(k-1, y_1)$, $(k, y_2)$, $(k+1, y_3)$做局部抛物线拟合$y(x) = ax^2 + bx + c$，顶点偏移量为：
+
+$$
+\delta k = \frac{y_1 - y_3}{2(y_1 + y_3 - 2y_2)}
+$$
+
+真实失谐频率为：
+
+$$
+\Delta f = (k_{\text{peak}} + \delta k) \cdot \delta f
+$$
+
+该方法的**优点**：
+- 无需初值猜测，对噪声鲁棒
+- $T_2^*$衰减在频域仅造成谱峰展宽（Lorentzian），不影响峰值位置——因此对退相干不敏感
+- 计算量小（一次FFT即可）
+
+**缺点**：
+- 只能得到$|\Delta f|$的绝对值，符号需额外判断
+- 需要$\tau$采样范围足够大（$\gtrsim 1/\Delta f$），否则振荡周期数不足、谱峰展宽严重
+
+##### 方法二：时域拟合
+
+直接对$p_e(\tau)$做非线性最小二乘拟合：
+
+$$
+p_e(\tau) = A e^{-\tau/T_2^*} \cos(2\pi\Delta f \cdot \tau + \phi_0) + C
+$$
+
+待拟合参数：$A, T_2^*, \Delta f, \phi_0, C$ 共5个。其中$\Delta f$即为失谐。
+
+**优点**：
+- 物理图像直观，直接得到所有参数（含$T_2^*$）
+- 原则上可分辨$\Delta f$的符号（通过相位$\phi_0$）
+- 对$\tau$采样点数要求低于FFT
+
+**缺点**：
+- **初值敏感**：$\Delta f$和$T_2^*$高度耦合，需较好的初始猜测，否则容易陷入局部极小
+- 对$T_2^*$的建模误差直接传递给$\Delta f$——若衰减并非纯指数（如存在$1/f$噪声导致Gaussian衰减），拟合偏差大
+- 多频分量（如存在驱动-induced ac Stark shift）时模型失配，单频拟合失效
+- 计算量大于FFT（迭代优化）
+
+##### 方法三：IQ解调（相位展开）
+
+施加两路正交的Ramsey序列，第二路第二个$\pi/2$脉冲的相位偏移$\pi/2$：
+
+$$
+\begin{aligned}
+\text{ch I:}&\quad \pi/2(x) - \tau - \pi/2(x) \quad\rightarrow\quad p_I(\tau) = \frac{1}{2}[1 + \cos(\Delta\omega \cdot \tau)] \\
+\text{ch Q:}&\quad \pi/2(x) - \tau - \pi/2(y) \quad\rightarrow\quad p_Q(\tau) = \frac{1}{2}[1 + \sin(\Delta\omega \cdot \tau)]
+\end{aligned}
+$$
+
+构造复信号$z(\tau) = (2p_I-1) + i(2p_Q-1) = e^{i\Delta\omega \cdot \tau}$，相位$\phi(\tau) = \arg z(\tau) = \Delta\omega \cdot \tau$。对$\phi(\tau)$做线性拟合，斜率即为$\Delta\omega$。
+
+**优点**：
+- 直接得到$\Delta f$的**符号**，无需人工失谐
+- 相位累积信息利用率高，信噪比优于幅值方法
+
+**缺点**：
+- 需要两次测量，时间开销翻倍
+- 相位展开（unwrap）在噪声大或采样稀疏时可能出错
+- 需要精确控制第二路脉冲的$\pi/2$相位偏移
+
+##### 方法对比
+
+| | FFT+插值 | 时域拟合 | IQ解调 |
+|---|---|---|---|
+| 初值需求 | 无 | 需要 | 无 |
+| 对$T_2^*$敏感性 | 不敏感 | 敏感 | 不敏感 |
+| 符号分辨 | 不能 | 间接 | 能 |
+| 计算量 | 低 | 中 | 低 |
+| 时间开销 | 1×Ramsey | 1×Ramsey | 2×Ramsey |
+| 多频能力 | 能（多峰） | 不能 | 不能 |
+| 鲁棒性 | 高 | 低 | 中 |
+
+**推荐策略**：实际标定中使用 ±f_a 双扫法——分别施加 +f_a 和 −f_a 的人工失谐（通过第二个 π/2 脉冲的相位斜坡实现，$\phi_2 = \pm 2\pi f_a \tau$），各自做 FFT 得到 $f_p = |\Delta f + f_a|$ 和 $f_n = |\Delta f - f_a|$。利用平方恒等式一步解出带符号的失谐：
+
+$$
+\Delta f = \frac{f_p^2 - f_n^2}{4 f_a}
+$$
+
+该公式对所有 $\Delta f$ 与 $f_a$ 的相对大小和符号都严格成立，无需分情况讨论。人工失谐默认取 $f_a = 50\,\text{MHz}$，远大于 FFT 分辨率（~5 MHz），在典型 detuning（<1 GHz）范围内具有良好的数值条件。这一方案已实现在 `sqc/calibration/frequency.py` 的 `_fit_ramsey_frequency` 中，两个辅助函数 `_run_ramsey_sweep` 和 `_fft_peak` 分别负责单次 τ 扫描和 FFT+子格点插值。
 
 ### 瞬态磁场协议与核函数策略
 

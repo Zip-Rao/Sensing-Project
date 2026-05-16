@@ -148,7 +148,7 @@ class ZCrosstalkWorkflow(Workflow):
     def _reconstruct_phi_B(self) -> FluxSignal:
         """Run transient sensing on qubit B and Wiener-reconstruct phi_B."""
         from sqc.experiments.transient import TransientSensingExperiment
-        from sqc.reconstruction.wiener import WienerReconstruction
+        from sqc.reconstruction.transient import TransientReconstruction
 
         # Park qubit B at its optimal work point
         qubit_B_for_exp = self._make_qubit_at_optimal(self._qubit_B)
@@ -168,7 +168,7 @@ class ZCrosstalkWorkflow(Workflow):
         result = exp.run()
 
         # Wiener reconstruction
-        wiener = WienerReconstruction(lambda_reg=self.wiener_lambda_reg)
+        wiener = TransientReconstruction(method="wiener", lambda_reg=self.wiener_lambda_reg)
         dt = float(self._phi_B_true.t_list[1] - self._phi_B_true.t_list[0])
         kernel = np.asarray(result.data["kernel"])
 

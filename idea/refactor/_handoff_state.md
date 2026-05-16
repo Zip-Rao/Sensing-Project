@@ -29,11 +29,32 @@
 - [x] **P4** — ControlLine + DistortionModel + PredistortionDesigner + Workflow (2026-05-01, commits: fdc55c8, d21194b)
 - [x] **P5** — TransferMatrix + ChipTopology + ZCrosstalkWorkflow + 双 qubit demo (2026-05-01, commit: 1877732)
 - [ ] **P6** — 用户可操作接口补完 (规划完成，待实施，详见 [phase_6_handbook.md](phase_6_handbook.md))
-  - [ ] P6a: `reconfigure()` 覆盖 6 层全部参数
-  - [ ] P6a: CONFIG 死字段接线 (SimulationConfig / TransmonDefaults / ControlLineDefaults)
-  - [ ] P6b: `SensingPipeline` 可组合实验管线
-  - [ ] P6b: `GateOperation` / `TwoQubitGate` qubit 级门操作
-  - [ ] P6c: Notebook 参数扫描示范 cell
+  - [ ] P6a: `reconfigure()` 覆盖 6 层全部参数 + CONFIG 死字段接线
+  - [ ] **P6d: `SensingWorkflow` 统一科研入口** (2026-05-15 重设计) — 并入 Workflow 层：
+    - [ ] `configure()` + `run()` + `plot()` — 基础管线 (full impl)
+    - [ ] `sweep(param, values)` — 参数扫描 (full impl)
+    - [ ] `compare(methods)` — 重建算法 A/B 对比 (full impl)
+    - [ ] 9 个科研接口 stub: `pipeline`, `multi_qubit`, `crosstalk`, `save/load`, `diff`, `benchmark`, `find_optimal_work_point`, `detectability_limit`, `noise_characterize`, `cross_validate`
+  - [ ] P6c: Notebook 参数扫描示范 cell (改用 SensingWorkflow API)
+  - [ ] P6b.1/6b.2: SensingPipeline + GateOperation (降优先级)
+- [ ] **P7** — 统一 mesolve 时间轴到 t_global (规划完成，待实施，详见 [phase_7_handbook.md](phase_7_handbook.md))
+  - [ ] P7.1: Tier B 底层 API 扩展
+  - [ ] ... (详见 handbook)
+- [ ] **P8** — filter function 代码适配：零遮盖 → 核函数卷积 (规划完成，待实施，详见 [phase_8_handbook.md](phase_8_handbook.md))
+  - [ ] P8.1: delay Ramsey 实验层 (use_filter_function + 时间映射修复)
+  - [ ] P8.2: delay Ramsey 标定层
+  - [ ] P8.3: delay Ramsey 重建层 (method="wiener")
+  - [ ] P8.4: Ramsey sensing 实验 + 重建
+  - [ ] P8.5: 公共 Wiener 反卷积函数提取
+  - [ ] P8.6: 测试
+  - [ ] P8.7: 文档 + Notebook
+  - [ ] P7.1: Tier B 底层 API 扩展 (Pulse/FluxSignal 加 `trigger` + `*_on(t_global)`)
+  - [ ] P7.2: Tier A2+A5 底层 mesolve 消费者迁移 (IQReadoutModel, HamiltonianBuilder)
+  - [ ] P7.3: Tier A1 实验层迁移 (Rabi→Ramsey→Echo→Cryoscope→DelayRamsey→PiPulseComp→Transient)
+  - [ ] P7.4: Tier A4 重建层迁移 (transient, ramsey, kernel, delay_ramsey)
+  - [ ] P7.5: R9 清理 (去 `np.linspace`, 去 `1e-9` 分隔)
+  - [ ] P7.6: Tier A6 标定+Workflow 迁移
+  - [ ] P7.7: 测试修复 + P7.8 baseline 重生成 + P7.9 notebook 验证 + 文档
 
 ---
 
@@ -118,7 +139,11 @@ baseline pickle 清单(`tests/baselines/` 内):
 
 22. **P5→P6: CONFIG migration incomplete for 4 of 6 layers** (discovered 2026-05-12): Commit `afe8d87` (Global config system) only wired AWG + PulseConfig to consumers. ReconstructionConfig was wired in `747cc0d`. SimulationConfig / TransmonDefaults / ControlLineDefaults remain declared but unread — changing their values in CONFIG has no effect on behaviour. See [phase_6_handbook.md §1.1](phase_6_handbook.md).
 
-23. **P5→P6: No unified user-facing parameter entry point** (2026-05-12): `reconfigure()` only accepts AWG + Pulse params. No `SensingPipeline` (measure → reconstruct → calibrate → predistort), no `GateOperation` (apply X_pi / CZ to named qubits), no parameter-sweep demo cells in notebook. Full gap analysis in [phase_6_handbook.md](phase_6_handbook.md).
+23. **P5→P6: HammersteinWienerReconstruction lambda_reg was 1.0 while CONFIG/Wiener were 10.0** (fixed in `747cc0d`): A silent 10× mismatch caused by hardcoded dataclass default that never read CONFIG. Now reads `CONFIG.reconstruction.lambda_reg` via `default_factory`.
+
+24. **P7: Cryoscope trunc_list silent failure discovered** (2026-05-15): When `trunc_list.max() > flux_signal.t_list[-1]`, `FluxSignal.truncate()` becomes a no-op because the mask `t > t_d` is all-False on the shorter t_list. This causes reconstruction to flatline at 0 beyond the signal's duration — no error/warning is raised. Additionally, `IQReadoutModel` uses `ctrl_I.t_list` (local pulse axis) not `t_global` for mesolve, creating a second hidden boundary when flux is longer than the Ramsey sequence. Both are root causes of the user's Cryoscope reconstruction artifact. Will be fixed in P7 (see [phase_7_handbook.md](phase_7_handbook.md)).
+
+23. **P5→P6: No unified user-facing parameter entry point** (2026-05-12, addressed by P6d on 2026-05-15): `reconfigure()` only accepts AWG + Pulse params. P6d (`SensingSession`) added as the single-panel solution: `session.configure(protocol=..., signal_type=..., lambda_reg=...)` groups all parameters in one call, `session.run(measure=True, reconstruct=True, calibrate=False)` executes with bool toggles.
 
 24. **P5→P6: HammersteinWienerReconstruction lambda_reg was 1.0 while CONFIG/Wiener were 10.0** (fixed in `747cc0d`): A silent 10× mismatch caused by hardcoded dataclass default that never read CONFIG. Now reads `CONFIG.reconstruction.lambda_reg` via `default_factory`.
 

@@ -123,7 +123,7 @@ def _build_h_and_t_evolve(qubit, cp, t_list, t_meas):
 def test_forward_simulation_smoke():
     """_forward_simulation runs without crash and produces correct shape."""
     from src.signal import Signal
-    from sqc.reconstruction.numerical_inverse import LMReconstruction
+    from sqc.reconstruction.transient import TransientReconstruction
 
     np.random.seed(42)
     q = _make_minimal_qubit()
@@ -141,7 +141,7 @@ def test_forward_simulation_smoke():
 
     H_list, t_evolve_list = _build_h_and_t_evolve(q, cp, t_list, t_meas)
 
-    recon = LMReconstruction(qubit=q, control_pulse=cp)
+    recon = TransientReconstruction(method="lm", qubit=q, control_pulse=cp)
     results = recon._forward_simulation(
         B_sig, t_meas, H_list, t_evolve_list,
     )
@@ -159,7 +159,7 @@ def test_forward_simulation_smoke():
 def test_jacobian_adjoint_shape():
     """Adjoint Jacobian has correct shape (N_meas x M_basis)."""
     from src.signal import Signal
-    from sqc.reconstruction.numerical_inverse import LMReconstruction
+    from sqc.reconstruction.transient import TransientReconstruction
 
     np.random.seed(42)
     q = _make_minimal_qubit()
@@ -177,7 +177,7 @@ def test_jacobian_adjoint_shape():
 
     H_list, t_evolve_list = _build_h_and_t_evolve(q, cp, t_list, t_meas)
 
-    recon = LMReconstruction(qubit=q, control_pulse=cp)
+    recon = TransientReconstruction(method="lm", qubit=q, control_pulse=cp)
 
     # Run forward simulation first
     results = recon._forward_simulation(
@@ -224,7 +224,7 @@ def test_jacobian_adjoint_shape():
 def test_jacobian_fd_shape():
     """Finite-difference Jacobian has correct shape."""
     from src.signal import Signal
-    from sqc.reconstruction.numerical_inverse import LMReconstruction
+    from sqc.reconstruction.transient import TransientReconstruction
 
     np.random.seed(42)
     q = _make_minimal_qubit()
@@ -253,7 +253,7 @@ def test_jacobian_fd_shape():
 
     H_list, t_evolve_list = _build_h_and_t_evolve(q, cp, t_list, t_meas)
 
-    recon = LMReconstruction(qubit=q, control_pulse=cp)
+    recon = TransientReconstruction(method="lm", qubit=q, control_pulse=cp)
     results = recon._forward_simulation(
         B_type6, t_meas, H_list, t_evolve_list,
     )
@@ -277,7 +277,7 @@ def test_jacobian_fd_shape():
 def test_lm_reconstruct_smoke():
     """LMReconstruction.reconstruct runs without crash."""
     from src.pulse import create_ramsey_pulse
-    from sqc.reconstruction.numerical_inverse import LMReconstruction
+    from sqc.reconstruction.transient import TransientReconstruction
     from sqc.simulation.result import ExperimentResult
     from sqc.control.flux_signal import FluxSignal
 
@@ -294,7 +294,8 @@ def test_lm_reconstruct_smoke():
         bl = pickle.load(f)
 
     n_basis = 5
-    recon = LMReconstruction(
+    recon = TransientReconstruction(
+        method="lm",
         qubit=q,
         control_pulse=cp,
         basis_type="fourier",
@@ -327,7 +328,7 @@ def test_forward_simulation_equivalence():
     """New _forward_simulation matches old forward_simulation."""
     from src.signal import Signal
     from src.analysis import forward_simulation as old_fwd
-    from sqc.reconstruction.numerical_inverse import LMReconstruction
+    from sqc.reconstruction.transient import TransientReconstruction
 
     np.random.seed(42)
     q_old = _make_minimal_qubit()
@@ -358,7 +359,7 @@ def test_forward_simulation_equivalence():
     H_list_new, t_evolve_list_new = _build_h_and_t_evolve(
         q_new, cp, t_list, t_meas,
     )
-    recon = LMReconstruction(qubit=q_new, control_pulse=cp)
+    recon = TransientReconstruction(method="lm", qubit=q_new, control_pulse=cp)
     results_new = recon._forward_simulation(
         B_sig, t_meas, H_list_new, t_evolve_list_new,
     )

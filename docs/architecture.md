@@ -237,14 +237,17 @@ sqc/                              ← 主包 (Superconducting Quantum Control)
 │   ├── transfer_function.py      ← TransferFunctionCalibration
 │   └── predistortion.py          ← PredistortionDesigner
 │
-├── reconstruction/               ← 波形重建算法
+├── reconstruction/               ← 波形重建算法（按协议组织）
 │   ├── base.py                   ← Reconstruction ABC
+│   ├── dispersion.py             ← 共享 Transmon 色散反演
 │   ├── basis.py                  ← 基函数生成、分解、正则化矩阵
 │   ├── kernel.py                 ← KernelEstimator
-│   ├── wiener.py                 ← Wiener / RamseyIQ / DiffEcho / RamseyUnwrap
-│   ├── hammerstein.py            ← HammersteinWienerReconstruction
-│   ├── numerical_inverse.py      ← LMReconstruction
-│   └── cryoscope.py              ← CryoscopeReconstruction
+│   ├── ramsey.py                 ← RamseyReconstruction(method="iq"|"unwrap")
+│   ├── echo.py                   ← EchoReconstruction
+│   ├── transient.py              ← TransientReconstruction(method="wiener"|"hammerstein"|"lm")
+│   ├── cryoscope.py              ← CryoscopeReconstruction + CryoscopeCalibration
+│   ├── delay_ramsey.py           ← DelayRamseyReconstruction + DelayRamseyCalibration
+│   └── pi_pulse_comp.py          ← PiPulseCompReconstruction
 │
 └── workflows/                    ← 顶层科研流程
     ├── base.py                   ← Workflow ABC
@@ -281,7 +284,7 @@ idea/                             ← 设计文档（refactor plan、phase handb
 | | result.py | 统一结果数据结构 |
 | **experiments** | rabi/ramsey/echo/transient/cryoscope.py | 一个实验 = device + flux + sequence + readout + runner |
 | **calibration** | qubit_frequency/flux_response/transfer_function/predistortion.py | 标定 workflow，产出 CalibrationTable 或 filter 系数 |
-| **reconstruction** | kernel/wiener/hammerstein/numerical_inverse/cryoscope.py | 仅消费测量数据 + kernel + calibration table，产出重建波形 |
+| **reconstruction** | ramsey/echo/transient/cryoscope/delay_ramsey/pi_pulse_comp.py | 按协议统一接口，仅消费测量数据 + kernel + calibration table，产出重建波形 |
 | **workflows** | predistortion_validation/z_crosstalk.py | 串联多个 experiment + reconstruction + calibration |
 
 ### 3.5 依赖矩阵（高层只能依赖低层）
@@ -750,6 +753,10 @@ class Experiment(ABC):
 | `DiffEchoExperiment` | π/2 − [echo]^k − π/2，差分回波 | §V.B.2 | `data["p_e"]`, `k`, `t_int` |
 | `TransientSensingExperiment` | 滑动 Ramsey + kernel 提取 | (项目原创) | `data["kernel"]`, `data["delta_p"]` |
 | `CryoscopeExperiment` | 截断扫描 + IQ 测相位 | §V.E | `data["varphi"]`, `axes["trunc"]` |
+| `DelayRamseyExperiment` | 延迟 Ramsey：滑动 flux 脉冲 + IQ 测 φ(τ) | (项目原创) | `data["varphi"]`, `axes["t_d"]` |
+| `PiPulseCompensationExperiment` | π 脉冲补偿：扫 τ×z 找最优补偿 | (项目原创) | `data["z_star"]`, `axes["tau"]` |
+
+> **v2.3 新增**：`DelayRamseyExperiment` 和 `PiPulseCompensationExperiment` 均新增 `t_fall` 参数，指定 flux 信号的下降沿时刻，使 t_d（或 tau）以该时刻为参考零点。`PiPulseCompensationExperiment` 的 z* 提取改用三点抛物线插值以提高子格点精度。
 
 #### 4.5.3 RamseyExperiment 详例
 
@@ -784,7 +791,7 @@ result = exp.run()
 # result.axes["scan"]     → 滑动扫描位置
 ```
 
-后接 `WienerReconstruction.reconstruct()` 可恢复 Φ(t)。
+后接 `TransientReconstruction(method="wiener").reconstruct()` 可恢复 Φ(t)。
 
 #### 4.5.5 扩展点
 
@@ -800,15 +807,19 @@ result = exp.run()
 
 所有重建类继承 `Reconstruction` ABC，实现 `reconstruct(measurement, kernel, calibration)`：
 
-| 类 | 算法 | 物理基础 | 输入 → 输出 |
-|---|---|---|---|
-| `WienerReconstruction` | 线性 Wiener 反卷积 | Δp = K * Φ + noise | Δp + kernel → Φ(t) |
-| `HammersteinWienerReconstruction` | 块结构非线性：Wiener + 色散反演 | 加入 ω(Φ) 非线性 | Δp + kernel → Φ(t) |
-| `LMReconstruction` | Levenberg-Marquardt 全密度矩阵优化 | 直接 fit p_meas | p_meas → Φ(t) (基函数参数化) |
-| `RamseyIQReconstruction` | IQ 解调 → arcsin → B(τ) | φ(τ) = κ·∫Φ dt | (I, Q) → B(τ) |
-| `RamseyUnwrapReconstruction` | 相位解缠绕 | 同上，但单通道 | p_e(τ) → B(τ) |
-| `DiffEchoReconstruction` | 差分回波直接公式 | B = −φ/(2k·κ·t_int) | p_e_list → B |
-| `CryoscopeReconstruction` | 相位微分 + φ(h) 反函数 | dφ/dt × τ_cal = Φ | φ(trunc) → Φ(t) |
+| 类 (统一接口) | 方法 | 算法 | 输入 → 输出 |
+|---|---|---|---|---|
+| `RamseyReconstruction` | `method="iq"` | IQ 解调 → arctan2 → dφ/dτ | (p_e_I, p_e_Q) → B(τ) |
+| | `method="unwrap"` | arccos + k-span 解缠绕 | p_e(τ) → B(τ) |
+| `EchoReconstruction` | — | B = −φ/(2k·κ·t_int) | p_e_list → B |
+| `TransientReconstruction` | `method="wiener"` | 线性 Wiener 反卷积 | Δp + kernel → Φ(t) |
+| | `method="hammerstein"` | Wiener + Transmon 色散反演 | Δp + kernel → Φ(t) |
+| | `method="lm"` | Levenberg-Marquardt 全密度矩阵优化 | p_meas → Φ(t) (基函数参数化) |
+| `CryoscopeReconstruction` | `inversion="calibration"` | φ(h) 标定表反查 | φ(t_d) → h(t) |
+| | `inversion="response"` | Transmon 色散解析反演 | φ(t_d) → h(t) |
+| `DelayRamseyReconstruction` | `inversion="response"` | φ/τ → Δω → 色散反演 | φ(t_d) → Φ_tail(t) |
+| | `inversion="calibration"` | φ(z) 标定表反查 | φ(t_d) → Φ_tail(t) |
+| `PiPulseCompReconstruction` | — | Φ = −z* | z*(τ) → Φ_tail(τ) |
 
 #### 4.6.2 `KernelEstimator` (`sqc/reconstruction/kernel.py`)
 
@@ -823,51 +834,61 @@ t_samples, kernel = estimator.estimate(pulse, qubit)
 
 **算法**：在每个时间点 t_i 注入窄高斯刺激，测量 p_e 变化。kernel[i] = (p_e_stimulated − p_e_baseline) / stim_area。
 
-#### 4.6.3 `WienerReconstruction` 详例
+#### 4.6.3 `TransientReconstruction` 详例
 
 ```python
-from sqc.reconstruction.wiener import WienerReconstruction
+from sqc.reconstruction.transient import TransientReconstruction
 
-recon = WienerReconstruction(lambda_reg=1.0)
+# Wiener 反卷积
+recon = TransientReconstruction(method="wiener", lambda_reg=1.0)
 phi_rec = recon.reconstruct(
     measurement=transient_result,    # ExperimentResult with data["delta_p"]
     kernel=kernel_array,
     dt=0.5,
 )
-# phi_rec.samples → 重建的 Φ(t)
-```
 
-**公式**：H_inv(ω) = K*(ω) / (|K(ω)|² + λ²)，对 Δp(ω) 应用 → Φ̂(ω) → IFFT 回时域。
+# Hammerstein-Wiener 非线性
+recon_hw = TransientReconstruction(method="hammerstein", qubit=q, lambda_reg=1.0)
+B = recon_hw.reconstruct(transient_result, kernel=kernel_array, dt=0.5)
 
-#### 4.6.4 `LMReconstruction` 详例
-
-```python
-from sqc.reconstruction.numerical_inverse import LMReconstruction
-
-recon = LMReconstruction(
-    qubit=q, control_pulse=cp,
-    basis_type="fourier", n_basis=100,
-    lambda_reg=100.0, max_iter=10, tol=1e-6,
-    use_adjoint=True,                # True: 伴随法 Jacobian（快）; False: 有限差分
+# LM 全密度矩阵优化
+recon_lm = TransientReconstruction(
+    method="lm", qubit=q, control_pulse=cp,
+    basis_type="fourier", n_basis=100, max_iter=10,
 )
-phi_rec, history = recon.reconstruct(measurement)
+phi_rec, history = recon_lm.reconstruct(measurement)
 ```
 
-**算法**：把 Φ(t) 参数化为基函数 b·φ_k(t)，定义损失 L(b) = ||p_sim(b) − p_meas||² + λ²·||R·b||²，用 LM 优化 b。
-
-#### 4.6.5 `CryoscopeReconstruction` 详例
+#### 4.6.4 `CryoscopeReconstruction` 详例
 
 ```python
-from sqc.reconstruction.cryoscope import CryoscopeReconstruction
+from sqc.reconstruction.cryoscope import CryoscopeReconstruction, CryoscopeCalibration
 
-# 先做 φ(h) 标定
-cal_table = FluxResponseCalibration(qubit=q, method="cryoscope").calibrate()
+# Step 1: φ(h) 标定
+cal = CryoscopeCalibration(qubit=q, h_list=h_list, tau=50.0)
+cal_table = cal.calibrate()
 
-recon = CryoscopeReconstruction(calibration=cal_table, tau=100.0, method="calib_inverse")
+# Step 2: 重建
+recon = CryoscopeReconstruction(calibration=cal_table, tau=50.0, inversion="calibration")
 flux_rec = recon.reconstruct(cryoscope_result)
 ```
 
-**注**：`method="calib_inverse"` / `"SG_diff"` / `"diff"` 三种反演策略，依赖 Track B 1.1 完成（当前为 stub）。
+#### 4.6.5 `RamseyReconstruction` / `EchoReconstruction` / `DelayRamseyReconstruction` 速览
+
+```python
+from sqc.reconstruction.ramsey import RamseyReconstruction
+from sqc.reconstruction.echo import EchoReconstruction
+from sqc.reconstruction.delay_ramsey import DelayRamseyReconstruction
+
+# Ramsey unwrap
+B = RamseyReconstruction(qubit=q, method="unwrap").reconstruct(ramsey_result)
+
+# Differential echo
+B = EchoReconstruction(qubit=q, t_int=10.0, k=5).reconstruct(echo_result)
+
+# Delay Ramsey
+flux = DelayRamseyReconstruction(inversion="response", qubit=q).reconstruct(dr_result)
+```
 
 #### 4.6.6 basis 模块 (`sqc/reconstruction/basis.py`)
 
@@ -879,7 +900,7 @@ from sqc.reconstruction.basis import (
 )
 ```
 
-被 `LMReconstruction` 和 `FluxSignal(type=6)` 使用。
+被 `TransientReconstruction(method="lm")` 和 `FluxSignal(type=6)` 使用。
 
 #### 4.6.7 扩展点
 
@@ -922,11 +943,11 @@ class CalibrationTable:
 
 | Calibration | 物理目标 | Gao 章节 | 方法 |
 |---|---|---|---|
-| `FluxResponseCalibration(method="ramsey")` | f(Φ) 曲线 | §V.A | 扫描 DC flux + Ramsey |
+| `FluxResponseCalibration(method="ramsey")` | f(Φ) 曲线 | §V.A | 扫描 DC flux + Ramsey（单扫模式，Δ≤0 已知） |
 | `FluxResponseCalibration(method="transient")` | Δω(Φ) 多项式 | (项目原创) | 已知瞬态信号扫描（依赖 Track B 1.2） |
-| `SinglePointFrequencyCalibration(method="ramsey")` | 单点 f₀₁ | §V.A | Ramsey 自由进动 + FFT |
-| `SinglePointFrequencyCalibration(method="closed_loop")` | 闭环收敛到 f_target | Vepsalainen 2022 | 割线法迭代 + Ramsey/瞬态测频 |
-| `SinglePointFrequencyCalibration(method="transient")` | 单点瞬态测频 | (项目原创) | （stub，依赖 Track B 1.2） |
+| `SinglePointFrequencyCalibration(method="ramsey")` | 单点 f₀₁ | §V.A | Ramsey FFT（单扫模式，|Δ| 小） |
+| `SinglePointFrequencyCalibration(method="closed_loop")` | 闭环收敛到 f_target | Vepsalainen 2022 | secant/bisection 迭代 + 双扫 Ramsey/瞬态测频 |
+| `SinglePointFrequencyCalibration(method="transient")` | 单点瞬态测频 | (项目原创) | 正交 Ramsey + 核函数灵敏度 G_α（已实现） |
 | `WaveformCalibration(method="transfer_function")` | H(ω) 拟合 | §V.E | 阶跃响应 + 多指数/FIR/IIR 拟合 |
 | `WaveformCalibration(method="predistortion")` | 设计逆滤波器 | §V.E | H_inv(ω) = H*(ω) / (|H|² + λ²) |
 | `PredistortionDesigner` | 独立预失真设计器 | §V.E | 可按需独立使用 |
@@ -935,33 +956,57 @@ class CalibrationTable:
 > **v2.1 重构**（2026-05-14）：频率标定拆为两大类的统一入口 — `FluxResponseCalibration`（磁通响应 f(Φ)）和 `SinglePointFrequencyCalibration`（单点 f₀₁，含闭环反馈）；波形标定统一为 `WaveformCalibration`；新增 `CalibrationScheduler` 控制室。
 >
 > 重建前置标定（`CryoscopeCalibration` φ(h)、`DelayRamseyCalibration` φ(z)）已移入 `sqc/reconstruction/`，与各自的重建算法就近管理。
+>
+> **v2.3 更新**（2026-05-15）：`_fit_ramsey_frequency` 支持双模人工失谐测频（见 §4.7.3 详例）；闭环反馈新增 `step_method="bisection"` 和 `bracket_tightening` 参数；瞬态测频 `_measure_frequency_transient` 完成实现。
 
 #### 4.7.3 `SinglePointFrequencyCalibration` 详例
+
+**Ramsey 测频双模设计**：
+
+所有 Ramsey 测频均通过 `_fit_ramsey_frequency(qubit, omega_d, tau_list, t_rabi, t_global, flux, f_artificial)` 实现。`f_artificial` 参数控制两种模式：
+
+| f_artificial | 模式 | 原理 | 时间 | 适用场景 |
+|---|---|---|---|---|
+| `float` (默认 0.1 GHz) | **单扫** | `phase2 = 2π·f_a·τ` 产生人工失谐，保证 Δ + f_a > 0，FFT 得 Δ = f_meas − f_a | 1× | |Δ| 有界（near sweet spot, 窄 flux scan） |
+| `None` | **双扫** | 跑 ±50 MHz 两轮，Δ = (f_p² − f_n²) / 0.2 | 2× | |Δ| 任意大（闭环反馈中任意 flux 点） |
+
+单扫模式由 `_run_ramsey_sweep`（τ 扫描 + 相位斜坡）和 `_fft_peak`（FFT + 二次子格点插值）两个内部辅助函数支撑。
 
 ```python
 from sqc.calibration.frequency import SinglePointFrequencyCalibration
 
-# 方法 1: 单次 Ramsey
+# 方法 1: 单次 Ramsey（单扫模式，|Δ| 小 → f_artificial=0.1 足够）
 cal = SinglePointFrequencyCalibration(qubit=q, method="ramsey")
 table = cal.calibrate()
-print(table.outputs[0])    # 拟合得到的 f_01 (rad·GHz)
+print(table.outputs[0])    # 拟合得到的 f_01 (rad·GHz)，带符号
 
-# 方法 2: 闭环反馈 (Vepsalainen 2022)
+# 方法 2a: 闭环反馈 — 割线法 (默认)
 cal = SinglePointFrequencyCalibration(
     qubit=q, method="closed_loop",
     f_target=5.0 * 2 * np.pi,   # 目标频率
     V_a=-0.03, V_b=0.03,        # 电压 bracketing
-    measure_method="ramsey",     # 每次迭代用 Ramsey 测频
+    step_method="secant",        # 默认
+    bracket_tightening=True,     # 默认，regula falsi 加速收敛
 )
 table = cal.calibrate()
-print(table.fit_params["V_opt"])     # 收敛到的偏置电压
-print(table.fit_params["n_iter"])    # 迭代次数
+print(table.fit_params["converged"])  # True/False
+
+# 方法 2b: 闭环反馈 — 二分法（可视化诊断用，指数收敛趋势清晰）
+cal = SinglePointFrequencyCalibration(
+    qubit=q, method="closed_loop",
+    f_target=5.0 * 2 * np.pi,
+    V_a=-0.03, V_b=0.03,
+    step_method="bisection",     # 二分法
+)
+table = cal.calibrate()
+# table.fit_params["history"] 中每步含 bracket_width
 ```
 
-**闭环算法**（割线法，每次迭代调用 `_measure_frequency(flux)` 分发到 Ramsey 或瞬态法）：
-1. 初始 V_n = (V_a + V_b) / 2，测 r_n = f(V_n) - f_target
-2. 割线更新 V_next = V_n - r_n · (V_n - V_prev) / (r_n - r_prev)
-3. 越界则回退中点；收敛 |r_n| < epsilon_f 退出
+**闭环算法**（两种 root-finding 方法，每次迭代通过 `_measure_frequency(flux)` 测频）：
+- **割线法** (secant)：维护 V_{n-1}, V_n，割线外推 V_{n+1} = V_n − r_n·(V_n − V_{n-1}) / (r_n − r_{n-1})。若越界 [V_a, V_b] 回退中点。`bracket_tightening=True`（默认）时每次迭代收紧边界（regula falsi），通常 1–3 次收敛。
+- **二分法** (bisection)：每次取中点 V_mid = (V_lo + V_hi)/2，根据 r_mid·r_lo 的符号缩半区间。收敛 O(log₂(范围/ε))，约 10–15 次迭代，适合可视化诊断。自动处理偶对称 f(Φ)（在 Φ=0 处拆分 bracket）。
+
+`_measure_frequency` 使用双扫模式（`f_artificial=None`）以保证任意 flux 下的符号正确性。
 
 #### 4.7.4 `WaveformCalibration` + `PredistortionDesigner` 详例
 
@@ -1117,7 +1162,7 @@ ChipTopology + TransferMatrix (ground truth)
 TransientSensingExperiment(qubit=QB, flux=Φ_B)
     │
     ▼
-WienerReconstruction
+TransientReconstruction(method="wiener")
     │ → Φ_B_estimated
     ▼
 freq-domain deconvolution (Φ_B_est × V_A*) / (|V_A|² + λ²)
@@ -1140,7 +1185,7 @@ Apply compensation → verify reduced Φ_B
 5. 构造 H_list：HamiltonianBuilder.build(...) (simulation)
 6. 演化：MesolveRunner.run(...)     (simulation)
 7. 封装：ExperimentResult(...)      (simulation)
-8. 反演：WienerReconstruction.reconstruct(...) (reconstruction)
+8. 反演：TransientReconstruction(method="wiener").reconstruct(...) (reconstruction)
 9. 标定（可选）：Calibration.calibrate() (calibration)
 10. 流程（可选）：Workflow.run()    (workflows)
 ```
@@ -1599,13 +1644,12 @@ sqc.config.CONFIG = sqc.config.Config(
 | `CryoscopeExperiment` | `sqc.experiments.cryoscope` | Cryoscope |
 | `Reconstruction` | `sqc.reconstruction.base` | 重建 ABC |
 | `KernelEstimator` | `sqc.reconstruction.kernel` | 控制核估计 |
-| `WienerReconstruction` | `sqc.reconstruction.wiener` | Wiener 反卷积 |
-| `RamseyIQReconstruction` | `sqc.reconstruction.wiener` | Ramsey IQ 反演 |
-| `RamseyUnwrapReconstruction` | `sqc.reconstruction.wiener` | Ramsey 解缠绕 |
-| `DiffEchoReconstruction` | `sqc.reconstruction.wiener` | 差分回波反演 |
-| `HammersteinWienerReconstruction` | `sqc.reconstruction.hammerstein` | 非线性反演 |
-| `LMReconstruction` | `sqc.reconstruction.numerical_inverse` | LM 数值反演 |
-| `CryoscopeReconstruction` | `sqc.reconstruction.cryoscope` | Cryoscope 反演 |
+| `RamseyReconstruction` | `sqc.reconstruction.ramsey` | Ramsey 协议重建 (iq/unwrap) |
+| `EchoReconstruction` | `sqc.reconstruction.echo` | 差分回波协议重建 |
+| `TransientReconstruction` | `sqc.reconstruction.transient` | 瞬态协议重建 (wiener/hammerstein/lm) |
+| `CryoscopeReconstruction` | `sqc.reconstruction.cryoscope` | Cryoscope 协议重建 |
+| `DelayRamseyReconstruction` | `sqc.reconstruction.delay_ramsey` | 延迟 Ramsey 协议重建 |
+| `PiPulseCompReconstruction` | `sqc.reconstruction.pi_pulse_comp` | π脉冲补偿协议重建 |
 | `Calibration` | `sqc.calibration.base` | 标定 ABC |
 | `CalibrationTable` | `sqc.calibration.base` | 标定结果 |
 | `FluxResponseCalibration` | `sqc.calibration.frequency` | f(Φ) 磁通响应标定 |
@@ -1613,8 +1657,8 @@ sqc.config.CONFIG = sqc.config.Config(
 | `WaveformCalibration` | `sqc.calibration.waveform` | 波形标定（传输函数+预失真） |
 | `PredistortionDesigner` | `sqc.calibration.waveform` | 预失真设计器 |
 | `CalibrationScheduler` | `sqc.calibration.scheduler` | 标定控制室 |
-| `CryoscopeCalibration` | `sqc.reconstruction.cryoscope_calib` | φ(h) 重建前置标定 |
-| `DelayRamseyCalibration` | `sqc.reconstruction.delay_ramsey_calib` | φ(z) 重建前置标定 |
+| `CryoscopeCalibration` | `sqc.reconstruction.cryoscope` | φ(h) 重建前置标定 |
+| `DelayRamseyCalibration` | `sqc.reconstruction.delay_ramsey` | φ(z) 重建前置标定 |
 | `Workflow` | `sqc.workflows.base` | 顶层流程 ABC |
 | `PredistortionValidationWorkflow` | `sqc.workflows.predistortion_validation` | 预失真验证 |
 | `ZCrosstalkWorkflow` | `sqc.workflows.z_crosstalk` | Z 串扰提取 |
@@ -1638,16 +1682,14 @@ HamiltonianBuilder.build(qubit, flux_signal, pulse, frame, omega_d)
 KernelEstimator(stim_amplitude=0.0215, stim_width=3.0).estimate(pulse, qubit)
     -> tuple[np.ndarray, np.ndarray]  # (t_samples, kernel)
 
-# WienerReconstruction
-WienerReconstruction(lambda_reg=1.0).reconstruct(
-    measurement, kernel, calibration=None, dt=None
+# TransientReconstruction
+TransientReconstruction(method="wiener", lambda_reg=1.0).reconstruct(
+    measurement, kernel, dt=None,
 ) -> FluxSignal
 
-# LMReconstruction
-LMReconstruction(
-    qubit, control_pulse, basis_type="fourier", n_basis=100,
-    lambda_reg=100.0, max_iter=10, tol=1e-6, mu_init=1e-3,
-    use_adjoint=True,
+TransientReconstruction(
+    method="lm", qubit=qubit, control_pulse=cp,
+    basis_type="fourier", n_basis=100, max_iter=10,
 ).reconstruct(measurement, initial_guess=None) -> tuple[FluxSignal, dict]
 
 # ControlLine
@@ -1872,8 +1914,8 @@ def _gap(duration): ...        # 仅在 sequence.py 内部使用
 - `Protocal`（故意错拼）在 `src/` 和 `src_mirror/` 中**永远保留**
 - `sliding_measrement`（故意错拼）在 facade 中保留
 - `sqc/` 中新代码使用正确拼写：`Protocol`, `Experiment`, `Calibration`
-- 类名用 PascalCase（`RamseyExperiment`、`WienerReconstruction`）
-- 文件名用 snake_case（`ramsey.py`、`wiener.py`）
+- 类名用 PascalCase（`RamseyExperiment`、`TransientReconstruction`）
+- 文件名用 snake_case（`ramsey.py`、`transient.py`）
 - 私有标识符以 `_` 开头（`_GT`、`_gap`）
 
 ### 11.3 单位约定
@@ -2025,7 +2067,9 @@ mesolve(H_list, psi0, t_array, c_ops, e_ops)
 |---|---|---|
 | v1.0 | 2026-05-01 | 初版，覆盖六层架构与基本扩展指南 |
 | v2.0 | 2026-05-12 | 引入全局配置（§10）；按 Gao 2021 章节重组（§12 附录）；每个模块扩展物理对应与扩展点；新增 R1 硬约束说明；测试统计更新到 228 |
-| v2.1 | 2026-05-14 | 标定模块重构：frequency.py（FluxResponseCalibration + SinglePointFrequencyCalibration 含闭环反馈）、waveform.py（WaveformCalibration + PredistortionDesigner）、scheduler.py（CalibrationScheduler 控制室）；重建前置标定 CryoscopeCalibration/DelayRamseyCalibration 移入 reconstruction/；删除 qubit_frequency.py/flux_response.py/transfer_function.py/predistortion.py/delay_ramsey.py |
+| v2.1 | 2026-05-14 | 标定模块重构：frequency.py（FluxResponseCalibration + SinglePointFrequencyCalibration 含闭环反馈）、waveform.py（WaveformCalibration + PredistortionDesigner）、scheduler.py（CalibrationScheduler 控制室）；重建前置标定移入 reconstruction/ | 
+| v2.2 | 2026-05-14 | 重建模块重构：按传感协议统一接口 — ramsey.py (RamseyReconstruction)、echo.py (EchoReconstruction)、transient.py (TransientReconstruction wiener/hammerstein/lm)、cryoscope.py、delay_ramsey.py、pi_pulse_comp.py；消除 _qubit_inverse_frequency / _build_h_for_signal 重复；删除 wiener/hammerstein/numerical_inverse/cryoscope_calib/delay_ramsey_calib/tail.py |
+| v2.3 | 2026-05-15 | 频率标定双模人工失谐测频：`_fit_ramsey_frequency` 拆分 `_fft_peak` + `_run_ramsey_sweep` + 编排层，支持单扫（`f_artificial`=float）和双扫（`f_artificial`=None）两种模式；闭环反馈新增 step_method=bisection 和 bracket_tightening 参数；_measure_frequency 切换双扫提高鲁棒性；瞬态测频 `_measure_frequency_transient` 完成实现。实验层新增 DelayRamseyExperiment 和 PiPulseCompensationExperiment，均支持 t_fall 参数；PiPulseComp z* 提取新增抛物线插值。IQ 读出新增 `_resample_hamiltonian` 统一时间网格 + max_step 选项消除插值伪影 |
 
 下一步阅读：
 - 完整设计背景：[`idea/refactor/_refactor_plan.md`](../idea/refactor/_refactor_plan.md)

@@ -40,16 +40,12 @@ from sqc.reconstruction.basis import (
     R,
 )
 from sqc.reconstruction.kernel import KernelEstimator
-from sqc.reconstruction.wiener import (
-    WienerReconstruction,
-    RamseyIQReconstruction,
-    RamseyUnwrapReconstruction,
-    DiffEchoReconstruction,
-)
-from sqc.reconstruction.hammerstein import HammersteinWienerReconstruction
-from sqc.reconstruction.numerical_inverse import LMReconstruction
+from sqc.reconstruction.transient import TransientReconstruction
+from sqc.reconstruction.ramsey import RamseyReconstruction
+from sqc.reconstruction.echo import EchoReconstruction
 from sqc.reconstruction.cryoscope import CryoscopeReconstruction
-from sqc.reconstruction.tail import TailReconstruction
+from sqc.reconstruction.delay_ramsey import DelayRamseyReconstruction
+from sqc.reconstruction.pi_pulse_comp import PiPulseCompReconstruction
 from sqc.simulation.result import (
     ExperimentResult,
     extract_expectation,
@@ -80,7 +76,7 @@ def forward_simulation(qubit, control_pulse, B_curr, t_meas, H_list, t_evolve_li
     _forward_simulation. For direct use in new code, prefer
     LMReconstruction._forward_simulation.
     """
-    recon = LMReconstruction(qubit=qubit, control_pulse=control_pulse)
+    recon = TransientReconstruction(method="lm", qubit=qubit, control_pulse=control_pulse)
     return recon._forward_simulation(B_curr, t_meas, H_list, t_evolve_list)
 
 
@@ -88,11 +84,10 @@ def compute_jacobian(qubit, control_pulse, B_curr, t_meas, results,
                      H_list, t_evolve_list):
     """Module-level compute_jacobian (adjoint) facade.
 
-    Creates a temporary LMReconstruction instance and delegates to
-    _compute_jacobian_adjoint. For direct use in new code, prefer
-    LMReconstruction._compute_jacobian_adjoint.
+    Creates a temporary TransientReconstruction and delegates to
+    _compute_jacobian_adjoint.
     """
-    recon = LMReconstruction(qubit=qubit, control_pulse=control_pulse)
+    recon = TransientReconstruction(method="lm", qubit=qubit, control_pulse=control_pulse)
     return recon._compute_jacobian_adjoint(
         B_curr, t_meas, results, H_list, t_evolve_list
     )
@@ -107,7 +102,7 @@ def compute_jacobian_finite_difference(qubit, control_pulse, B_curr,
     _compute_jacobian_fd. For direct use in new code, prefer
     LMReconstruction._compute_jacobian_fd.
     """
-    recon = LMReconstruction(qubit=qubit, control_pulse=control_pulse)
+    recon = TransientReconstruction(method="lm", qubit=qubit, control_pulse=control_pulse)
     return recon._compute_jacobian_fd(
         B_curr, t_meas, p_sim, H_list, t_evolve_list, epsilon=epsilon
     )
@@ -122,8 +117,8 @@ def levenberg_marquardt(qubit, p_meas, t_list, control_pulse,
     _levenberg_marquardt. For direct use in new code, prefer
     LMReconstruction._levenberg_marquardt.
     """
-    recon = LMReconstruction(
-        qubit=qubit, control_pulse=control_pulse,
+    recon = TransientReconstruction(
+        method="lm", qubit=qubit, control_pulse=control_pulse,
         lambda_reg=reg, max_iter=int(max_iter), tol=tol,
         mu_init=mu_init,
     )
@@ -218,7 +213,7 @@ class Analysis:
         np.ndarray
             Reconstructed B(tau).
         """
-        recon = RamseyIQReconstruction(qubit=qubit)
+        recon = RamseyReconstruction(qubit=qubit, method="iq")
         meas = ExperimentResult(
             data={
                 "p_e_I": np.asarray(p_e_list_I, dtype=float),
@@ -250,7 +245,7 @@ class Analysis:
         np.ndarray
             Reconstructed B(tau).
         """
-        recon = RamseyUnwrapReconstruction(qubit=qubit, k_span=k_span)
+        recon = RamseyReconstruction(qubit=qubit, method="unwrap", k_span=k_span)
         meas = ExperimentResult(
             data={"p_e": np.asarray(p_e_list, dtype=float)},
             axes={"tau": np.asarray(tau_list, dtype=float)},
@@ -281,7 +276,7 @@ class Analysis:
         np.ndarray
             Reconstructed B.
         """
-        recon = DiffEchoReconstruction(qubit=qubit, t_int=t_int, k=k)
+        recon = EchoReconstruction(qubit=qubit, t_int=t_int, k=k)
         meas = ExperimentResult(
             data={"p_e": np.asarray(p_e_list, dtype=float)},
         )
@@ -344,7 +339,7 @@ class Analysis:
         tuple[np.ndarray, np.ndarray]
             (t_list, reconstructed_signal)
         """
-        recon = WienerReconstruction(lambda_reg=lambdas)
+        recon = TransientReconstruction(method="wiener", lambda_reg=lambdas)
         result = recon.reconstruct(delta_p, kernel, dt=dt)
         return result.t_list, result.signal
 
@@ -353,7 +348,7 @@ class Analysis:
     ):
         """Hammerstein-Wiener nonlinear deconvolution.
 
-        Delegates to HammersteinWienerReconstruction.
+        Delegates to TransientReconstruction(method="hammerstein").
 
         Parameters
         ----------
@@ -372,11 +367,10 @@ class Analysis:
         tuple[np.ndarray, np.ndarray]
             (B_list, B) — time axis and reconstructed B-field.
         """
-        recon = HammersteinWienerReconstruction(
-            qubit=qubit, lambda_reg=lambdas,
+        recon = TransientReconstruction(
+            method="hammerstein", qubit=qubit, lambda_reg=lambdas,
         )
-        # Wiener step gives us the time axis; Hammerstein returns B
-        wiener = WienerReconstruction(lambda_reg=lambdas)
+        wiener = TransientReconstruction(method="wiener", lambda_reg=lambdas)
         omega_signal = wiener.reconstruct(delta_p, kernel, dt=dt)
         omega_lists = omega_signal.t_list
         B = recon.reconstruct(delta_p, kernel, dt=dt)
@@ -421,7 +415,8 @@ class Analysis:
         tuple[np.ndarray, dict]
             (B_opt, history) — reconstructed B(t) and iteration history.
         """
-        recon = LMReconstruction(
+        recon = TransientReconstruction(
+            method="lm",
             qubit=qubit,
             control_pulse=control_pulse,
             basis_type=basis_type,
@@ -517,8 +512,8 @@ class Analysis:
         FluxSignal
             Reconstructed tail flux waveform.
         """
-        recon = TailReconstruction(
-            calibration=calibration, method="delay_ramsey",
+        recon = DelayRamseyReconstruction(
+            calibration=calibration,
         )
         return recon.reconstruct(measurement)
 
@@ -536,5 +531,5 @@ class Analysis:
         FluxSignal
             Reconstructed tail flux waveform.
         """
-        recon = TailReconstruction(method="pi_pulse_comp")
+        recon = PiPulseCompReconstruction()
         return recon.reconstruct(measurement)

@@ -322,8 +322,8 @@ class Calibration:
             FluxResponseCalibration,
             SinglePointFrequencyCalibration,
         )
-        from sqc.reconstruction.delay_ramsey_calib import DelayRamseyCalibration
-        from sqc.reconstruction.cryoscope_calib import CryoscopeCalibration
+        from sqc.reconstruction.delay_ramsey import DelayRamseyCalibration
+        from sqc.reconstruction.cryoscope import CryoscopeCalibration
 
         match self.type:
             case 0:  # Ramsey frequency f_01 calibration

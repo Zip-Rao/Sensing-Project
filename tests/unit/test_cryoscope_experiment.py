@@ -216,7 +216,7 @@ class TestFluxResponseCalibration:
     def test_cryoscope_smoke(self):
         """method='cryoscope' runs and returns CalibrationTable(kind='phi_h')."""
         q = _make_qubit()
-        from sqc.reconstruction.cryoscope_calib import CryoscopeCalibration
+        from sqc.reconstruction.cryoscope import CryoscopeCalibration
 
         # Use a small h_list for speed
         f = CryoscopeCalibration(

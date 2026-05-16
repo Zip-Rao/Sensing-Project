@@ -100,10 +100,11 @@ def test_lm_default_baseline():
         t_rabi=np.linspace(0, 5, 6), tau=5.0, omega_d=q.frequency,
     )
 
-    from sqc.reconstruction.numerical_inverse import LMReconstruction
+    from sqc.reconstruction.transient import TransientReconstruction
     from sqc.simulation.result import ExperimentResult
 
-    recon = LMReconstruction(
+    recon = TransientReconstruction(
+        method="lm",
         qubit=q,
         control_pulse=cp,
         basis_type=bl["basis_type"],

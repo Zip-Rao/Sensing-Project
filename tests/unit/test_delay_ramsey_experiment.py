@@ -120,7 +120,7 @@ class TestDelayRamseyCalibration:
 
     def test_calibrate_smoke(self):
         """calibrate() completes and returns CalibrationTable."""
-        from sqc.reconstruction.delay_ramsey_calib import DelayRamseyCalibration
+        from sqc.reconstruction.delay_ramsey import DelayRamseyCalibration
 
         q = _make_qubit()
         cal = DelayRamseyCalibration(
@@ -141,7 +141,8 @@ class TestTailReconstruction:
 
     def test_delay_ramsey_reconstruct(self):
         """TailReconstruction with delay_ramsey method via calibration."""
-        from sqc.reconstruction.tail import TailReconstruction
+        from sqc.reconstruction.delay_ramsey import DelayRamseyReconstruction
+        from sqc.reconstruction.pi_pulse_comp import PiPulseCompReconstruction
         from sqc.calibration.base import CalibrationTable
         from sqc.simulation.result import ExperimentResult
 
@@ -161,8 +162,8 @@ class TestTailReconstruction:
             config={"tau_R": 20.0},
         )
 
-        recon = TailReconstruction(
-            calibration=cal, method="delay_ramsey", inversion="calibration",
+        recon = DelayRamseyReconstruction(
+            calibration=cal, inversion="calibration",
         )
         flux = recon.reconstruct(meas)
 
@@ -171,7 +172,8 @@ class TestTailReconstruction:
 
     def test_pi_pulse_comp_reconstruct(self):
         """TailReconstruction with pi_pulse_comp method."""
-        from sqc.reconstruction.tail import TailReconstruction
+        from sqc.reconstruction.delay_ramsey import DelayRamseyReconstruction
+        from sqc.reconstruction.pi_pulse_comp import PiPulseCompReconstruction
         from sqc.simulation.result import ExperimentResult
 
         # z_star = [0.005, 0.003, 0.001] → flux = -z_star
@@ -180,7 +182,7 @@ class TestTailReconstruction:
             axes={"tau": np.array([0.0, 10.0, 20.0])},
         )
 
-        recon = TailReconstruction(method="pi_pulse_comp")
+        recon = PiPulseCompReconstruction()
         flux = recon.reconstruct(meas)
 
         assert flux.type == 8

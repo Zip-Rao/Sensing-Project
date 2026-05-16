@@ -73,8 +73,9 @@ TODO...
 
 ## TODO
 - 在重构项目中：
-    - tomo，pi补偿，delay Ramsey 
-    - qubit标定，预失真
+    - ***tomo，pi补偿，delay Ramsey（待修正） 
+    - ***qubit标定，预失真
+    - 核函数扩展适配，修正脉冲期间的相位积累
     - 扩展Ramsey协议，支持相位unwrap(IQ调制)，
     - 基函数比较：Fourier，B-spline，Legendre
     - [差分回波协议](./_sensing%20theory.md)
@@ -82,8 +83,9 @@ TODO...
     - tomo
     - 加噪声，加耗散
     - 并行优化，代码结构优化：
-        - 统一时间轴t_global，统一时间间隔，优化函数接口与扩展性
-        - 全局统一t_rabi
+        - 统一时间轴t_global， *统一时间间隔，优化函数接口与扩展性
+        - workflow控制台设计，支持不同任务编排
+        - *全局统一t_rabi
         - *超导量子比特的实际架构：参考Practical Guide for Building Superconducting Quantum Devices
     - demo
     - 当脉冲时间不可忽略时，完善以上协议
