@@ -152,7 +152,7 @@ class TransientReconstruction(Reconstruction):
 
         return FluxSignal(
             type=8,
-            t_list=np.linspace(0, (N - 1) * dt, N),
+            t_list=np.arange(0, N * dt, dt),
             signal=x_rec,
         )
 
@@ -219,9 +219,10 @@ class TransientReconstruction(Reconstruction):
         for i, t_delay in enumerate(t_meas):
             delta = t_delay - 0.5 * cp.t_list[-1]
             t_start = min(t_list[0], delta)
-            t_end = max(t_list[-1], delta + cp.t_list[-1])
             N_e = len(t_list) + len(cp.t_list) - 1
-            t_evolve = np.linspace(t_start, t_end, N_e)
+            _dt = float(CONFIG.awg.dt)
+            t_start_grid = np.floor(t_start / _dt) * _dt
+            t_evolve = np.arange(t_start_grid, t_start_grid + N_e * _dt, _dt)[:N_e]
             t_evolve_list[i] = t_evolve
 
             freq_coeffs = np.zeros(N_e, dtype=float)
@@ -439,8 +440,10 @@ class TransientReconstruction(Reconstruction):
         history = {"b": [b.copy()], "res": [], "mu": [mu]}
 
         meas_start = t_list[0] - 0.5 * cp.t_list[-1]
-        meas_end = t_list[-1] + 0.5 * cp.t_list[-1]
-        t_meas = np.linspace(meas_start, meas_end, len(t_list) + len(cp.t_list) - 1)
+        N_meas = len(t_list) + len(cp.t_list) - 1
+        _dt = float(CONFIG.awg.dt)
+        meas_start_grid = np.floor(meas_start / _dt) * _dt
+        t_meas = np.arange(meas_start_grid, meas_start_grid + N_meas * _dt, _dt)[:N_meas]
 
         def build_H():
             return self._build_h_for_signal(t_list, t_meas)
