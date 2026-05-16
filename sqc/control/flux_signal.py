@@ -455,7 +455,7 @@ class CompositeSignal(CompositeWaveform):
             pulse_list = [t + curr for t in sig.t_list]
             t_list.extend(pulse_list)
             if pulse_list:
-                curr = pulse_list[-1] + 1e-9
+                curr = pulse_list[-1]  # P7.5: removed 1e-9 separator
         return np.array(t_list, dtype=float)
 
     def _compute_samples(self) -> np.ndarray:

@@ -292,10 +292,7 @@ class Pulse(PulseBase):
         -------
         float
         """
-        num_points = 1000
-        t_list = np.linspace(
-            self.Omega.t_list[0], self.Omega.t_list[-1], num_points
-        )
+        t_list = np.asarray(self.Omega.t_list, dtype=float)
         Omegas = [self.get_Rabi_frequency(t) for t in t_list]
         angle = np.trapezoid(Omegas, t_list)
         return angle
@@ -399,6 +396,9 @@ class CompositePulse(PulseBase):
     def get_t_list(self) -> np.ndarray:
         """Compute merged time axis from sub-pulses.
 
+        *Deprecated*: prefer ``hamiltonian_on(t_global)`` instead.
+        This method is retained for backward compatibility only.
+
         Returns
         -------
         np.ndarray
@@ -409,7 +409,7 @@ class CompositePulse(PulseBase):
             pulse_list = [t + curr for t in pulse.Omega.t_list]
             t_list.extend(pulse_list)
             if pulse_list:
-                curr = pulse_list[-1] + 1e-9
+                curr = pulse_list[-1]  # P7.5: removed 1e-9 separator
         return np.array(t_list)
 
     def get_Omega(self, t: float) -> float:
