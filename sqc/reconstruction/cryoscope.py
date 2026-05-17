@@ -174,6 +174,18 @@ class CryoscopeCalibration(Calibration):
         )
         varphi = unwrap_phase_with_model(varphi_raw, varphi_theory)
 
+        # Anchor calibration zero to h=0: subtract the residual phase at
+        # h=0 so that cal.inverse(0) == 0.  IQ readout adds a finite
+        # system phase (from finite-duration pi/2 pulses, RWA residuals,
+        # etc.) that the analytical theory (omega_q - omega_d) * tau
+        # does not capture.  The reconstruction layer uses dphi/dt * tau,
+        # whose constant offset cancels in differentiation, so the
+        # corresponding cal-table offset must be subtracted here for
+        # both paths to share the same zero.
+        h_list_arr = np.asarray(self.h_list, dtype=float)
+        i_h0 = int(np.argmin(np.abs(h_list_arr)))
+        varphi = varphi - varphi[i_h0]
+
         return CalibrationTable(
             name="cryoscope_phi_h",
             qubit_name=getattr(self.qubit, "name", "qubit"),
