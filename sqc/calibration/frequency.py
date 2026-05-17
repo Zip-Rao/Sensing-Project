@@ -86,9 +86,12 @@ def _run_ramsey_sweep(
             QobjEvo(qubit.H_list, tlist=qubit.mag_signal.t_list, order=1)
             + QobjEvo(ctrl.hamiltonian_on(t_global), tlist=t_global, order=1)
         )
+        # max_step prevents adaptive stepper from skipping over narrow
+        # pulse windows on the long t_global axis.
         result = mesolve(
             H, qubit.state, t_global, [],
             e_ops=[psi_e * psi_e.dag()],
+            options={"max_step": float(CONFIG.awg.dt)},
         )
         p_e_vals[i] = float(result.expect[0][-1])
 
@@ -631,6 +634,7 @@ class SinglePointFrequencyCalibration(Calibration):
         res_x = mesolve(
             H_x, self.qubit.state, self.t_global, [],
             e_ops=[psi_e * psi_e.dag()],
+            options={"max_step": float(CONFIG.awg.dt)},
         )
         p_x = float(res_x.expect[0][-1])
 
@@ -640,6 +644,7 @@ class SinglePointFrequencyCalibration(Calibration):
         res_mx = mesolve(
             H_mx, self.qubit.state, self.t_global, [],
             e_ops=[psi_e * psi_e.dag()],
+            options={"max_step": float(CONFIG.awg.dt)},
         )
         p_mx = float(res_mx.expect[0][-1])
 
