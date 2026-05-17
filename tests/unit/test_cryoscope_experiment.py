@@ -243,14 +243,65 @@ class TestFluxResponseCalibration:
             f.calibrate()
 
 
-class TestTransientFrequencyCalibrationStub:
-    """Verify that TransientFrequencyCalibration stub raises correctly."""
+class TestFrequencyMeasurement:
+    """Verify FrequencyMeasurement (single-point f01 measurement)."""
 
-    def test_calibrate_raises_not_implemented(self):
-        """TransientFrequencyCalibration.calibrate raises NotImplementedError."""
+    def test_instantiation_ramsey(self):
+        """method='ramsey' instantiates with default Ramsey parameters."""
+        q = _make_qubit()
+        from sqc.calibration.frequency import FrequencyMeasurement
+
+        m = FrequencyMeasurement(qubit=q, method="ramsey")
+        # default f_artificial = 0.1 GHz (single-sweep mode)
+        assert m.method == "ramsey"
+        assert m.f_artificial == 0.1
+        assert m.flux == 0.0
+        assert m.tau_list is not None and len(m.tau_list) > 0
+
+    def test_instantiation_transient(self):
+        """method='transient' instantiates without raising (Track B 1.2 wired)."""
+        q = _make_qubit()
+        from sqc.calibration.frequency import FrequencyMeasurement
+
+        m = FrequencyMeasurement(qubit=q, method="transient", flux=0.005)
+        assert m.method == "transient"
+        assert m.flux == 0.005
+
+
+class TestSinglePointFrequencyCalibration:
+    """Verify SinglePointFrequencyCalibration (closed-loop only)."""
+
+    def test_closed_loop_requires_f_target(self):
+        """calibrate() raises ValueError if f_target is missing."""
         q = _make_qubit()
         from sqc.calibration.frequency import SinglePointFrequencyCalibration
 
-        tc = SinglePointFrequencyCalibration(qubit=q, method="transient")
-        with pytest.raises(NotImplementedError, match="Track B 1.2"):
-            tc.calibrate()
+        cal = SinglePointFrequencyCalibration(qubit=q, V_a=-0.01, V_b=0.01)
+        with pytest.raises(ValueError, match="f_target"):
+            cal.calibrate()
+
+    def test_closed_loop_requires_bracket(self):
+        """calibrate() raises ValueError if V_a/V_b are missing."""
+        q = _make_qubit()
+        from sqc.calibration.frequency import SinglePointFrequencyCalibration
+
+        cal = SinglePointFrequencyCalibration(qubit=q, f_target=5.0 * 2 * np.pi)
+        with pytest.raises(ValueError, match="V_a and V_b"):
+            cal.calibrate()
+
+    def test_builds_internal_measurement(self):
+        """__post_init__ wires an internal FrequencyMeasurement instance."""
+        q = _make_qubit()
+        from sqc.calibration.frequency import (
+            FrequencyMeasurement,
+            SinglePointFrequencyCalibration,
+        )
+
+        cal = SinglePointFrequencyCalibration(
+            qubit=q, f_target=5.0 * 2 * np.pi, V_a=-0.01, V_b=0.01,
+            measure_method="ramsey",
+        )
+        assert isinstance(cal._meas, FrequencyMeasurement)
+        # closed-loop always uses double-sweep (f_artificial=None)
+        assert cal._meas.f_artificial is None
+        assert cal._meas.method == "ramsey"

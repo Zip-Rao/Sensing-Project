@@ -13,8 +13,8 @@ from typing import Literal, Optional
 import numpy as np
 
 from sqc.control.waveform import Waveform
-
-
+from sqc.hardware.distortion import DistortionModel
+from sqc.calibration.waveform import PredistortionDesigner
 @dataclass
 class ControlLine:
     """Models a physical control line (xy / z / readout) with

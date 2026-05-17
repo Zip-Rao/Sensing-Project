@@ -26,10 +26,12 @@
 三条主线在数据上互相喂养：
 
 ```
-                  ┌────────────────────────────────────┐
-                  │    主线 B（频率标定）              │
-                  │  Ramsey / closed-loop / transient  │
-                  └──────────┬─────────────────────────┘
+                  ┌────────────────────────────────────────────────┐
+                  │    主线 B（频率标定）                          │
+                  │  FluxResponse (f(Φ)) / FrequencyMeasurement   │
+                  │  (单点测量 ramsey/transient) /                 │
+                  │  SinglePointFrequencyCalibration (闭环调谐)    │
+                  └──────────┬─────────────────────────────────────┘
                              │  CalibrationTable(f_phi, f01)
                              ▼
   ┌──────────────────────────────────────────────────┐
@@ -64,7 +66,7 @@
 ### 0.4 文档导航
 
 - §1 = 主线 A（波形重建，4 个协议）
-- §2 = 主线 B（频率标定，2 个标定器）
+- §2 = 主线 B（频率标定，3 个标定器：FluxResponse / FrequencyMeasurement / SinglePointFrequencyCalibration，v2.5 起测量与调谐职责分离）
 - §3 = 主线 C（预失真，5 个失真模型 + 设计器 + 端到端 workflow）
 - 附录 A = 公式速查
 - 附录 B = 参考文献
@@ -864,6 +866,8 @@ B_hammer = rec_hammer.reconstruct(trans_result, kernel=kernel)
 
 ## 2.1 标定层概览
 
+频率主线分**测量**（read-only）与**调谐**（write/feedback）两个职责清晰的类，由 v2.5 重构落定。`FluxResponseCalibration` 给宽视野 f(Φ) 曲线；`FrequencyMeasurement` 给单点 f₀₁；`SinglePointFrequencyCalibration` 用闭环把 f₀₁ 推到目标值，内部组合一个 `FrequencyMeasurement` 实例完成每步测频。
+
 ```
                        sqc.calibration
                               │
@@ -872,20 +876,35 @@ B_hammer = rec_hammer.reconstruct(trans_result, kernel=kernel)
    CalibrationTable      Calibration (ABC)               CalibrationScheduler
    (base.py:19)          (base.py:167)                   (scheduler.py:19)
         │                     │                                 │
-   evaluate(x)        ┌───────┴───────┬─────────────┐    register / run / run_next
-   inverse(y)         │               │             │
-                      │               │             │
-              FluxResponseCal   SinglePointFreqCal  WaveformCal
-              (frequency.py)   (frequency.py)      (waveform.py)
-              ├ "ramsey"        ├ "ramsey"          ├ "transfer_function"
-              └ "transient"*    ├ "closed_loop"     └ "predistortion"
-                                └ "transient"
-                                  ├ measure="ramsey"
-                                  └ measure="transient"
-              * Track B 1.2 待实现           Δω = p_diff / G_α
+   evaluate(x)        ┌───────┴───────────────┬─────────────────┴────┬──────────┐
+   inverse(y)         │                       │                      │          │
+                      │                       │                      │          │
+            FluxResponseCal           FrequencyMeasurement   SinglePointFreqCal  WaveformCal
+            (frequency.py)            (frequency.py, v2.5)   (frequency.py)     (waveform.py)
+            ├ "ramsey"                ├ "ramsey"             └ "closed_loop"    ├ "transfer_function"
+            └ "transient"*            └ "transient"             ├ secant         └ "predistortion"
+                                                                ├ bisection
+            f(Φ) 曲线                  单点 f₀₁ 测量              + 内部 FrequencyMeasurement
+                                      (read-only)                (闭环调谐)
+                                      .measure(flux) -> float
+                                      .calibrate() -> CalibrationTable
+
+            * Track B 1.2 待实现       Track B 1.2 已接通          为未来调谐策略预留 method 字段
+                                      (gradient / feedforward 等)
 ```
 
-注：`FluxResponseCalibration / SinglePointFrequencyCalibration` 是频率主线的核心；`WaveformCalibration / PredistortionDesigner` 形式上也属于 calibration 模块，但属于主线 C（§3.3 详述）。
+注：`FluxResponseCalibration / FrequencyMeasurement / SinglePointFrequencyCalibration` 是频率主线的核心；`WaveformCalibration / PredistortionDesigner` 形式上也属于 calibration 模块，但属于主线 C（§3.3 详述）。
+
+**测量与调谐的职责分离**——这是 v2.5 重构的核心动机：
+
+| 维度 | `FrequencyMeasurement` | `SinglePointFrequencyCalibration` |
+|------|------------------------|------------------------------------|
+| 物理目标 | **表征**（read f₀₁ at given flux） | **调谐**（drive f₀₁ → f_target） |
+| 反馈回路 | 无 | 有（secant/bisection on r(V) = 0） |
+| 必填参数 | `qubit` | `qubit, f_target, V_a, V_b` |
+| 调用次数 | 1× | N×（每个闭环迭代调一次 measurement） |
+| 接口形态 | `.measure(flux) -> float`（子例程）+ `.calibrate() -> CalibrationTable`（独立任务） | `.calibrate() -> CalibrationTable`（带 V_opt + history） |
+| 内部依赖 | 模块级 `_fit_ramsey_frequency` 或 `_measure_frequency_transient` | 持有 `self._meas: FrequencyMeasurement` 实例（dual-sweep ramsey 或 transient） |
 
 `CalibrationScheduler` 是一个轻量的"控制室"：
 
@@ -898,8 +917,8 @@ B_hammer = rec_hammer.reconstruct(trans_result, kernel=kernel)
 | 任务名 | 类 | 依赖 |
 |--------|----|------|
 | `flux_response_ramsey` | `FluxResponseCalibration(method="ramsey")` | — |
-| `frequency_ramsey` | `SinglePointFrequencyCalibration(method="ramsey")` | — |
-| `frequency_closed_loop` | `SinglePointFrequencyCalibration(method="closed_loop")` | `flux_response_ramsey` |
+| `frequency_measurement` | `FrequencyMeasurement` (method="ramsey" 默认 / "transient") | — |
+| `frequency_closed_loop` | `SinglePointFrequencyCalibration` (method="closed_loop") | `flux_response_ramsey` |
 | `waveform_transfer_function` | `WaveformCalibration(method="transfer_function")` | — |
 | `waveform_predistortion` | `WaveformCalibration(method="predistortion")` | `waveform_transfer_function` |
 
@@ -966,63 +985,92 @@ class FluxResponseCalibration(Calibration):
 - 给 closed-loop 标定提供 `V_a, V_b` bracket（scheduler 自动注入）。
 - 作为 Cryoscope/Delay Ramsey 标定的"宽视野" sanity check。
 
-## 2.4 `SinglePointFrequencyCalibration` — 单点 f₀₁
+## 2.4 `FrequencyMeasurement` — 单点 f₀₁ 测量
 
-[`sqc/calibration/frequency.py:207`](../sqc/calibration/frequency.py#L207) 三种 method：
+> **v2.5 重构说明**：旧版 `SinglePointFrequencyCalibration` 把"测频"和"闭环调谐"两件事都塞在一个 `method` 字段里（`"ramsey"`/`"closed_loop"`/`"transient"`），导致 closed_loop 既要管自己的搜索逻辑又要重复 dispatch 测频逻辑，参数列表里又混杂着只对部分 method 有意义的字段。v2.5 拆分后：测频归 `FrequencyMeasurement`，调谐归 `SinglePointFrequencyCalibration`（§2.5），闭环里"内部组合"一个 `FrequencyMeasurement` 实例完成每步迭代——这是经典 strategy + composition 范式，未来加新的调谐方法（gradient、feedforward 等）只需新加 case，不动测频。
 
-| method | 输出 | 何时用 |
-|--------|------|--------|
-| `"ramsey"` | f₀₁ at flux=0 | 单点测量、bare freq 校验 |
-| `"closed_loop"` | f₀₁ at 目标值附近的电压 V_opt | 把 qubit 调到 target frequency |
-| `"transient"` | (与 `"ramsey"` 同接口) | stub，Track B 1.2 |
+[`sqc/calibration/frequency.py:317`](../sqc/calibration/frequency.py#L317) `FrequencyMeasurement` 是单点 f₀₁ 测量类，提供两种测量方式：
 
-### 2.4.1 `"ramsey"` 单次
+| method | 物理原理 | 时间代价 | 何时用 |
+|--------|----------|----------|--------|
+| `"ramsey"` | Ramsey τ-sweep + FFT 提失谐峰（含单/双扫两个子模式） | `len(tau_list) ×` mesolve（默认 ~80×） | 高精度独立测频；闭环内层（双扫） |
+| `"transient"` | τ=0 正交 Ramsey + 核函数灵敏度 G_α | 2× mesolve + 1× kernel | 弱信号近似下的高速测频（闭环内层加速） |
 
-[`frequency.py:303-321`](../sqc/calibration/frequency.py#L303-L321)：直接调一次 `_fit_ramsey_frequency(..., flux=0.0)` 包成 `CalibrationTable(kind="f01")`。
+**两种接口形态**：
 
-### 2.4.2 `"closed_loop"` 反馈控制
+- `.measure(flux=None) -> float`：直接返回 f₀₁ (rad·GHz)，作为子例程被闭环反复调用。
+- `.calibrate() -> CalibrationTable`：标准 Calibration 接口，包装单点结果供 scheduler 注册和后续 evaluate/inverse 调用。
 
-[`frequency.py:327-352`](../sqc/calibration/frequency.py#L327-L352) `_calibrate_closed_loop()`：把"找 V 使 f(V) = f_target"当成根求解问题 r(V) = f_Q(V) − f_target = 0，两种算法：
+数据类签名（[`frequency.py:317-378`](../sqc/calibration/frequency.py#L317-L378)）：
 
-**A. Secant 法（默认 `step_method="secant"`）** ([`frequency.py:355-400`](../sqc/calibration/frequency.py#L355-L400))：
+```python
+@dataclass
+class FrequencyMeasurement(Calibration):
+    qubit: object
+    method: Literal["ramsey", "transient"] = "ramsey"
+    flux: float = 0.0                                          # 默认测 sweet spot
+
+    # Ramsey-specific（method="transient" 时只用 t_rabi / t_global）
+    tau_list: np.ndarray | None = None                         # default make_time(0, 200)
+    t_rabi: np.ndarray = field(default_factory=lambda: CONFIG.pulse.t_rabi.copy())
+    t_global: np.ndarray | None = None                         # default CONFIG.pulse.t_global
+    f_artificial: float | None = 0.1                           # 单扫=float, 双扫=None
+```
+
+### 2.4.1 `method="ramsey"` —— Ramsey FFT 双模
+
+底层调用 [`frequency.py:98-194`](../sqc/calibration/frequency.py#L98-L194) `_fit_ramsey_frequency`，通过 `f_artificial` 切换单/双扫两种子模式：
+
+**单扫**（`f_artificial = 0.1` GHz，默认）：
+
+第二个 π/2 脉冲带相位斜坡 `phase2 = 2π·f_a·τ`，在旋转坐标系中相当于额外加了人工失谐 f_a。FFT 测得：
 
 $$
-V_{n+1} \;=\; V_n \;-\; r_n\cdot\frac{V_n - V_{n-1}}{r_n - r_{n-1}}
+f_{\text{meas}} \;=\; |\Delta + f_a| \;=\; \Delta + f_a \quad (\text{要求 } f_a > |\Delta|_{\max})
 $$
 
-附加 **bracket tightening (regula falsi)**（[`frequency.py:393-398`](../sqc/calibration/frequency.py#L393-L398)）：每步把 [V_lo, V_hi] 裹紧到当前估计点，防止 secant 跳出有效区间。
+⇒ `Δ = f_meas − f_a`。**1× τ-sweep 即可**，但调用者必须保证 `f_a > |f_q − ω_d|_max`。sweet spot 附近窄 flux 扫描时合适。
 
-**B. Bisection 法（`step_method="bisection"`）** ([`frequency.py:403-459`](../sqc/calibration/frequency.py#L403-L459)）：
+**双扫**（`f_artificial = None`）：
+
+跑 ±0.05 GHz 两轮 τ-sweep，符号失谐由恒等式：
 
 $$
-V_n \;=\; \tfrac12 (V_{\mathrm{lo}}+V_{\mathrm{hi}}),
-\qquad
-\text{bracket width} \;\sim\; \frac{V_b - V_a}{2^n}
+\Delta \;=\; \frac{f_+^2 - f_-^2}{4\,f_a}, \quad f_a = 0.05\text{ GHz}
 $$
 
-特别处理 **even f(Φ)**（甜点处 f 对称，r(V_lo) 和 r(V_hi) 同号）：自动在中点劈半 bracket（[`frequency.py:418-432`](../sqc/calibration/frequency.py#L418-L432)）。
+**2× 代价但 |Δ| 任意大、带符号**。这是闭环必用模式——搜索过程中 V 可能远离 sweet spot，|Δ| 可达 GHz 量级，固定 f_a 的单扫会反推出错符号。
 
-### 2.4.3 `measure_method="transient"`：核函数法测频率
+FFT 找峰底层（[`frequency.py:29-53`](../sqc/calibration/frequency.py#L29-L53) `_fft_peak`）：rfft（zero-pad 到 n_fft=2048）→ argmax → 三点抛物线子-bin 插值：
 
-[`frequency.py:504-582`](../sqc/calibration/frequency.py#L504-L582) `_measure_frequency_transient()` —— closed-loop 的每次迭代不一定都跑 Ramsey FFT（贵），可以用瞬态核函数法只跑 2 次测量得到 detuning：
+$$
+\delta_{\text{bin}} \;=\; \frac{y_1 - y_3}{2(y_1 + y_3 - 2y_2)},\qquad
+f_{\text{meas}} \;=\; (k^* + \delta_{\text{bin}})\cdot \mathrm{df}_{\text{bin}}
+$$
 
-构造两个正交 Ramsey 序列：`ctrl_x = (R_y, R_x)` 与 `ctrl_mx = (R_y, R_{-x})`，τ=0，跑 mesolve 得 p_x, p_mx。差分：
+把分辨率从 `1/T_max ~ 5 MHz` 提升到 `~ 250 kHz`。低对比度保护：`ptp(p_e) < 0.01` 直接返回 `None`，上层降级返回原 `omega_d`。
+
+### 2.4.2 `method="transient"` —— 正交 Ramsey 差分 + 核函数 G_α
+
+底层调用 [`frequency.py:201-285`](../sqc/calibration/frequency.py#L201-L285) `_measure_frequency_transient`（v2.5 起从原 SinglePointFrequencyCalibration 的方法**提升为模块级函数**，让 `FrequencyMeasurement(method="transient")` 和闭环内层都能共用）。
+
+构造两个正交 τ=0 Ramsey：`ctrl_x = (R_y, R_x)` 与 `ctrl_mx = (R_y, R_{-x})`，跑 mesolve 得 `p_x, p_mx`。差分：
 
 $$
 p_{\text{diff}} \;=\; \tfrac12 (p_x - p_{-x})
 $$
 
-理论上（[_sensing theory.md](../note/_sensing%20theory.md) §瞬态磁场协议）：
+理论上（[_sensing theory.md](../idea/_sensing%20theory.md) §瞬态磁场协议）弱信号近似：
 
 $$
 p_{\text{diff}} \;\approx\; G_\alpha \cdot \Delta\omega,\qquad
 G_\alpha \;=\; \int k(t)\,\mathrm dt
 $$
 
-所以 `delta_omega = p_diff / G_alpha`：
+所以 `delta_omega = p_diff / G_alpha`，最终 `f_q = omega_d + delta_omega`。
 
 ```python
-# sqc/calibration/frequency.py:543-582 (节选)
+# sqc/calibration/frequency.py:201-285 (节选)
 ctrl_x = create_ramsey_pulse(t_rabi, tau=0.0, omega_d=omega_d,
                               phase1=np.pi/2, phase2=0.0, qubit=qubit)
 ctrl_mx = create_ramsey_pulse(t_rabi, tau=0.0, omega_d=omega_d,
@@ -1034,17 +1082,197 @@ p_diff = (p_x - p_mx) / 2.0
 ctrl_x.get_kernel(qubit)
 G_alpha = float(np.trapezoid(ctrl_x.kernel, ctrl_x.t_samples))
 
+# restore qubit state after get_kernel side effects
+qubit.qubit_in_mag(Phi, frame=1, omega_d=omega_d)
+
+if abs(G_alpha) < 1e-15:
+    return float(omega_d)
 delta_omega = p_diff / G_alpha
 return float(omega_d + delta_omega)
 ```
 
-**优势**：每次迭代仅 2 次 mesolve + 1 次 kernel 计算（kernel 可以 caching），而 Ramsey FFT 需要扫 `len(tau_list)` 次。
+**优势 / 限制**：
 
-### 2.4.4 Notebook 调用示例 —— 闭环单点频率标定
+- 每次测量只跑 2× mesolve + 1× kernel（kernel 可后续 caching），比 Ramsey FFT 快 `len(tau_list)/2 ≈ 25-50×`。
+- 但依赖弱信号线性近似，`|Δω·tau_R| > 1` 时近似失效。闭环搜索远离 sweet spot 时不推荐用 transient 内层。
 
-完整 pipeline（[`Simulation_sqc.ipynb`](../Simulation_sqc.ipynb) §9，cells 20–22）：
+### 2.4.3 调用示例
 
-**Step 1: 粗标定 f(Φ) 给 bracket**（cell 20）：
+**独立单点测频**：
+
+```python
+from sqc.calibration.frequency import FrequencyMeasurement
+
+# 方法 A: Ramsey 单扫 → 标准 CalibrationTable
+m = FrequencyMeasurement(qubit=q, method="ramsey")
+table = m.calibrate()
+print(table.outputs[0])                      # f_q (rad·GHz)
+
+# 方法 B: Ramsey 双扫 → 直接拿 float
+m = FrequencyMeasurement(qubit=q, method="ramsey", f_artificial=None)
+f_q = m.measure(flux=0.025)                  # 在指定 flux 测,不打包
+
+# 方法 C: 瞬态测频（高速,弱信号近似）
+m = FrequencyMeasurement(qubit=q, method="transient", flux=0.0)
+table = m.calibrate()
+```
+
+**作为子例程被闭环调用**（§2.5 详述）：闭环内部在 `__post_init__` 一次性构造 `self._meas = FrequencyMeasurement(...)`，每次迭代调 `self._meas.measure(V_n)`。
+
+### 2.4.4 通过 Scheduler 注册
+
+`frequency_measurement` 是 v2.5 注册的统一入口，可独立运行或被其他任务依赖：
+
+```python
+sch = CalibrationScheduler()
+sch.register_defaults()
+# 默认 method="ramsey"; 用 kwargs 切换
+table = sch.run("frequency_measurement", qubit=q, method="transient", flux=0.005)
+```
+
+### 2.4.5 约束与陷阱
+
+| 约束 | 出处 | 说明 |
+|------|------|------|
+| 单扫模式要求 `\|Δ\| < f_a` | [`frequency.py:118-127`](../sqc/calibration/frequency.py#L118-L127) | 否则 FFT 取绝对值会反推出错符号；闭环远离 sweet spot 必须用双扫（`f_artificial=None`） |
+| FFT 分辨率 ≈ 1/T_max | `_fft_peak` | 默认 `tau_list=make_time(0,200)` → df_bin=5 MHz，子-bin 插值后 ~250 kHz |
+| 低对比度返回 omega_d | [`frequency.py:34-35`](../sqc/calibration/frequency.py#L34-L35) | 振幅 `ptp(p_e) < 0.01` 时上层会"假收敛"——sweet spot 紧贴 ω_d 时易触发 |
+| Transient 假设线性 | [`frequency.py:282`](../sqc/calibration/frequency.py#L282) | `\|Δω·tau_R\| > 1` 时偏差大；仅在弱信号近似有效区间用 |
+| Transient 改 qubit 状态 | [`frequency.py:281`](../sqc/calibration/frequency.py#L281) | `get_kernel` 有副作用，函数末尾 `qubit_in_mag(Phi)` 恢复;复用 qubit 实例时要意识到这层 |
+| Ramsey + transient 都先调 `qubit_in_mag` 设 flux | [`frequency.py:158, 220`](../sqc/calibration/frequency.py#L158) | 复用 qubit 实例做多次测量时需注意上下文切换开销 |
+
+## 2.5 `SinglePointFrequencyCalibration` — 单点 f₀₁ 调谐
+
+[`sqc/calibration/frequency.py:454`](../sqc/calibration/frequency.py#L454) `SinglePointFrequencyCalibration` 是单点频率**调谐**类（v2.5 起瘦身为只含调谐方法）。把"找 V 使 f(V) = f_target"当成一个单变量根求解问题：
+
+$$
+r(V) \;:=\; f_Q(V) - f_{\text{target}} \;=\; 0
+$$
+
+数据类签名（[`frequency.py:454-516`](../sqc/calibration/frequency.py#L454-L516)）：
+
+```python
+@dataclass
+class SinglePointFrequencyCalibration(Calibration):
+    qubit: object
+    method: Literal["closed_loop"] = "closed_loop"        # 仅一个值,为未来调谐策略预留
+
+    # closed_loop 必填
+    f_target: float | None = None                          # 目标频率 (rad·GHz)
+    V_a: float | None = None                               # bracketing 下界
+    V_b: float | None = None                               # bracketing 上界
+
+    # 闭环参数
+    epsilon_f: float = 1e-4                                # 收敛容差 (rad·GHz)
+    max_iter: int = 20
+    measure_method: Literal["ramsey", "transient"] = "ramsey"
+    bracket_tightening: bool = True
+    step_method: Literal["secant", "bisection"] = "secant"
+
+    # 内部 FrequencyMeasurement 转发参数
+    tau_list, t_rabi, t_global: ...
+```
+
+**关键设计**：`__post_init__` 中一次性构造 `self._meas = FrequencyMeasurement(..., f_artificial=None)`（dual-sweep 强制开启，保证搜索过程中即使 V 远离 sweet spot 也能正确测频）。闭环算法的每步迭代调用 `self._meas.measure(V_n)`——这就是"调谐组合测量"的具象。
+
+`method` 字段保留 `Literal["closed_loop"]` 看似冗余，但是给未来扩展（gradient descent、feedforward、ML-driven 等）留好的扩展点：`calibrate()` 的 `match self.method` 派发结构已在那里，只需补 `case "gradient":` 即可上新方法，无需改类签名。
+
+### 2.5.1 顶层入口
+
+[`frequency.py:524-552`](../sqc/calibration/frequency.py#L524-L552) `_calibrate_closed_loop()`：
+
+```python
+def _calibrate_closed_loop(self) -> CalibrationTable:
+    if self.f_target is None:
+        raise ValueError("f_target is required for closed_loop method.")
+    if self.V_a is None or self.V_b is None:
+        raise ValueError("V_a and V_b are required ...")
+
+    V_lo, V_hi = min(self.V_a, self.V_b), max(self.V_a, self.V_b)
+    if self.step_method == "bisection":
+        return self._closed_loop_bisection(...)
+    else:
+        return self._closed_loop_secant(...)
+```
+
+**设计契约**：闭环不负责找 bracket——找 bracket 是 `FluxResponseCalibration` 的工作（粗扫 f(Φ) 表，定位 f_target 所在电压窗）。这是一个明确的工作流约束：粗标 → 闭环细调。
+
+### 2.5.2 Secant 法（默认 `step_method="secant"`）
+
+[`frequency.py:555-601`](../sqc/calibration/frequency.py#L555-L601)。割线公式：
+
+$$
+V_{n+1} \;=\; V_n \;-\; r_n\cdot\frac{V_n - V_{n-1}}{r_n - r_{n-1}}
+$$
+
+**初始化代价**：在主循环前已花 2× `self._meas.measure(...)`——中点起步 `V_n = (V_lo + V_hi)/2`、前一点取 `V_prev = V_lo`。中点起步而非端点的三个考量：① 中点 r 值小，第一步 V_next 容易落 bracket 内 ② 端点是粗标边界精度低 ③ 多花 1 次测量换收敛少 1 步，净开销持平。
+
+**每轮三步**：
+
+1. **Secant 公式 + 两层兜底**：分母 `|r_n − r_prev| < 1e-15` ⇒ 退回中点（近平台兜底）；外推越界 [V_lo, V_hi] ⇒ 退回中点（且**不**更新 V_prev/r_prev，等于白跑一步换二分稳健性）。
+2. **测频**：`r_n = self._meas.measure(V_n) - f_target`——每个 iter 真正的计算瓶颈，~2×N_τ ≈ 100× mesolve（双扫 ramsey）或 2× mesolve（transient）。
+3. **Bracket 收紧 ≡ Regula falsi**（`bracket_tightening=True`，默认）：`r_n > 0 ⇒ V_hi = V_n`，否则 `V_lo = V_n`。这让纯 secant 等价于 **Illinois 变体**——收敛阶 φ≈1.618（超线性）+ bisection 级别的不发散保证。
+
+`bracket_tightening=False` 用于诊断纯 secant 行为（远离根可能发散）。
+
+每轮 history 记 `{iter, V, f, residual}`。
+
+### 2.5.3 Bisection 法（`step_method="bisection"`）
+
+[`frequency.py:604-660`](../sqc/calibration/frequency.py#L604-L660)。每次取中点缩半区间：
+
+$$
+V_n \;=\; \tfrac12 (V_{\mathrm{lo}}+V_{\mathrm{hi}}),
+\qquad
+\text{bracket width} \;\sim\; \frac{V_b - V_a}{2^n}
+$$
+
+**唯一新增能力 vs secant**：偶对称 f(Φ) **自动 split**——若 `r(V_lo)·r(V_hi) > 0`（甜点两侧 f 同向衰减导致两端同号），取中点 `V_mid0` 试探，根据三段符号判断目标在哪半边（[`frequency.py:619-633`](../sqc/calibration/frequency.py#L619-L633)）。若三点同号 ⇒ 整区间无根 ⇒ `raise RuntimeError`，要求重新跑 `FluxResponseCalibration` 取更宽窗。
+
+每轮 history 额外记 `bracket_width` 字段，便于绘制对数衰减直线。
+
+**收敛速度**：bisection 线性（每步 ×0.5），约 `⌈log₂((V_b−V_a)/ε)⌉ ≈ 10-15` 步达到 ε=1e-4；secant + bracket tightening 超线性，1-3 步。**所以 secant 是生产默认**，bisection 是诊断/演示模式（log-linear 曲线适合论文图）。
+
+### 2.5.4 内嵌测频策略
+
+闭环每步迭代调 `self._meas.measure(V)`，由 `FrequencyMeasurement(method=measure_method, f_artificial=None)` 完成。两个策略：
+
+| `measure_method` | 闭环单步代价 | 适用范围 | 总迭代数（典型） | 总 mesolve 数 |
+|---|---|---|---|---|
+| `"ramsey"`（默认，强制双扫） | ~2×N_τ mesolve ≈ 100× | 任意 \|Δ\|，鲁棒 | 1–3 (secant) / 10–15 (bisect) | 200–400 / 1000–1500 |
+| `"transient"` | 2× mesolve + 1× kernel | 弱信号近似有效区 | 同上 | 4–6 / 20–30 |
+
+闭环里**强制 `f_artificial=None`** 的原因：搜索过程中 V 可能远离 sweet spot，|Δω| 可达 GHz 量级，单扫模式的固定 f_a=0.1 GHz 会反推出错符号。
+
+### 2.5.5 输出 CalibrationTable 结构
+
+`_build_result` ([`frequency.py:662-684`](../sqc/calibration/frequency.py#L662-L684))：
+
+```python
+CalibrationTable(
+    name="frequency_closed_loop",
+    kind="f01",
+    inputs=np.array([V_opt]),
+    outputs=np.array([f_target + residual]),
+    fit_params={
+        "method": "closed_loop",
+        "step_method": "secant" | "bisection",
+        "measure_method": "ramsey" | "transient",
+        "f_target": float,
+        "V_opt": float,
+        "n_iter": int,
+        "residual": float,
+        "converged": bool,                        # abs(residual) <= epsilon
+        "history": list[dict],                    # 每步 {iter, V, f, residual, [bracket_width]}
+    },
+)
+```
+
+### 2.5.6 Notebook 调用示例
+
+完整 pipeline（[`Simulation_sqc.ipynb`](../Simulation_sqc.ipynb) §9 + [`closed_loop_calibration_test.ipynb`](../closed_loop_calibration_test.ipynb)）：
+
+**Step 1: 粗标定 f(Φ) 给 bracket**：
 
 ```python
 qubit = TransmonQubit(EC=0.2*2*np.pi, EJ=10.0*2*np.pi,
@@ -1059,23 +1287,25 @@ f_interp = interp1d(flux_table.inputs, flux_table.outputs, kind="cubic")
 f_target = float(f_interp(0.025))
 ```
 
-**Step 2: 两种闭环（Ramsey FFT vs Transient kernel） Bisection**（cell 21）：
+**Step 2: 闭环调谐（两种内层测量策略 + bisection）**：
 
 ```python
-# 方法 A: Ramsey FFT + Bisection
+# 方法 A: Ramsey FFT 内层 + Bisection（高精度,鲁棒）
 cal_ramsey = SinglePointFrequencyCalibration(
-    qubit=qubit, method="closed_loop", measure_method="ramsey",
+    qubit=qubit,                                  # method="closed_loop" 是默认值,可省
+    measure_method="ramsey",
     step_method="bisection",
-    tau_list=CONFIG.pulse.make_time(0, 500),    # 长 τ 提升 FFT 分辨率
+    tau_list=CONFIG.pulse.make_time(0, 500),      # 长 τ 提升 FFT 分辨率
     f_target=f_target,
     epsilon_f=1e-4 * 2 * np.pi,
     V_a=V_a, V_b=V_b, max_iter=20,
 )
 res_r = cal_ramsey.calibrate()
 
-# 方法 B: Transient kernel + Bisection
+# 方法 B: Transient kernel 内层 + Bisection（高速,弱信号近似）
 cal_transient = SinglePointFrequencyCalibration(
-    qubit=qubit2, method="closed_loop", measure_method="transient",
+    qubit=qubit2,
+    measure_method="transient",
     step_method="bisection",
     f_target=f_target,
     epsilon_f=1e-4 * 2 * np.pi,
@@ -1084,7 +1314,7 @@ cal_transient = SinglePointFrequencyCalibration(
 res_t = cal_transient.calibrate()
 ```
 
-**Step 3: 收敛对比可视化**（cell 22）展示 6 张子图：
+**Step 3: 收敛对比可视化** 展示 6 张子图：
 
 1. (a) f(Φ) 曲线 + target 标注
 2. (b) V vs iter 收敛轨迹
@@ -1093,16 +1323,48 @@ res_t = cal_transient.calibrate()
 5. (e) bracket width log 衰减（验证 1/2ⁿ 理论线）
 6. (f) Summary 表（迭代次数 + 单次测量代价 + 总测量数）
 
-**关键观察**（notebook 最后一行打印）：transient kernel 每次迭代仅需 2 次单点测量，比 Ramsey FFT 快 `len(tau_list)/2` 倍。精度相当。
+**关键观察**：transient kernel 每次迭代仅需 2 次单点测量，比 Ramsey FFT 快 `len(tau_list)/2 ≈ 25-50×`，精度相当（在弱信号近似有效区间内）。
 
-### 2.4.5 约束与陷阱
+### 2.5.7 通过 Scheduler 注册（依赖注入）
+
+`frequency_closed_loop` 任务依赖 `flux_response_ramsey`——scheduler 自动把 flux 扫描表的 inputs 注入为 V_a/V_b bracket（[`scheduler.py:174-192`](../sqc/calibration/scheduler.py#L174-L192)）：
+
+```python
+sch = CalibrationScheduler()
+sch.register_defaults()
+sch.run("flux_response_ramsey", qubit=q)                     # 必须先跑这个
+sch.run("frequency_closed_loop",                             # 自动注入 V_a, V_b
+        qubit=q, f_target=2*np.pi*5.20)                      # 只需提供 f_target
+```
+
+### 2.5.8 未来扩展的预留口
+
+`method: Literal["closed_loop"]` 字段在 v2.5 保留有意为之——`calibrate()` 中的 `match self.method` 派发结构已就位，扩展新调谐策略只需：
+
+```python
+# 例如在 __post_init__ 加 measurement strategy 选择,在 calibrate() 加 case:
+match self.method:
+    case "closed_loop":
+        return self._calibrate_closed_loop()
+    case "gradient":                                          # 新增
+        return self._calibrate_gradient()
+    case "feedforward":                                       # 新增
+        return self._calibrate_feedforward()
+```
+
+类签名、Scheduler 注册名、文档结构都不动。
+
+### 2.5.9 约束与陷阱
 
 | 约束 | 出处 | 说明 |
 |------|------|------|
-| Bisection 需要 r(V_a)·r(V_b) < 0 | [`frequency.py:418`](../sqc/calibration/frequency.py#L418) | 甜点处 f(Φ) 偶函数，自动 split bracket 算法已内置 |
-| Secant 可能跳出 bracket | [`frequency.py:377-380`](../sqc/calibration/frequency.py#L377-L380) | 设了 fallback 到 midpoint |
-| Ramsey 分辨率 ≈ 1/(2·tau_max) | FFT | tau_long=500 → ~1 MHz 极限 |
-| Transient kernel 假设线性 | 推导 2.4.3 | 大 detuning 时 |Δω·tau_R| > 1，公式失真 |
+| `f_target` / `V_a` / `V_b` 必填 | [`frequency.py:533-541`](../sqc/calibration/frequency.py#L533-L541) | 否则 `ValueError` |
+| Bisection 起始两端同号 | [`frequency.py:618-633`](../sqc/calibration/frequency.py#L618-L633) | 自动用中点试探切分 bracket;若三点同号则 raise——重跑 FluxResponse 取更宽窗 |
+| Secant 可能跳出 bracket | [`frequency.py:570-575`](../sqc/calibration/frequency.py#L570-L575) | 设了 fallback 到 midpoint 兜底 |
+| 闭环 ramsey 内层强制双扫 | [`frequency.py:516`](../sqc/calibration/frequency.py#L516) | `f_artificial=None` 写死在 `__post_init__`,避免远离 sweet spot 反推错符号 |
+| 闭环 transient 内层风险 | [`frequency.py:282`](../sqc/calibration/frequency.py#L282) | 弱信号近似在远离根的搜索点失效;闭环起步阶段尤其要警惕 |
+| Bracket 跨越多个 sweet spot | — | f(Φ) ∝ \|cos(πΦ)\| 周期函数,若 V_a/V_b 跨越多个周期,secant 会飘移;先用 FluxResponse `inverse(f_target)` 给出粗 V_opt 后再 ±0.005 Φ₀ 收紧 V_a/V_b |
+| 收敛容差被 FFT 分辨率限制 | — | epsilon_f < `1/T_max` 时 ramsey 内层抖动会让 secant 看似不收敛;tau_long=500 ns → ~1 MHz 极限 |
 | Kernel 必须在 qubit 当前 flux 下重新算 | [`frequency.py:570-576`](../sqc/calibration/frequency.py#L570) | 否则 G_α 不对 |
 
 ---

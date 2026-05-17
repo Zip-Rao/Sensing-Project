@@ -26,7 +26,7 @@ class CalibrationScheduler:
     Pre-registered tasks (auto-populated on init)::
 
         flux_response_ramsey       → FluxResponseCalibration(method="ramsey")
-        frequency_ramsey           → SinglePointFrequencyCalibration(method="ramsey")
+        frequency_measurement      → FrequencyMeasurement (method="ramsey" by default)
         frequency_closed_loop      → SinglePointFrequencyCalibration(method="closed_loop")
         waveform_transfer_function → WaveformCalibration(method="transfer_function")
         waveform_predistortion     → WaveformCalibration(method="predistortion")
@@ -83,12 +83,13 @@ class CalibrationScheduler:
         """Populate the scheduler with the standard calibration registry."""
         from sqc.calibration.frequency import (
             FluxResponseCalibration,
+            FrequencyMeasurement,
             SinglePointFrequencyCalibration,
         )
         from sqc.calibration.waveform import WaveformCalibration
 
         self.register("flux_response_ramsey", FluxResponseCalibration)
-        self.register("frequency_ramsey", SinglePointFrequencyCalibration)
+        self.register("frequency_measurement", FrequencyMeasurement)
         self.register(
             "frequency_closed_loop",
             SinglePointFrequencyCalibration,

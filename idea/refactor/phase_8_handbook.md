@@ -193,12 +193,31 @@ flux = recon.reconstruct(result)  # 使用 result.data["kernel"] 做 Wiener 反�
 ### 依赖
 
 - **P7（时间轴统一）**：非硬依赖。P8 可独立实施；若 P7 先完成，P8 的触发对齐代码可简化。
+- **P9（级联预失真 + 协议驱动测量）**：非硬依赖，详见下文 §6.1。
 - **KernelEstimator**：已存在且可复用。
 - **Wiener 反卷积**：`transient.py` 中已有实现，可直接复用或提取。
 
+### 6.1 与 P9 的协调
+
+P9（[phase_9_handbook.md](phase_9_handbook.md)）在 `delay_ramsey.py` / `ramsey.py` 有文件级交集，但**行级隔离**：
+
+- P8 改 `run()` **中段**：flux modulation 逻辑（zero-out vs 连续施加 + kernel 计算）
+- P9.B 改 `run()` **开头**：`flux = self._route_flux(flux)`（注入 `control_line` 失真）
+
+两者改的位置错开，merge 不冲突。
+
+**情形 1：P8 先实施，P9 后实施** — P8 无需为 P9 做调整；P9.B 在 `run()` 开头插 `_route_flux()`，位置早于 P8 的 zero-out / 连续施加分歧点。
+
+**情形 2：P9 先实施，P8 后实施** — P8 实施时 `run()` 开头已有 `_route_flux()`。**P8 需注意**：
+- `use_filter_function=True` 分支里计算 kernel 的 flux signal 应当是 `_route_flux()` **之后** 的版本（即经 `control_line` 畸变后到达 qubit 的真实信号）——这是物理正确做法
+- 实操：把 kernel 计算位置放在 `_route_flux()` 之后；若 P8 当前实现是基于"理想 flux signal"求 kernel，与 P9 合并后 kernel 会自动变成基于"畸变 flux signal"——这是符合物理的，无需额外代码调整
+- 仅在 P8 的 baseline test 中需要确认：当调用方**不传** `control_line`（即旧行为）时，kernel 与 P9 实施前一致
+
+**情形 3：同 phase 并行** — 建议 P8.1 / P8.4 完成后再做 P9.B.3，减少 review 复杂度。
+
 ### 风险
 
-1. **kernel 缓存一致性**：kernel 依赖 `(t_rabi, tau_R, omega_d, qubit_spec)`，若 qubit 参数中途改变需刷新缓存
+1. **kernel 缓存一致性**：kernel 依赖 `(t_rabi, tau_R, omega_d, qubit_spec)`，若 qubit 参数中途改变需刷新缓存。**注意**：若 P9 已实施，kernel 还应隐式依赖 `control_line.transfer_function`——缓存 key 需包含 transfer_function 的 hash 或对象 id，否则跨 control_line 切换时会读到陈旧 kernel
 2. **性能**：kernel 计算需对每个时间点做两次 mesolve，耗时与脉冲长度成正比——但对 20 点 t_rabi 的 Ramsey 序列（~3×20=60 点），开销可接受
 3. **数值稳定性**：Wiener 反卷积在小信号（深 tail 区）可能放大噪声；λ 正则化参数需合理默认值
 

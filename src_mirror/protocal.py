@@ -298,7 +298,7 @@ class Calibration:
     API preserved verbatim from src/protocal.py:Calibration.
 
     Delegation:
-      - type 0 → QubitFrequencyCalibration (Ramsey f_01)
+      - type 0 → FrequencyMeasurement(method="ramsey") (single-point f_01)
       - type 1 → FluxResponseCalibration(method="ramsey") (f(Phi) via Ramsey)
       - type 2 → NOT IMPLEMENTED (requires Track B 1.2)
       - type 3 → NOT IMPLEMENTED (requires Track B 1.1)
@@ -320,14 +320,14 @@ class Calibration:
         """
         from sqc.calibration.frequency import (
             FluxResponseCalibration,
-            SinglePointFrequencyCalibration,
+            FrequencyMeasurement,
         )
         from sqc.reconstruction.delay_ramsey import DelayRamseyCalibration
         from sqc.reconstruction.cryoscope import CryoscopeCalibration
 
         match self.type:
             case 0:  # Ramsey frequency f_01 calibration
-                cal = SinglePointFrequencyCalibration(
+                cal = FrequencyMeasurement(
                     qubit=self.qubit,
                     method="ramsey",
                 )

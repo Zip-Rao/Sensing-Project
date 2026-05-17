@@ -1,8 +1,9 @@
 """sqc.calibration.frequency — Qubit frequency calibration.
-
-Two major categories:
+Three calibration classes:
   - FluxResponseCalibration: f(Φ) curve via flux scan
-  - SinglePointFrequencyCalibration: f01 at a single flux working point
+  - FrequencyMeasurement: single-point f01 measurement (ramsey or transient)
+  - SinglePointFrequencyCalibration: single-point frequency *tuning*
+        (currently closed-loop feedback; extensible for future methods)
 
 See _sensing theory.md §闭环反馈控制 for closed-loop algorithm reference
 (Vepsalainen 2022).
@@ -20,10 +21,6 @@ from sqc.calibration.base import Calibration, CalibrationTable
 from sqc.control.flux_signal import FluxSignal
 from sqc.control.sequence import create_ramsey_pulse
 
-
-# ---------------------------------------------------------------------------
-# Shared helper: Ramsey FFT frequency fitting
-# ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
 # Internal helpers for Ramsey FFT fitting
@@ -97,10 +94,6 @@ def _run_ramsey_sweep(
 
     return p_e_vals
 
-
-# ---------------------------------------------------------------------------
-# Shared helper: Ramsey FFT frequency fitting (signed)
-# ---------------------------------------------------------------------------
 
 def _fit_ramsey_frequency(
     qubit: object,
@@ -201,6 +194,96 @@ def _fit_ramsey_frequency(
     return float(omega_d + 2.0 * np.pi * detuning_ghz)
 
 
+# ---------------------------------------------------------------------------
+# Internal helper: transient single-point frequency measurement
+# ---------------------------------------------------------------------------
+
+def _measure_frequency_transient(
+    qubit: object,
+    omega_d: float,
+    t_rabi: np.ndarray,
+    t_global: np.ndarray,
+    flux: float = 0.0,
+) -> float:
+    """Transient-based single-point frequency measurement.
+
+    Uses orthogonal Ramsey readout (R_y–R_x and R_y–R_{-x}) with tau=0
+    to measure detuning via differential p_e and the control-pulse
+    kernel sensitivity G_α = ∫ k(t) dt.
+
+    Theory ref: _sensing theory.md §瞬态磁场协议与核函数策略
+    """
+    n_levels = qubit.n_levels
+
+    # -- set qubit to target flux ----------------------------------------
+    t_sig = CONFIG.pulse.make_time(0, 300)
+    Phi = FluxSignal(
+        type=1 if flux != 0.0 else 0,
+        t_list=t_sig,
+        amplitude=float(flux),
+        offset=0.0,
+    )
+    qubit.qubit_in_mag(Phi, frame=1, omega_d=omega_d)
+
+    # -- build orthogonal readout pulses (tau=0) -------------------------
+    tau = 0.0
+    ctrl_x = create_ramsey_pulse(
+        t_rabi, tau,
+        omega_d=omega_d,
+        phase1=np.pi / 2, phase2=0.0,
+        qubit=qubit,
+    )
+    ctrl_mx = create_ramsey_pulse(
+        t_rabi, tau,
+        omega_d=omega_d,
+        phase1=np.pi / 2, phase2=np.pi,
+        qubit=qubit,
+    )
+
+    # -- run both measurements (use hamiltonian_on on t_global) ---------
+    psi_e = basis(n_levels, 1)
+    H_base = QobjEvo(
+        qubit.H_list, tlist=qubit.mag_signal.t_list, order=1,
+    )
+
+    H_x = H_base + QobjEvo(
+        ctrl_x.hamiltonian_on(t_global), tlist=t_global, order=1,
+    )
+    res_x = mesolve(
+        H_x, qubit.state, t_global, [],
+        e_ops=[psi_e * psi_e.dag()],
+        options={"max_step": float(CONFIG.awg.dt)},
+    )
+    p_x = float(res_x.expect[0][-1])
+
+    H_mx = H_base + QobjEvo(
+        ctrl_mx.hamiltonian_on(t_global), tlist=t_global, order=1,
+    )
+    res_mx = mesolve(
+        H_mx, qubit.state, t_global, [],
+        e_ops=[psi_e * psi_e.dag()],
+        options={"max_step": float(CONFIG.awg.dt)},
+    )
+    p_mx = float(res_mx.expect[0][-1])
+
+    p_diff = (p_x - p_mx) / 2.0
+
+    # -- kernel sensitivity G_α = ∫ k(t) dt ------------------------------
+    ctrl_x.get_kernel(qubit)
+    kernel = np.asarray(ctrl_x.kernel, dtype=float)
+    t_kernel = np.asarray(ctrl_x.t_samples, dtype=float)
+    G_alpha = float(np.trapezoid(kernel, t_kernel))
+
+    # restore qubit state after get_kernel side effects
+    qubit.qubit_in_mag(Phi, frame=1, omega_d=omega_d)
+
+    if abs(G_alpha) < 1e-15:
+        return float(omega_d)
+
+    delta_omega = p_diff / G_alpha
+    return float(omega_d + delta_omega)
+
+
 # ===================================================================
 # FluxResponseCalibration — f(Φ) curve
 # ===================================================================
@@ -284,85 +367,58 @@ class FluxResponseCalibration(Calibration):
 
 
 # ===================================================================
-# SinglePointFrequencyCalibration — single-point f01
+# FrequencyMeasurement — single-point f01 measurement (read-only)
 # ===================================================================
 
 @dataclass
-class SinglePointFrequencyCalibration(Calibration):
-    """Single-point qubit frequency calibration.
+class FrequencyMeasurement(Calibration):
+    """Single-point qubit frequency measurement.
 
-    Measures f01 at a single flux working point. Replaces
-    src/protocal.py:Calibration.calibrate case 0 (ramsey).
+    Measures f01 at a single flux working point.  Returns the measured
+    angular frequency (rad·GHz) and can also be packaged into a
+    CalibrationTable for inclusion in calibration workflows.
 
     Methods
     -------
-    - ``"ramsey"``: single Ramsey FFT → f01.
-    - ``"closed_loop"``: secant-method iterative convergence to a target
-      frequency (Vepsalainen 2022 closed-loop feedback). The per-iteration
-      frequency measurement is controlled by ``measure_method``.
-    - ``"transient"``: single-shot transient measurement → f01.
-      **Requires Track B 1.2.**
+    - ``"ramsey"``: Ramsey τ-sweep + FFT peak → f01.  Default mode uses
+      single-sweep (f_artificial=0.1 GHz) which assumes |Δ| < 0.1 GHz; for
+      arbitrary |Δ| (e.g. inside a closed-loop search) set ``f_artificial``
+      to None to use the double-sweep mode (slower but signed and unbounded).
+    - ``"transient"``: τ=0 orthogonal Ramsey (R_y–R_x and R_y–R_{-x})
+      differential readout + control-kernel sensitivity G_α = ∫k(t)dt to
+      extract Δω directly.  Cheaper than Ramsey τ-sweep but relies on the
+      weak-signal linear approximation; intended for |Δω| close to zero.
 
     Parameters
     ----------
     qubit : TransmonQubit
     method : str
-        "ramsey", "closed_loop", or "transient".
+        "ramsey" (default) or "transient".
+    flux : float
+        DC flux offset at which to measure (Φ₀).  Default 0.0 (sweet spot).
     tau_list : np.ndarray or None
-        Free evolution times for Ramsey (ns). Default make_time(0, 200).
+        Ramsey free evolution times (ns).  Default make_time(0, 200).
+        Ignored when method="transient".
     t_rabi : np.ndarray
         Rabi pulse time axis (ns).
     t_global : np.ndarray or None
-        Global evolution time axis (ns).
-
-    Closed-loop parameters
-    ----------------------
-    f_target : float or None
-        Target qubit frequency (angular, GHz·2π). Required for closed_loop.
-    epsilon_f : float
-        Convergence tolerance (GHz·2π). Default 1e-4.
-    V_a : float or None
-        Lower voltage bound bracketing target. Required for closed_loop.
-    V_b : float or None
-        Upper voltage bound bracketing target. Required for closed_loop.
-    max_iter : int
-        Maximum secant iterations. Default 20.
-    measure_method : str
-        Per-iteration frequency measurement technique:
-        - ``"ramsey"``: Ramsey FFT (default).
-        - ``"transient"``: transient measurement (Track B 1.2).
-    bracket_tightening : bool
-        If True (default), tighten the bracket [V_a, V_b] on each iteration
-        (regula falsi) for faster convergence.  Set False to observe pure
-        secant iteration trends at the cost of more iterations.
-    step_method : str
-        Root-finding algorithm for closed-loop iteration:
-        - ``"secant"`` (default): secant method with bracket tightening.
-          Fast convergence (1–3 iterations) when the measurement is smooth.
-        - ``"bisection"``: simple bisection.  Converges in O(log₂(range/ε))
-          iterations (~10–15), giving a clear exponential convergence trend
-          for visualisation and diagnostics.
+        Global evolution time axis for mesolve (ns).
+    f_artificial : float or None
+        Single-sweep artificial detuning (GHz) for the Ramsey method.
+        None selects double-sweep.  Default 0.1 GHz; closed-loop callers
+        should pass None.  Ignored when method="transient".
     """
 
     qubit: object
-    method: Literal["ramsey", "closed_loop", "transient"] = "ramsey"
+    method: Literal["ramsey", "transient"] = "ramsey"
+    flux: float = 0.0
 
-    # Ramsey params
     tau_list: np.ndarray | None = None
     t_rabi: np.ndarray = field(
         default_factory=lambda: CONFIG.pulse.t_rabi.copy()
     )
     t_global: np.ndarray | None = None
-
-    # Closed-loop params
-    f_target: float | None = None
-    epsilon_f: float = 1e-4
-    V_a: float | None = None
-    V_b: float | None = None
-    max_iter: int = 20
-    measure_method: Literal["ramsey", "transient"] = "ramsey"
-    bracket_tightening: bool = True
-    step_method: Literal["secant", "bisection"] = "secant"
+    f_artificial: float | None = 0.1
 
     def __post_init__(self):
         if self.tau_list is None:
@@ -371,52 +427,177 @@ class SinglePointFrequencyCalibration(Calibration):
             self.t_global = CONFIG.pulse.t_global.copy()
 
     # ------------------------------------------------------------------
-    def calibrate(self) -> CalibrationTable:
+    def measure(self, flux: float | None = None) -> float:
+        """Return f01 (angular, rad·GHz) at the given flux.
+
+        Parameters
+        ----------
+        flux : float or None
+            Flux offset (Φ₀).  Defaults to self.flux when None.
+
+        Returns
+        -------
+        float
+            Measured qubit frequency, signed (angular, rad·GHz).
+        """
+        flux_val = self.flux if flux is None else float(flux)
+        omega_d = self.qubit.frequency
         match self.method:
             case "ramsey":
-                return self._calibrate_ramsey()
-            case "closed_loop":
-                return self._calibrate_closed_loop()
+                return _fit_ramsey_frequency(
+                    self.qubit, omega_d, self.tau_list,
+                    self.t_rabi, self.t_global,
+                    flux=flux_val, f_artificial=self.f_artificial,
+                )
             case "transient":
-                return self._calibrate_transient()
+                return _measure_frequency_transient(
+                    self.qubit, omega_d,
+                    self.t_rabi, self.t_global,
+                    flux=flux_val,
+                )
 
     # ------------------------------------------------------------------
-    # Single-shot Ramsey
-    # ------------------------------------------------------------------
-
-    def _calibrate_ramsey(self) -> CalibrationTable:
-        """Single Ramsey FFT → f01 at zero flux."""
-        omega_d = self.qubit.frequency
-        fitted_freq = _fit_ramsey_frequency(
-            self.qubit, omega_d, self.tau_list,
-            self.t_rabi, self.t_global, flux=0.0,
-        )
+    def calibrate(self) -> CalibrationTable:
+        """Standalone single-point measurement → CalibrationTable."""
+        f_meas = self.measure(self.flux)
         return CalibrationTable(
-            name="frequency_ramsey",
+            name=f"frequency_measurement_{self.method}",
             qubit_name=getattr(self.qubit, "name", "qubit"),
             kind="f01",
-            inputs=np.array([0.0]),
-            outputs=np.array([fitted_freq]),
+            inputs=np.array([self.flux]),
+            outputs=np.array([f_meas]),
             fit_params={
-                "method": "ramsey",
-                "omega_d": float(omega_d),
+                "method": self.method,
+                "omega_d": float(self.qubit.frequency),
             },
             metadata={},
         )
+
+
+# ===================================================================
+# SinglePointFrequencyCalibration — single-point frequency tuning
+# ===================================================================
+
+@dataclass
+class SinglePointFrequencyCalibration(Calibration):
+    """Single-point qubit frequency tuning.
+
+    Drives the qubit frequency f_q(V) to a target f_target by adjusting
+    the flux bias V.  Currently supports closed-loop feedback
+    (Vepsalainen 2022).  Designed to admit future single-point control
+    strategies (e.g. gradient descent, feedforward) via the ``method``
+    field — new methods should add a ``case`` branch in :meth:`calibrate`.
+
+    Methods
+    -------
+    - ``"closed_loop"`` (default): secant or bisection root-finding on
+      r(V) = f_q(V) − f_target = 0.  Per-iteration measurement is
+      delegated to an internal :class:`FrequencyMeasurement` instance,
+      which can be Ramsey-based (robust, default) or transient-based.
+
+    Parameters
+    ----------
+    qubit : TransmonQubit
+    method : str
+        Tuning strategy.  Currently only "closed_loop".
+
+    Closed-loop parameters
+    ----------------------
+    f_target : float or None
+        Target qubit frequency (angular, GHz·2π).  Required.
+    V_a, V_b : float or None
+        Voltage bounds bracketing the target.  Required; typically
+        provided by a preceding :class:`FluxResponseCalibration`.
+    epsilon_f : float
+        Convergence tolerance on |r| (GHz·2π).  Default 1e-4.
+    max_iter : int
+        Maximum iterations.  Default 20.
+    measure_method : str
+        Per-iteration frequency measurement strategy passed to the inner
+        :class:`FrequencyMeasurement`:
+
+        - ``"ramsey"`` (default, robust): Ramsey FFT with double-sweep,
+          handles arbitrary |Δω| during the search.
+        - ``"transient"``: τ=0 orthogonal Ramsey + kernel sensitivity.
+          Faster but relies on weak-signal linear approximation; risky
+          when the search may probe far from the root.
+    bracket_tightening : bool
+        If True (default), tighten [V_a, V_b] each iteration based on the
+        sign of r (regula falsi).  Improves robustness; disable to observe
+        pure secant behaviour.
+    step_method : str
+        - ``"secant"`` (default): secant method, superlinear convergence
+          (1–3 iterations typical) when paired with bracket_tightening.
+        - ``"bisection"``: classical bisection, O(log₂(range/ε)) iterations
+          (~10–15) with a clean exponential bracket-width trend, ideal
+          for visualisation and diagnostics.  Auto-splits the bracket
+          when both endpoints share the same residual sign (handles even
+          f(Φ) crossing the sweet spot).
+
+    Inner-measurement parameters (forwarded to FrequencyMeasurement)
+    ----------------------------------------------------------------
+    tau_list, t_rabi, t_global
+        See :class:`FrequencyMeasurement`.  The inner measurement always
+        uses ``f_artificial=None`` (double-sweep) because the search may
+        probe flux far from the sweet spot.
+    """
+
+    qubit: object
+    method: Literal["closed_loop"] = "closed_loop"
+
+    # Closed-loop parameters
+    f_target: float | None = None
+    V_a: float | None = None
+    V_b: float | None = None
+    epsilon_f: float = 1e-4
+    max_iter: int = 20
+    measure_method: Literal["ramsey", "transient"] = "ramsey"
+    bracket_tightening: bool = True
+    step_method: Literal["secant", "bisection"] = "secant"
+
+    # Inner-measurement parameters (forwarded to FrequencyMeasurement)
+    tau_list: np.ndarray | None = None
+    t_rabi: np.ndarray = field(
+        default_factory=lambda: CONFIG.pulse.t_rabi.copy()
+    )
+    t_global: np.ndarray | None = None
+
+    def __post_init__(self):
+        if self.tau_list is None:
+            self.tau_list = CONFIG.pulse.make_time(0, 200)
+        if self.t_global is None:
+            self.t_global = CONFIG.pulse.t_global.copy()
+
+        # Inner measurement: dual-sweep Ramsey so |Δω| is unconstrained
+        # during the search.
+        self._meas = FrequencyMeasurement(
+            qubit=self.qubit,
+            method=self.measure_method,
+            tau_list=self.tau_list,
+            t_rabi=self.t_rabi,
+            t_global=self.t_global,
+            f_artificial=None,
+        )
+
+    # ------------------------------------------------------------------
+    def calibrate(self) -> CalibrationTable:
+        match self.method:
+            case "closed_loop":
+                return self._calibrate_closed_loop()
 
     # ------------------------------------------------------------------
     # Closed-loop feedback (Vepsalainen 2022)
     # ------------------------------------------------------------------
 
     def _calibrate_closed_loop(self) -> CalibrationTable:
-        """Closed-loop frequency calibration.
+        """Closed-loop frequency tuning.
 
-        Iteratively adjusts flux bias voltage to drive qubit frequency to
-        f_target.  Uses the secant method (default) or bisection for
+        Iteratively adjusts flux bias voltage to drive qubit frequency
+        to f_target.  Uses the secant method (default) or bisection for
         root-finding on r(V) = f_Q(V) - f_target = 0.
 
         Requires f_target, V_a, V_b to be set.  V_a and V_b must bracket
-        the target: r(V_a) · r(V_b) < 0.
+        the target: r(V_a) · r(V_b) < 0 (bisection auto-splits if not).
         """
         if self.f_target is None:
             raise ValueError("f_target is required for closed_loop method.")
@@ -443,11 +624,11 @@ class SinglePointFrequencyCalibration(Calibration):
 
         # Initial midpoint
         V_n = (V_lo + V_hi) / 2.0
-        r_n = self._measure_frequency(V_n) - f_target
+        r_n = self._meas.measure(V_n) - f_target
         n_iter = 0
 
         V_prev = V_lo
-        r_prev = self._measure_frequency(V_lo) - f_target
+        r_prev = self._meas.measure(V_lo) - f_target
 
         history: list[dict] = []
 
@@ -465,7 +646,7 @@ class SinglePointFrequencyCalibration(Calibration):
                 V_prev, r_prev = V_n, r_n
                 V_n = V_next
 
-            f_n = self._measure_frequency(V_n)
+            f_n = self._meas.measure(V_n)
             r_n = f_n - f_target
             n_iter += 1
 
@@ -496,13 +677,13 @@ class SinglePointFrequencyCalibration(Calibration):
         f(V_lo) and f(V_hi) have the same sign (the root lies on one
         side of the sweet spot).
         """
-        r_lo = self._measure_frequency(V_lo) - f_target
-        r_hi = self._measure_frequency(V_hi) - f_target
+        r_lo = self._meas.measure(V_lo) - f_target
+        r_hi = self._meas.measure(V_hi) - f_target
 
         # Auto-split bracket if both ends have the same sign (even f(Φ))
         if r_lo * r_hi > 0:
             V_mid0 = (V_lo + V_hi) / 2.0
-            r_mid0 = self._measure_frequency(V_mid0) - f_target
+            r_mid0 = self._meas.measure(V_mid0) - f_target
             if r_lo * r_mid0 < 0:
                 V_hi, r_hi = V_mid0, r_mid0
             elif r_mid0 * r_hi < 0:
@@ -520,7 +701,7 @@ class SinglePointFrequencyCalibration(Calibration):
 
         while (V_hi - V_lo) / 2.0 > 1e-15 and n_iter < self.max_iter:
             V_mid = (V_lo + V_hi) / 2.0
-            r_mid = self._measure_frequency(V_mid) - f_target
+            r_mid = self._meas.measure(V_mid) - f_target
             n_iter += 1
 
             history.append({
@@ -539,7 +720,7 @@ class SinglePointFrequencyCalibration(Calibration):
                 V_lo, r_lo = V_mid, r_mid
 
         V_mid = (V_lo + V_hi) / 2.0
-        r_mid = self._measure_frequency(V_mid) - f_target
+        r_mid = self._meas.measure(V_mid) - f_target
         return self._build_result(f_target, V_mid, r_mid, n_iter, epsilon, history)
 
     # ------------------------------------------------------------------
@@ -555,7 +736,7 @@ class SinglePointFrequencyCalibration(Calibration):
             inputs=np.array([V_opt]),
             outputs=np.array([f_target + residual]),
             fit_params={
-                "method": "closed_loop",
+                "method": self.method,
                 "step_method": self.step_method,
                 "measure_method": self.measure_method,
                 "f_target": float(f_target),
@@ -566,111 +747,4 @@ class SinglePointFrequencyCalibration(Calibration):
                 "history": history,
             },
             metadata={},
-        )
-
-    def _measure_frequency(self, flux: float) -> float:
-        """Measure f01 at a given flux offset.
-
-        Dispatches to Ramsey or transient measurement based on
-        self.measure_method.
-        """
-        if self.measure_method == "ramsey":
-            omega_d = self.qubit.frequency
-            return _fit_ramsey_frequency(
-                self.qubit, omega_d, self.tau_list,
-                self.t_rabi, self.t_global, flux=flux,
-                f_artificial=None,  # double-sweep: flux may be far from sweet spot
-            )
-        elif self.measure_method == "transient":
-            return self._measure_frequency_transient(flux)
-        else:
-            raise ValueError(f"Unknown measure_method: {self.measure_method}")
-
-    def _measure_frequency_transient(self, flux: float) -> float:
-        """Transient-based single-point frequency measurement.
-
-        Uses orthogonal Ramsey readout (R_y–R_x and R_y–R_{-x}) with tau=0
-        to measure detuning via differential p_e and the control-pulse
-        kernel sensitivity G_α = ∫ k(t) dt.
-
-        Theory ref: _sensing theory.md §瞬态磁场协议与核函数策略
-        """
-        omega_d = self.qubit.frequency
-        n_levels = self.qubit.n_levels
-
-        # -- set qubit to target flux ------------------------------------
-        t_sig = CONFIG.pulse.make_time(0, 300)
-        Phi = FluxSignal(
-            type=1 if flux != 0.0 else 0,
-            t_list=t_sig,
-            amplitude=float(flux),
-            offset=0.0,
-        )
-        self.qubit.qubit_in_mag(Phi, frame=1, omega_d=omega_d)
-
-        # -- build orthogonal readout pulses (tau=0) ---------------------
-        tau = 0.0
-        ctrl_x = create_ramsey_pulse(
-            self.t_rabi, tau,
-            omega_d=omega_d,
-            phase1=np.pi / 2, phase2=0.0,
-            qubit=self.qubit,
-        )
-        ctrl_mx = create_ramsey_pulse(
-            self.t_rabi, tau,
-            omega_d=omega_d,
-            phase1=np.pi / 2, phase2=np.pi,
-            qubit=self.qubit,
-        )
-        # -- run both measurements (P7: use hamiltonian_on on t_global) ---
-        psi_e = basis(n_levels, 1)
-        H_base = QobjEvo(
-            self.qubit.H_list, tlist=self.qubit.mag_signal.t_list, order=1,
-        )
-
-        H_x = H_base + QobjEvo(
-            ctrl_x.hamiltonian_on(self.t_global), tlist=self.t_global, order=1,
-        )
-        res_x = mesolve(
-            H_x, self.qubit.state, self.t_global, [],
-            e_ops=[psi_e * psi_e.dag()],
-            options={"max_step": float(CONFIG.awg.dt)},
-        )
-        p_x = float(res_x.expect[0][-1])
-
-        H_mx = H_base + QobjEvo(
-            ctrl_mx.hamiltonian_on(self.t_global), tlist=self.t_global, order=1,
-        )
-        res_mx = mesolve(
-            H_mx, self.qubit.state, self.t_global, [],
-            e_ops=[psi_e * psi_e.dag()],
-            options={"max_step": float(CONFIG.awg.dt)},
-        )
-        p_mx = float(res_mx.expect[0][-1])
-
-        p_diff = (p_x - p_mx) / 2.0
-
-        # -- kernel sensitivity G_α = ∫ k(t) dt --------------------------
-        ctrl_x.get_kernel(self.qubit)
-        kernel = np.asarray(ctrl_x.kernel, dtype=float)
-        t_kernel = np.asarray(ctrl_x.t_samples, dtype=float)
-        G_alpha = float(np.trapezoid(kernel, t_kernel))
-
-        # restore qubit state after get_kernel side effects
-        self.qubit.qubit_in_mag(Phi, frame=1, omega_d=omega_d)
-
-        if abs(G_alpha) < 1e-15:
-            return float(omega_d)
-
-        delta_omega = p_diff / G_alpha
-        return float(omega_d + delta_omega)
-
-    # ------------------------------------------------------------------
-    # Transient (stub)
-    # ------------------------------------------------------------------
-
-    def _calibrate_transient(self) -> CalibrationTable:
-        raise NotImplementedError(
-            "SinglePointFrequencyCalibration(method='transient'): "
-            "requires Track B 1.2."
         )

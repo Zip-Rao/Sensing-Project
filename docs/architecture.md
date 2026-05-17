@@ -1047,9 +1047,9 @@ class CalibrationTable:
 |---|---|---|---|
 | `FluxResponseCalibration(method="ramsey")` | f(Φ) 曲线 | §V.A | 扫描 DC flux + Ramsey（单扫模式，Δ≤0 已知） |
 | `FluxResponseCalibration(method="transient")` | Δω(Φ) 多项式 | (项目原创) | 已知瞬态信号扫描（依赖 Track B 1.2） |
-| `SinglePointFrequencyCalibration(method="ramsey")` | 单点 f₀₁ | §V.A | Ramsey FFT（单扫模式，|Δ| 小） |
-| `SinglePointFrequencyCalibration(method="closed_loop")` | 闭环收敛到 f_target | Vepsalainen 2022 | secant/bisection 迭代 + 双扫 Ramsey/瞬态测频 |
-| `SinglePointFrequencyCalibration(method="transient")` | 单点瞬态测频 | (项目原创) | 正交 Ramsey + 核函数灵敏度 G_α（已实现） |
+| `FrequencyMeasurement(method="ramsey")` | 单点 f₀₁ 测量 | §V.A | Ramsey FFT（单/双扫模式可选） |
+| `FrequencyMeasurement(method="transient")` | 单点 f₀₁ 测量 | (项目原创) | 正交 Ramsey + 核函数灵敏度 G_α |
+| `SinglePointFrequencyCalibration(method="closed_loop")` | 闭环调谐到 f_target | Vepsalainen 2022 | secant/bisection 迭代,内层组合 `FrequencyMeasurement`(双扫 ramsey 或 transient) |
 | `WaveformCalibration(method="transfer_function")` | H(ω) 拟合 | §V.E | 阶跃响应 + 多指数/FIR/IIR 拟合 |
 | `WaveformCalibration(method="predistortion")` | 设计逆滤波器 | §V.E | H_inv(ω) = H*(ω) / (|H|² + λ²) |
 | `PredistortionDesigner` | 独立预失真设计器 | §V.E | 可按需独立使用 |
@@ -1060,8 +1060,14 @@ class CalibrationTable:
 > 重建前置标定（`CryoscopeCalibration` φ(h)、`DelayRamseyCalibration` φ(z)）已移入 `sqc/reconstruction/`，与各自的重建算法就近管理。
 >
 > **v2.3 更新**（2026-05-15）：`_fit_ramsey_frequency` 支持双模人工失谐测频（见 §4.7.3 详例）；闭环反馈新增 `step_method="bisection"` 和 `bracket_tightening` 参数；瞬态测频 `_measure_frequency_transient` 完成实现。
+>
+> **v2.4 重构**（2026-05-17）:`SinglePointFrequencyCalibration` 拆分为**测量**与**调谐**两个职责清晰的类。单点频率测量提取为新类 `FrequencyMeasurement(method="ramsey"|"transient")`(也是 `Calibration` 子类),可独立用于读 f_q 或作为子例程被调用;`SinglePointFrequencyCalibration` 瘦身为仅含调谐方法(目前 `method="closed_loop"`,`method` 字段保留以便扩展未来调谐策略),内部组合一个 `FrequencyMeasurement` 实例完成每步测频。顶层 transient 测频路径接通(Track B 1.2)。Scheduler 任务重命名:`frequency_ramsey` → `frequency_measurement`(统一入口,通过 `method` 参数选择 ramsey/transient)。
 
-#### 4.7.3 `SinglePointFrequencyCalibration` 详例
+#### 4.7.3 `FrequencyMeasurement` + `SinglePointFrequencyCalibration` 详例
+
+**职责分离设计**(v2.4):
+- `FrequencyMeasurement` — 单点 f₀₁ **测量**(read-only),`method ∈ {"ramsey", "transient"}`,提供 `.measure(flux)` 子例程接口和标准 `.calibrate()` CalibrationTable 接口
+- `SinglePointFrequencyCalibration` — 单点 f₀₁ **调谐**(write/feedback),`method ∈ {"closed_loop"}`(为未来调谐策略预留扩展点),内部组合一个 `FrequencyMeasurement` 实例完成每步测频
 
 **Ramsey 测频双模设计**：
 
@@ -1072,43 +1078,60 @@ class CalibrationTable:
 | `float` (默认 0.1 GHz) | **单扫** | `phase2 = 2π·f_a·τ` 产生人工失谐，保证 Δ + f_a > 0，FFT 得 Δ = f_meas − f_a | 1× | |Δ| 有界（near sweet spot, 窄 flux scan） |
 | `None` | **双扫** | 跑 ±50 MHz 两轮，Δ = (f_p² − f_n²) / 0.2 | 2× | |Δ| 任意大（闭环反馈中任意 flux 点） |
 
-单扫模式由 `_run_ramsey_sweep`（τ 扫描 + 相位斜坡）和 `_fft_peak`（FFT + 二次子格点插值）两个内部辅助函数支撑。
+单扫模式由 `_run_ramsey_sweep`（τ 扫描 + 相位斜坡）和 `_fft_peak`（FFT + 二次子格点插值）两个内部辅助函数支撑。瞬态模式由模块级 `_measure_frequency_transient(qubit, omega_d, t_rabi, t_global, flux)` 实现(正交 Ramsey + 控制核积分 G_α)。
 
 ```python
-from sqc.calibration.frequency import SinglePointFrequencyCalibration
-
-# 方法 1: 单次 Ramsey（单扫模式，|Δ| 小 → f_artificial=0.1 足够）
-cal = SinglePointFrequencyCalibration(qubit=q, method="ramsey")
-table = cal.calibrate()
-print(table.outputs[0])    # 拟合得到的 f_01 (rad·GHz)，带符号
-
-# 方法 2a: 闭环反馈 — 割线法 (默认)
-cal = SinglePointFrequencyCalibration(
-    qubit=q, method="closed_loop",
-    f_target=5.0 * 2 * np.pi,   # 目标频率
-    V_a=-0.03, V_b=0.03,        # 电压 bracketing
-    step_method="secant",        # 默认
-    bracket_tightening=True,     # 默认，regula falsi 加速收敛
+from sqc.calibration.frequency import (
+    FrequencyMeasurement, SinglePointFrequencyCalibration,
 )
-table = cal.calibrate()
-print(table.fit_params["converged"])  # True/False
 
-# 方法 2b: 闭环反馈 — 二分法（可视化诊断用，指数收敛趋势清晰）
+# === 测量(read-only): FrequencyMeasurement ===
+
+# 方法 1: Ramsey FFT 单扫(|Δ| 小,sweet spot 附近)
+m = FrequencyMeasurement(qubit=q, method="ramsey")
+table = m.calibrate()
+print(table.outputs[0])                 # f_01 (rad·GHz),带符号
+
+# 方法 2: Ramsey FFT 双扫(|Δ| 任意大)
+m = FrequencyMeasurement(qubit=q, method="ramsey", f_artificial=None)
+f_q = m.measure(flux=0.025)             # 直接调子例程,不打包成 CalibrationTable
+
+# 方法 3: 瞬态测频(τ=0 正交 Ramsey + G_α)
+m = FrequencyMeasurement(qubit=q, method="transient", flux=0.0)
+table = m.calibrate()
+
+# === 调谐(closed-loop): SinglePointFrequencyCalibration ===
+
+# 方法 A: 割线法(默认),内层 Ramsey FFT 双扫
 cal = SinglePointFrequencyCalibration(
-    qubit=q, method="closed_loop",
+    qubit=q,                            # method="closed_loop" 是默认值
     f_target=5.0 * 2 * np.pi,
     V_a=-0.03, V_b=0.03,
-    step_method="bisection",     # 二分法
+    measure_method="ramsey",            # 内层 FrequencyMeasurement 的 method
+    step_method="secant",
+    bracket_tightening=True,
+)
+table = cal.calibrate()
+print(table.fit_params["converged"])    # True/False
+print(table.fit_params["V_opt"])
+
+# 方法 B: 二分法 + 瞬态内层(诊断/快速调谐用)
+cal = SinglePointFrequencyCalibration(
+    qubit=q,
+    f_target=5.0 * 2 * np.pi,
+    V_a=-0.03, V_b=0.03,
+    measure_method="transient",
+    step_method="bisection",
 )
 table = cal.calibrate()
 # table.fit_params["history"] 中每步含 bracket_width
 ```
 
-**闭环算法**（两种 root-finding 方法，每次迭代通过 `_measure_frequency(flux)` 测频）：
+**闭环算法**（两种 root-finding 方法，每次迭代通过内部 `self._meas.measure(V_n)` 测频）：
 - **割线法** (secant)：维护 V_{n-1}, V_n，割线外推 V_{n+1} = V_n − r_n·(V_n − V_{n-1}) / (r_n − r_{n-1})。若越界 [V_a, V_b] 回退中点。`bracket_tightening=True`（默认）时每次迭代收紧边界（regula falsi），通常 1–3 次收敛。
 - **二分法** (bisection)：每次取中点 V_mid = (V_lo + V_hi)/2，根据 r_mid·r_lo 的符号缩半区间。收敛 O(log₂(范围/ε))，约 10–15 次迭代，适合可视化诊断。自动处理偶对称 f(Φ)（在 Φ=0 处拆分 bracket）。
 
-`_measure_frequency` 使用双扫模式（`f_artificial=None`）以保证任意 flux 下的符号正确性。
+闭环内部的 `FrequencyMeasurement` 在 `__post_init__` 中一次性构造,强制 `f_artificial=None`(双扫),以保证搜索过程中即使探到远离 sweet spot 的 flux 也能正确测频。
 
 #### 4.7.4 `WaveformCalibration` + `PredistortionDesigner` 详例
 
@@ -1807,7 +1830,8 @@ sqc.config.CONFIG = sqc.config.Config(
 | `Calibration` | `sqc.calibration.base` | 标定 ABC |
 | `CalibrationTable` | `sqc.calibration.base` | 标定结果 |
 | `FluxResponseCalibration` | `sqc.calibration.frequency` | f(Φ) 磁通响应标定 |
-| `SinglePointFrequencyCalibration` | `sqc.calibration.frequency` | 单点 f₀₁ 标定（含闭环） |
+| `FrequencyMeasurement` | `sqc.calibration.frequency` | 单点 f₀₁ 测量(ramsey/transient) |
+| `SinglePointFrequencyCalibration` | `sqc.calibration.frequency` | 单点 f₀₁ 调谐(closed_loop) |
 | `WaveformCalibration` | `sqc.calibration.waveform` | 波形标定（传输函数+预失真） |
 | `PredistortionDesigner` | `sqc.calibration.waveform` | 预失真设计器 |
 | `CalibrationScheduler` | `sqc.calibration.scheduler` | 标定控制室 |
@@ -2288,6 +2312,7 @@ mesolve(H_list, psi0, t_array, c_ops, e_ops)
 | v2.2 | 2026-05-14 | 重建模块重构：按传感协议统一接口 — ramsey.py (RamseyReconstruction)、echo.py (EchoReconstruction)、transient.py (TransientReconstruction wiener/hammerstein/lm)、cryoscope.py、delay_ramsey.py、pi_pulse_comp.py；消除 _qubit_inverse_frequency / _build_h_for_signal 重复；删除 wiener/hammerstein/numerical_inverse/cryoscope_calib/delay_ramsey_calib/tail.py |
 | v2.3 | 2026-05-15 | 频率标定双模人工失谐测频：`_fit_ramsey_frequency` 拆分 `_fft_peak` + `_run_ramsey_sweep` + 编排层，支持单扫（`f_artificial`=float）和双扫（`f_artificial`=None）两种模式；闭环反馈新增 step_method=bisection 和 bracket_tightening 参数；_measure_frequency 切换双扫提高鲁棒性；瞬态测频 `_measure_frequency_transient` 完成实现。实验层新增 DelayRamseyExperiment 和 PiPulseCompensationExperiment，均支持 t_fall 参数；PiPulseComp z* 提取新增抛物线插值。IQ 读出新增 `_resample_hamiltonian` 统一时间网格 + max_step 选项消除插值伪影 |
 | v2.4 | 2026-05-16 | **P6**：用户可操作接口补完。P6a: `reconfigure()` 扩展至覆盖全部 6 层 CONFIG (AWG/Pulse/Reconstruction/Simulation/Transmon/ControlLine)。P6d: `SensingWorkflow` 统一科研入口 — `configure()` + `run(measure, reconstruct, calibrate)` + `sweep(param, values)` + `compare(methods)` + `plot()` + 11 个科研接口 stub。新增 `WorkflowResult`/`SweepResult`/`CompareResult` 数据结构。P6c: `Simulation_sqc.ipynb` 新增参数扫描演示 cell（扫幅度、扫 λ、扫 flux bias、reconfigure() 演示）。测试: +30 单元测试 (tests/unit/test_workflow.py)。 |
+| v2.5 | 2026-05-17 | **频率标定职责分离**:`SinglePointFrequencyCalibration` 拆分为两个职责清晰的类。新增 `FrequencyMeasurement(method="ramsey"\|"transient")` 单点测量类(`.measure(flux)` + `.calibrate()`);`SinglePointFrequencyCalibration` 瘦身为只含调谐方法,`method ∈ {"closed_loop"}`(保留 `method` 字段为未来策略预留),内部组合 `FrequencyMeasurement` 完成每步测频。顶层 transient 测频接通 Track B 1.2(`_measure_frequency_transient` 提到模块级,FrequencyMeasurement(method="transient") 即时可用)。Scheduler:`frequency_ramsey` → `frequency_measurement` 统一入口。`__init__.py` 导出 `FrequencyMeasurement`;src_mirror facade、测试、docs、notebooks 同步迁移。 |
 | v2.5 | 2026-05-17 | §4.5.2 追加 DelayRamsey **t_d 语义陷阱**注释:说明 `t_d` 是 Ramsey 起点相对 `t_fall` 的偏移而非测量点相对 falling edge 的延迟,实际采样时刻 `t_query = t_fall + t_d + t_sig`(t_sig ∈ 自由演化窗口),最早可测点为 `t_fall + t_rabi[-1]`;并提示 `flux_signal.t_list` 必须覆盖整个 t_query 范围(否则 `value_at` 越界返回 0 造成重建曲线"悬崖")。纯文档增补,无代码改动。 |
 | v2.6 | 2026-05-17 | **Cryoscope/DelayRamsey 相位 unwrap 统一**:消除 calibration 反演的 ~70 μΦ₀ DC 偏置。(1) 新建 `sqc/reconstruction/dispersion.py` 共享 4 个函数 — `omega_q_at_flux`/`cryoscope_phase_theory`/`cumulative_phase_theory`/`unwrap_phase_with_model`,作为相位 unwrap 唯一真理源。(2) 4 处迁移到统一 API:`CryoscopeExperiment`/`CryoscopeCalibration`/`DelayRamseyExperiment`/`DelayRamseyCalibration` 全部用 model-guided unwrap,实验端用累积积分锚定、标定端用方波相位锚定;旧的 baseline-subtraction + `np.unwrap` 残骸清理。(3) `CryoscopeCalibration` 末尾追加 h=0 锚定 — 减掉 `varphi[h≈0]` 让 `cal.inverse(0) == 0`,消除 IQReadout 系统相位污染。(4) `CryoscopeExperiment` `trunc_list` 越界 sanity check + 默认 `flux_signal.t_list` 延长到 100 ns,避免 `truncate()` 静默失效(silent failure)。(5) `DelayRamseyExperiment.run_baseline` 字段保留兼容性但标 deprecated。详见 §4.6.7。22 单元测试 + 5 物理回归 baseline 全绿(无需重生成)。数值验证:DC offset 由 +6.88e-5 → +2.15e-9 Φ₀。 |
 
@@ -2295,6 +2320,41 @@ mesolve(H_list, psi0, t_array, c_ops, e_ops)
 - 完整设计背景：[`idea/refactor/_refactor_plan.md`](../idea/refactor/_refactor_plan.md)
 - Phase 工作记录：[`idea/refactor/_handoff_state.md`](../idea/refactor/_handoff_state.md)
 - 实战 demo：`python web_demo_v2.py`
+
+---
+
+## 现存假设与限制
+
+### A1. 理想控制线假设（flux 线 + XY 线均未接入失真管道）
+
+**当前所有 `Experiment` 和 `Calibration` 子类假定 flux 控制线（Z）和驱动控制线（XY）都是理想的。** 具体来说：
+
+- **Z 线（flux）**：用户构造的 `FluxSignal` 直接作为"片上磁通"喂给 `qubit.qubit_in_mag()`，不经过 `ControlLine(kind="z").apply()`。
+- **XY 线（drive）**：`create_ramsey_pulse` / `create_pulse` 等工厂函数直接用理想 Rabi 包络 Ω(t) 构造 Hamiltonian 的 σ_x/σ_y 项，不经过 `ControlLine(kind="xy").apply()`。
+
+```
+当前(理想):
+  FluxSignal        → qubit.qubit_in_mag(FluxSignal)  → H_qubit (σ_z 项)
+  pulse Ω_awg(t)    → Pulse(Ω_awg)                    → H_control (σ_x/σ_y 项)
+
+未来(真实):
+  FluxSignal → ControlLine(z).apply()  → FluxSignal → H_qubit
+  Ω_awg      → ControlLine(xy).apply() → Pulse       → H_control
+```
+
+**物理后果**：
+- **Z 线失真**：片上磁通 Φ_Q(t) 与 AWG 输出的 Φ_awg(t) 不同——短脉冲/快边沿场景下幅值不准、尾部拖尾
+- **XY 线失真**：Rabi 驱动包络 Ω_true(t) 与 AWG 输出的 Ω_awg(t) 不同——脉冲初期逐渐建立（Chevron 振荡周期变慢）、脉冲关断后存在残响
+
+**现状**：
+- `ControlLine` 的 `kind` 字段已预埋 `Literal["xy", "z", "readout"]`，三条线各可挂独立的 `transfer_function`——数据模型已就绪，只是**没有消费端**
+- 主线 C（预失真）是唯一显式建模控制线失真的模块，通过手动 `FluxSignal → Waveform → ControlLine.apply() → FluxSignal(type=8)` 走通 Z 线；XY 线失真尚无任何消费
+- 用户可手动走上述链路做单次仿真，但框架未自动化
+
+**修复方向**（issue，暂不排期）：
+1. 所有 `Experiment.build_sequence()` 和 `Calibration` 入口统一接受 `z_line: ControlLine | None` 和 `xy_line: ControlLine | None`，非 `None` 时走真实管道
+2. `Pulse` 构造链路加 `control_line` 注入点——`Ω_awg` 先经失真再入 Hamiltonian
+3. 改涉及 `sqc/experiments/` 8 个类 + `sqc/calibration/` 2 个类 + `sqc/control/pulse.py` 工厂函数 + `sqc/reconstruction/` 标定路径
 
 ---
 
