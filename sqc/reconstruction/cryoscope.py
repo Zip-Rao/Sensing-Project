@@ -17,7 +17,11 @@ from sqc.config import CONFIG
 from sqc.control.flux_signal import FluxSignal
 from sqc.hardware.readout import IQReadoutModel
 from sqc.reconstruction.base import Reconstruction
-from sqc.reconstruction.dispersion import qubit_inverse_frequency
+from sqc.reconstruction.dispersion import (
+    cryoscope_phase_theory,
+    qubit_inverse_frequency,
+    unwrap_phase_with_model,
+)
 
 
 # ===================================================================
@@ -164,7 +168,11 @@ class CryoscopeCalibration(Calibration):
         p_e_I = np.asarray(p_e_I_list, dtype=float)
         p_e_Q = np.asarray(p_e_Q_list, dtype=float)
         varphi_raw = np.arctan2(0.5 - p_e_I, p_e_Q - 0.5)
-        varphi = self._unwrap_with_model(varphi_raw, omega_d)
+        varphi_theory = cryoscope_phase_theory(
+            self.qubit, np.asarray(self.h_list, dtype=float),
+            tau=self.tau, omega_d=omega_d,
+        )
+        varphi = unwrap_phase_with_model(varphi_raw, varphi_theory)
 
         return CalibrationTable(
             name="cryoscope_phi_h",
@@ -179,16 +187,3 @@ class CryoscopeCalibration(Calibration):
             metadata={},
         )
 
-    def _unwrap_with_model(self, varphi_raw: np.ndarray, omega_d: float) -> np.ndarray:
-        EC = self.qubit.EC
-        EJ0 = getattr(self.qubit, "EJ_0", self.qubit.EJ)
-        flux_bias = (
-            getattr(self.qubit, "flux_bias", None)
-            or getattr(self.qubit, "flux", None)
-            or 0.0
-        )
-        total_flux = flux_bias + np.asarray(self.h_list, dtype=float)
-        omega_q = np.sqrt(8.0 * EJ0 * np.abs(np.cos(np.pi * total_flux)) * EC) - EC
-        varphi_theory = (omega_q - omega_d) * self.tau
-        n_wraps = np.round((varphi_theory - varphi_raw) / (2.0 * np.pi))
-        return varphi_raw + 2.0 * np.pi * n_wraps

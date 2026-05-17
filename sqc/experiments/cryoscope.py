@@ -19,6 +19,10 @@ from sqc.control.flux_signal import FluxSignal
 from sqc.config import CONFIG
 from sqc.experiments.base import Experiment
 from sqc.hardware.readout import IQReadoutModel
+from sqc.reconstruction.dispersion import (
+    cumulative_phase_theory,
+    unwrap_phase_with_model,
+)
 from sqc.simulation.result import ExperimentResult
 
 
@@ -124,10 +128,22 @@ class CryoscopeExperiment(Experiment):
 
         p_e_I = np.asarray(p_e_I_list, dtype=float)
         p_e_Q = np.asarray(p_e_Q_list, dtype=float)
+        trunc_arr = np.asarray(self.trunc_list, dtype=float)
 
-        # Compute phase via arctan2, reverse to align time axis (legacy)
-        varphi = np.arctan2(0.5 - p_e_I, p_e_Q - 0.5)[::-1]
-        varphi = np.unwrap(varphi)
+        # Sort so trunc / varphi are time-ascending
+        order = np.argsort(trunc_arr)
+        trunc_sorted = trunc_arr[order]
+        varphi_raw = np.arctan2(0.5 - p_e_I, p_e_Q - 0.5)[order]
+
+        # Model-guided unwrap anchored to ∫₀^{t_d} (ω_q(Φ(t)) − ω_d) dt
+        # so the absolute-phase convention matches CryoscopeCalibration.
+        varphi_theory = cumulative_phase_theory(
+            self.qubit,
+            np.asarray(self.flux_signal.t_list, dtype=float),
+            np.asarray(self.flux_signal.signal, dtype=float),
+            trunc_sorted, omega_d=self.omega_d,
+        )
+        varphi = unwrap_phase_with_model(varphi_raw, varphi_theory)
         return ExperimentResult(
             data={
                 "varphi": varphi,
@@ -135,7 +151,7 @@ class CryoscopeExperiment(Experiment):
                 "p_e_Q": p_e_Q,
             },
             axes={
-                "trunc": np.asarray(self.trunc_list),
+                "trunc": trunc_sorted,
             },
             metadata={
                 "experiment": "CryoscopeExperiment",

@@ -21,6 +21,10 @@ from sqc.control.flux_signal import FluxSignal
 from sqc.config import CONFIG
 from sqc.experiments.base import Experiment
 from sqc.hardware.readout import IQReadoutModel
+from sqc.reconstruction.dispersion import (
+    cumulative_phase_theory,
+    unwrap_phase_with_model,
+)
 from sqc.simulation.result import ExperimentResult
 
 
@@ -72,9 +76,11 @@ class DelayRamseyExperiment(Experiment):
         default_factory=lambda: CONFIG.pulse.t_rabi.copy()
     )
     omega_d: float | None = None
-    run_baseline: bool = False  # Default off: numerical noise at zero
-                                # detuning makes arctan2(0, 0) unstable.
-                                # Use calibration intercept instead.
+    run_baseline: bool = False  # Deprecated.  Model-guided unwrap
+                                # (via sqc.reconstruction.dispersion)
+                                # now sets the absolute-phase reference
+                                # analytically — no baseline measurement
+                                # is needed.  Kept for API compatibility.
     t_fall: float = 0.0
     """Falling-edge time in the flux signal (ns). t_d is relative to this."""
 
@@ -112,18 +118,6 @@ class DelayRamseyExperiment(Experiment):
             omega_d=self.omega_d,
         )
 
-        # Baseline measurement (zero flux). Store I/Q components for
-        # complex-space subtraction (avoids arctan2(0,0) singularity
-        # when signal is small at large t_d).
-        p_e_I_base: float | None = None
-        p_e_Q_base: float | None = None
-        if self.run_baseline:
-            Phi_zero = FluxSignal(type=0, t_list=t_sig)
-            self.qubit.qubit_in_mag(Phi_zero, frame=1, omega_d=self.omega_d)
-            base_meas = readout.measure(self.qubit)
-            p_e_I_base = float(base_meas["p_e_I"])
-            p_e_Q_base = float(base_meas["p_e_Q"])
-
         p_e_I_list: list[float] = []
         p_e_Q_list: list[float] = []
 
@@ -153,31 +147,26 @@ class DelayRamseyExperiment(Experiment):
 
         p_e_I = np.asarray(p_e_I_list, dtype=float)
         p_e_Q = np.asarray(p_e_Q_list, dtype=float)
+        t_d_arr = np.asarray(self.t_d_list, dtype=float)
 
-        # Raw phase via arctan2 (uncorrected).
-        varphi_raw_unwrapped = np.unwrap(
-            np.arctan2(0.5 - p_e_I, p_e_Q - 0.5)
+        # Raw wrapped phase
+        varphi_raw = np.arctan2(0.5 - p_e_I, p_e_Q - 0.5)
+
+        # Model-guided unwrap shared with DelayRamseyCalibration so the
+        # absolute-phase convention is consistent across the two paths.
+        # Theory anchor: ∫_{t_d}^{t_d+τ_R} (ω_q(Φ_bias + h_tail(s)) − ω_d) ds
+        # where h_tail(s) = flux_signal.value_at(t_fall + s).
+        varphi_theory = cumulative_phase_theory(
+            self.qubit,
+            np.asarray(self.flux_signal.t_list, dtype=float) - self.t_fall,
+            np.asarray(self.flux_signal.signal, dtype=float),
+            t_d_arr, omega_d=self.omega_d,
+            window=(0.0, float(self.tau_R)),
         )
+        varphi = unwrap_phase_with_model(varphi_raw, varphi_theory)
 
-        # Baseline-corrected phase: subtract the constant arctan2 offset
-        # BEFORE unwrap, so points near zero signal stay near 0 instead of
-        # at the noise floor (~3π/4).  Then unwrap can correctly resolve
-        # 2π branches over the large-signal region.
+        # Keep legacy keys for downstream compatibility.
         varphi_base: float | None = None
-        if p_e_I_base is not None:
-            varphi_base = float(np.arctan2(
-                0.5 - p_e_I_base, p_e_Q_base - 0.5
-            ))
-            varphi_shifted = (
-                np.arctan2(0.5 - p_e_I, p_e_Q - 0.5) - varphi_base
-            )
-            # Wrap into [-π, π] before unwrap to avoid spurious 2π jumps
-            varphi_shifted = (varphi_shifted + np.pi) % (2 * np.pi) - np.pi
-            varphi = np.unwrap(varphi_shifted)
-        else:
-            varphi = varphi_raw_unwrapped
-
-        varphi_raw = varphi_raw_unwrapped
 
         return ExperimentResult(
             data={

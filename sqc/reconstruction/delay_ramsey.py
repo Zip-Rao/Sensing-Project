@@ -15,7 +15,11 @@ from sqc.config import CONFIG
 from sqc.control.flux_signal import FluxSignal
 from sqc.hardware.readout import IQReadoutModel
 from sqc.reconstruction.base import Reconstruction
-from sqc.reconstruction.dispersion import qubit_inverse_frequency
+from sqc.reconstruction.dispersion import (
+    cryoscope_phase_theory,
+    qubit_inverse_frequency,
+    unwrap_phase_with_model,
+)
 
 
 # ===================================================================
@@ -65,21 +69,17 @@ class DelayRamseyReconstruction(Reconstruction):
     def _via_response(self, varphi, t_axis, tau) -> FluxSignal:
         if self.qubit is None:
             raise ValueError("inversion='response' requires qubit=...")
-        phi = np.asarray(varphi, dtype=float).copy()
-        if np.median(phi) > 0:
-            phi = phi - 2.0 * np.pi
-        h = qubit_inverse_frequency(phi / tau, self.qubit)
+        h = qubit_inverse_frequency(
+            np.asarray(varphi, dtype=float) / tau, self.qubit,
+        )
         return FluxSignal(type=8, t_list=t_axis, signal=h)
 
     def _via_calibration(self, varphi, t_axis, cal) -> FluxSignal:
         if cal is None:
             raise ValueError("inversion='calibration' requires a CalibrationTable.")
-        phi = np.asarray(varphi, dtype=float).copy()
-        cal_center = 0.5 * (cal.outputs.min() + cal.outputs.max())
-        shift = cal_center - np.median(phi)
-        n2pi = np.round(shift / (2.0 * np.pi))
-        phi = phi + n2pi * (2.0 * np.pi)
-        flux = cal.inverse(phi)
+        # Upstream now uses model-guided unwrap so phi and cal.outputs
+        # share the same absolute-phase convention — no 2π adjustment.
+        flux = cal.inverse(np.asarray(varphi, dtype=float))
         return FluxSignal(type=8, t_list=t_axis, signal=flux)
 
 
@@ -131,37 +131,28 @@ class DelayRamseyCalibration(Calibration):
             tau=self.tau_R, t_rabi=self.t_rabi, omega_d=self.omega_d,
         )
 
-        # Baseline measurement at zero flux (matches DelayRamseyExperiment
-        # — both subtract the constant arctan2 offset before unwrap so
-        # the φ(z=0) point sits at 0 rather than at the noise floor).
-        Phi_zero = FluxSignal(type=0, t_list=t_sig)
-        self.qubit.qubit_in_mag(Phi_zero, frame=1, omega_d=self.omega_d)
-        base = readout.measure(self.qubit)
-        varphi_base = float(np.arctan2(
-            0.5 - float(base["p_e_I"]), float(base["p_e_Q"]) - 0.5
-        ))
-
         varphi_list: list[float] = []
         for z in self.z_list:
             signal = np.zeros(len(t_sig))
             evo_start = self.t_rabi[-1]
             evo_end = self.t_rabi[-1] + self.tau_R
-            print("equal evo window:", evo_start, evo_end)
             signal[(t_sig >= evo_start) & (t_sig <= evo_end)] = float(z)
             Phi = FluxSignal(type=8, t_list=t_sig, signal=signal)
             self.qubit.qubit_in_mag(Phi, frame=1, omega_d=self.omega_d)
-            
             measured = readout.measure(self.qubit)
             phi = float(np.arctan2(
                 0.5 - measured["p_e_I"], measured["p_e_Q"] - 0.5
             ))
-            print(f"z={z:.4f} -> varphi={phi:.4f} rad")
             varphi_list.append(phi)
 
-        # Subtract baseline offset, wrap into [-π, π], then unwrap
-        varphi_shifted = np.asarray(varphi_list, dtype=float) - varphi_base
-        varphi_shifted = (varphi_shifted + np.pi) % (2 * np.pi) - np.pi
-        varphi_arr = np.unwrap(varphi_shifted)
+        # Model-guided unwrap shared with DelayRamseyExperiment so the
+        # absolute-phase convention is consistent across the two paths.
+        varphi_raw = np.asarray(varphi_list, dtype=float)
+        varphi_theory = cryoscope_phase_theory(
+            self.qubit, np.asarray(self.z_list, dtype=float),
+            tau=self.tau_R, omega_d=self.omega_d,
+        )
+        varphi_arr = unwrap_phase_with_model(varphi_raw, varphi_theory)
         k, intercept = np.polyfit(self.z_list, varphi_arr, 1)
 
         return CalibrationTable(
