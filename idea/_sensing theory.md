@@ -1482,6 +1482,18 @@ $$
 - $\pi$脉冲时间：$\Delta = 0$处的第一个振荡峰的位置
 - 失真：若波形存在失真，或者有其他非理想因素，则会导致图像的变形，例如振荡频率不均匀，振荡幅度不均匀等。
 
+**使用情形**：
+1. **qubit 频率标定**：$\Delta=0$ 共振水平线 → $\omega_q$
+2. **$\pi$ 脉冲时间标定**：$\Delta=0$ 切片首峰位置 → $t_\pi = \pi/\Omega$
+3. **Rabi 频率 $\Omega$ 标定**：共振振荡周期 $T_{\rm Rabi} = 2\pi/\Omega$
+4. **微波驱动线失真诊断**：理想方波驱动 $\Omega \cdot \mathrm{rect}$ 经失真变为时变 $\Omega(t)$，哈密顿量变成 $H = \frac{\Delta}{2}\sigma_z + \frac{\Omega(t)}{2}\sigma_x$——**失真挂在 $\sigma_x$ 通道**
+
+**失真表现（$\sigma_x$ 通道时变）**：
+- 振荡周期变慢、不均匀：初期 $\Omega(t)$ 尚未稳定 → 累积转角 $\int\Omega(t')\,dt'$ 慢于理想 $\Omega t$，振荡相位整体右移
+- 振荡对比度衰减：包络抖动/拖尾导致 sin² 振幅减小
+- **$\Delta=0$ 共振线位置不动**：$\sigma_x$ 通道的扰动不改变共振条件 $\Delta=0$
+- 图样沿时间轴方向被压缩/拉伸，但保持左右对称（关于 $\Delta=0$）
+
 #### 两比特flux Chevron
 考虑一个耦合系统，哈密顿量为
 $$
@@ -1497,6 +1509,54 @@ p_{11}(t) = \frac{8g^2}{\Delta^2 + 8g^2} \sin^2\left(\frac{\sqrt{\Delta^2 + 8g^2
 $$
 与Rabi类似，扫flux幅度，$\Delta$相应改变，扫持续时间，得到二维图像$p_{11}(\Delta, t)$，可以得到一个Chevron图像。
 ![alt text](image-11.png)
+
+其中 $\Delta = (\omega_1-\omega_2)-\alpha_2$ 由 flux 幅度 $A$ 决定（线性近似 $\Delta = \kappa\,(A - A_{\rm res})$，$A_{\rm res}$ 为共振 flux 幅度）。
+
+**使用情形**：
+1. **耦合强度 $g$ 标定**：共振 $\Delta=0$ 切片的振荡周期 $T = \pi/(\sqrt{2}\,g)$
+2. **iSWAP / $\sqrt{\rm iSWAP}$ 门标定**：共振脊上 $p_{11}=0$（完全交换）的第一个点 → iSWAP 时间
+3. **CZ 门振幅标定**：定位 $|11\rangle\leftrightarrow|02\rangle$ avoided crossing 处的 $A$；CZ 门通过绝热扫过该共振点累积 $\pi$ 相位
+4. **flux 控制线失真诊断**：方波 flux 经失真变为 $A\,s(t)$，时变失谐 $\Delta(t) = \kappa\,(A\,s(t)-A_{\rm res})$——**失真挂在 $\sigma_z$ 通道**
+
+**失真表现（$\sigma_z$ 通道时变）**：
+- **共振脊弯曲**：短脉冲下片上 flux 未爬升到 $A$（$\langle s\rangle_T < 1$），需要更大 $A$ 让时间平均 $\langle\Delta\rangle_T = 0$
+- 绝热近似下共振脊曲线 $A_{\rm res}^{\rm eff}(T) = A_{\rm res}/\langle s\rangle_T$；对单指数失真 $s(t)=1-a\,e^{-t/\tau}$：
+  - $T\to 0$ 极限：$A_{\rm res}^{\rm eff} \to A_{\rm res}/(1-a)$
+  - $T\to\infty$ 极限：$A_{\rm res}^{\rm eff} \to A_{\rm res}$
+  - 中间 $T$ 处共振脊呈双曲线状向高 $A$ 弯曲
+- 长拖尾失真（多指数 / IIR 尾巴）会导致共振脊在长 $T$ 区域出现**小幅颤动**或**分裂**
+- 不对称性：$\sigma_z$ 时变破坏 $A \leftrightarrow A_{\rm res}-(A-A_{\rm res})$ 镜像对称，整个图像关于 $A_{\rm res}$ 不再对称
+
+#### Rabi Chevron 与 Flux Chevron 对比
+
+两者数学结构都是 $\sigma_z + \sigma_x$ 两能级模型，但**失真注入的 Hamiltonian 通道不同**，因此诊断对象、图像特征、应用场景各异。
+
+| 维度 | Rabi Chevron | Flux Chevron |
+|---|---|---|
+| **比特数** | 单比特 | 两比特（或 qubit-resonator） |
+| **扫描轴 1** | 微波失谐 $\Delta = \omega_d - \omega_q$（微波源频率决定，脉冲期间**真的恒定**） | flux 幅度 $A$（AWG 输出，经失真后**脉冲期间时变** $A\,s(t)$） |
+| **扫描轴 2** | 脉冲持续时间 $t$ | 脉冲持续时间 $t$ |
+| **$\sigma_x$ 通道（耦合）** | Rabi 频率 $\Omega$（来自微波驱动包络，**可能时变**） | 固定交换耦合 $g$ 或 $\sqrt{2}g$（**常数**） |
+| **$\sigma_z$ 通道（失谐）** | $\Delta$（微波源单频，**常数**） | $\Delta(t) = \kappa(A\,s(t)-A_{\rm res})$（**可能时变**） |
+| **共振条件** | $\Delta = 0$ | $A = A_{\rm res}$（理想）；$\langle s\rangle_T\,A = A_{\rm res}$（失真，绝热近似） |
+| **诊断对象** | **微波驱动线**失真（影响 $\sigma_x$） | **flux 控制线**失真（影响 $\sigma_z$） |
+| **失真图像特征** | 振荡周期/对比度变化，**共振线位置不动**，仍左右对称 | **共振脊向高 $A$ 弯曲**，关于 $A_{\rm res}$ 不再对称 |
+| **典型校准应用** | $\omega_q$、$\pi$ 脉冲长度、$\Omega$ | iSWAP/CZ 门 $A$ 与 $T$、耦合 $g$、$|11\rangle$-$|02\rangle$ avoided crossing 位置 |
+
+**共同点**：
+- 都是二维扫描（失谐/幅度 × 持续时间），图像呈 Chevron "叶片" 状
+- 共振线上 sin² 振荡，离共振时振幅按 $\Omega_c^2/(\Omega_c^2+\Delta^2)$ 衰减、频率按 $\sqrt{\Omega_c^2+\Delta^2}$ 加快
+- 都是诊断波形失真的**标准初筛工具**——肉眼即可识别图像变形
+- 都给出"耦合（$\sigma_x$）—失谐（$\sigma_z$）"的二维谱
+
+**关键差异**：
+- **失真注入通道不同**：Rabi Chevron 把失真挂在 $\sigma_x$（微波包络），Flux Chevron 把失真挂在 $\sigma_z$（flux→失谐）
+- **失真图像特征不同**：$\sigma_x$ 通道时变 ⇒ 振荡速率变但**共振位置不动**；$\sigma_z$ 通道时变 ⇒ **共振位置随 $T$ 偏移 ⇒ 弯曲共振脊**
+- **互补性**：微波线和 flux 线是两条独立的控制线，各自的失真**不能互相替代诊断**——必须分别做 Rabi Chevron 和 Flux Chevron 才能完整刻画失真情况
+
+> **常见误区**："改 flux 就是改失谐 $\Delta$，所以 Rabi Chevron 也应该看到 flux 失真效应"。这在**静态/长 $T$ 极限**下对，但 Chevron 的失真特征是**动态**的：取决于失真把哪个 Hamiltonian 系数变成时间相关，与"扫描什么变量"无关。Rabi Chevron 通过微波频率 $\omega_d$ 调失谐——微波相干源给出的是单频信号，脉冲期间 $\Delta$ 真的是常数；flux 失真不参与这条路径，因此 Rabi Chevron 看不到 flux 失真。
+
+代码演示见 [`Simulation_sqc.ipynb`](../Simulation_sqc.ipynb) §10.1（Rabi Chevron）与 §10.1bis（Flux Chevron）：两者使用相同的 `SingleExponentialDistortion(amp=0.3, tau=30 ns)` 对象，仅注入通道不同，即可对比验证上述结论。
 
 因此，通过Chevron实验可以获得qubit和脉冲的基本信息，但还不足以定量分析失真，因此需要进一步测量系统的阶跃响应。
 
