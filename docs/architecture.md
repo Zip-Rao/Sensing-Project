@@ -758,6 +758,21 @@ class Experiment(ABC):
 
 > **v2.3 新增**：`DelayRamseyExperiment` 和 `PiPulseCompensationExperiment` 均新增 `t_fall` 参数，指定 flux 信号的下降沿时刻，使 t_d（或 tau）以该时刻为参考零点。`PiPulseCompensationExperiment` 的 z* 提取改用三点抛物线插值以提高子格点精度。
 
+> **注意 (DelayRamsey t_d 语义陷阱, v2.5 新增)**:`DelayRamseyExperiment.t_d_list` 中的 `t_d` 是 **Ramsey 序列起点相对 `t_fall` 的偏移**,不是"测量点相对 falling edge 的延迟"。原因:序列内部把 flux 只施加在自由演化窗口 `[t_rabi[-1], t_rabi[-1] + tau_R]`,π/2 期间强制 flux=0(否则 π/2 失谐 → φ 不可信)。所以实际采样的 flux 时刻是
+>
+> ```
+> t_query = t_fall + t_d + t_sig          (t_sig ∈ [t_rabi[-1], t_rabi[-1] + tau_R])
+> ```
+>
+> 例:`t_fall=40, t_rabi[-1]=10, tau_R=0` → `t_query = 50 + t_d`。此时 t_d=0 实际测的是 falling edge 之后 **10 ns** 的 flux,而非 falling edge 本身。
+>
+> **物理边界**:自由演化窗口必须完全落在 falling edge 之后(`t_query ≥ t_fall`),否则第一个 π/2 落在方波高电平上被失谐。因此 **delay Ramsey 能测到的最早点是 `t_fall + t_rabi[-1]`**,这是协议本身的物理下限。
+>
+> **使用提醒**:
+> 1. 测试信号 `flux_signal.t_list` 必须覆盖整个 t_query 范围,即 `t_list[-1] ≥ t_fall + max(t_d_list) + t_rabi[-1] + tau_R`。否则 `FluxSignal.value_at` 越界返回 0(见 [`sqc/control/flux_signal.py:335`](../sqc/control/flux_signal.py#L335)),重建曲线会在 t_list 末端附近出现"悬崖"跌至 0。
+> 2. 对比参考真值时,应在 `t_fall + t_d + t_rabi[-1]` 附近采样 flux(配合 tau_R 做平均),而不是 `t_fall + t_d`。否则重建曲线相对参考有约 `t_rabi[-1]` 的时间平移,在指数衰减信号上等价于一个恒定幅值因子 `exp(t_rabi[-1] / τ_tail)`,容易被误判为"标定增益偏差"。
+> 3. `DelayRamseyCalibration` 把 flux=z 施加在相同的自由演化窗口,k 标定的是"自由演化窗口平均 flux → 相位"的斜率,与实验自洽 —— 无需为 t_d 偏移做额外修正,只需正确解读重建结果的时间轴含义。
+
 #### 4.5.3 RamseyExperiment 详例
 
 ```python
@@ -902,9 +917,73 @@ from sqc.reconstruction.basis import (
 
 被 `TransientReconstruction(method="lm")` 和 `FluxSignal(type=6)` 使用。
 
-#### 4.6.7 扩展点
+#### 4.6.7 dispersion 模块 (`sqc/reconstruction/dispersion.py`) — 共享色散公式与相位 unwrap
+
+色散物理（`f_Q(Φ) = √(8·EJ_0·|cos(π·Φ)|·EC) − EC`）和"model-guided phase unwrap"被 cryoscope/delay_ramsey 的实验端和标定端共用。`dispersion.py` 是它们的**唯一真理源**——避免实验/标定两条路径长出不同的相位约定。
+
+```python
+from sqc.reconstruction.dispersion import (
+    omega_q_at_flux,           # f_Q(Φ_total) 解析公式
+    cryoscope_phase_theory,    # (ω_q(Φ_bias + h) − ω_d) · τ
+    cumulative_phase_theory,   # ∫₀^t_d (ω_q − ω_d) dt  或  ∫_{t0+t_d}^{t1+t_d} (sliding window)
+    unwrap_phase_with_model,   # 2π 分支选择: 给定 φ_theory，选最近 φ_raw + 2πn
+    qubit_inverse_frequency,   # dφ/dt → h（响应式反演）
+)
+```
+
+| 用途 | 函数 | 谁调用 |
+|---|---|---|
+| 解析 f_Q(Φ) | `omega_q_at_flux(qubit, Φ_total)` | 所有理论相位计算 |
+| 方波 calibration 理论相位 | `cryoscope_phase_theory(qubit, h_list, τ)` | `CryoscopeCalibration`, `DelayRamseyCalibration` |
+| 任意波形累积相位 | `cumulative_phase_theory(qubit, t, h(t), query, window=None)` | `CryoscopeExperiment`（无 window）, `DelayRamseyExperiment`（window=(0, τ_R)） |
+| 2π 分支选择 | `unwrap_phase_with_model(φ_raw, φ_theory)` | 所有 IQ Ramsey 类协议 |
+| dφ/dt → h | `qubit_inverse_frequency(dφ_dt, qubit)` | `CryoscopeReconstruction(inversion="response")`, `DelayRamseyReconstruction(inversion="response")` |
+
+##### 4.6.7.1 为什么需要 model-guided unwrap
+
+`np.unwrap` 只保证**连续性**，不保证从 0 出发——首点的 2π 分支是任意的。对于"实验扫 t_d、标定扫 h"两条独立测量序列，`np.unwrap` 会给出两个相互独立、绝对零点不同的相位约定。重建时 `cal.inverse(dφ/dt · τ)` 喂入查表，零点不一致直接体现为**重建波形的 DC 偏置**。
+
+`unwrap_phase_with_model` 通过比对每个测量点的理论相位 φ_theory，按 `round((φ_theory − φ_raw) / 2π)` 选 2π 分支——把绝对零点锚定到解析色散公式上。所有调用同一锚点 → 路径间约定一致。
+
+##### 4.6.7.2 为什么还需要 cal_table h=0 锚定
+
+即使 unwrap 用了 model-guided 一致约定，`IQReadoutModel` 仍会在 h=0（无 detuning）时产生**有限残余相位** ~1e-1 rad，来源是：
+
+- π/2 脉冲有限时长内的非 RWA 修正
+- RWA 残余项
+- mesolve 数值积分初值
+
+理论公式 `(ω_q − ω_d) · τ` **不包含**这些。`unwrap_phase_with_model` 因 < π 不会做 2π 修正，所以保留这个残余。
+
+下游 `CryoscopeReconstruction` 用 `phi_equiv = dφ/dt · τ`，**求导自动消掉常数残余**——但 `cal_table.outputs` 仍带着它。`cal.inverse(0)` 因此返回非零 h，导致重建结果整体平移 ~1e-4 Φ₀。
+
+**修复**：`CryoscopeCalibration.calibrate()` 末尾减掉 `varphi[argmin(|h_list|)]`，让 `cal.inverse(0) == 0`。
+
+这一步是**数据驱动发现**——理论模型不足以预测系统相位，要靠实测的 h=0 点扣减。
+
+数值验证（Cell 15 wave-packet, τ=50 ns, flux=arctan(√2)/π）：
+
+| 量 | 改前 | 改后 |
+|---|---|---|
+| `cal.outputs[h=0]` | +0.147 rad | 0 rad |
+| DC offset (h_cal − h_res) 平均 | +6.88×10⁻⁵ Φ₀ | +2.15×10⁻⁹ Φ₀ |
+| max \|h_cal − h_res\| | 7.59×10⁻⁵ | 1.04×10⁻⁵ |
+
+##### 4.6.7.3 三种 unwrap 流派对比（历史脏点 → 现代统一）
+
+| 历史代码 | 文件位置 | 问题 |
+|---|---|---|
+| 裸 `np.unwrap(varphi)` | 旧 `experiments/cryoscope.py:130` | 首点 2π 分支任意 |
+| 私有 `_unwrap_with_model(...)` | 旧 `reconstruction/cryoscope.py` | 锚到 `(ω_q − ω_d)·τ`，但实验端不共享 |
+| baseline-subtraction + `np.unwrap` | 旧 `experiments/delay_ramsey.py:158/176`, `reconstruction/delay_ramsey.py:140-164` | 需要额外 zero-flux 测量，且与 cryoscope 不同型 |
+
+**v2.6 后**：所有四处统一使用 `unwrap_phase_with_model(varphi_raw, varphi_theory)`，其中 `varphi_theory` 由 `cryoscope_phase_theory` 或 `cumulative_phase_theory` 算出。CryoscopeCalibration 额外做 h=0 锚定。
+
+#### 4.6.8 扩展点
 
 详见 §7.2。简言之：继承 `Reconstruction` ABC，实现 `reconstruct(measurement, kernel, calibration, **kwargs)`。
+
+新协议如果涉及 IQ Ramsey 相位测量，**应当复用** `sqc.reconstruction.dispersion` 的 `unwrap_phase_with_model` 而非自己调 `np.unwrap`——否则会重新引入"实验/标定零点不一致"的回归。
 
 ---
 
@@ -2186,6 +2265,8 @@ mesolve(H_list, psi0, t_array, c_ops, e_ops)
 | v2.2 | 2026-05-14 | 重建模块重构：按传感协议统一接口 — ramsey.py (RamseyReconstruction)、echo.py (EchoReconstruction)、transient.py (TransientReconstruction wiener/hammerstein/lm)、cryoscope.py、delay_ramsey.py、pi_pulse_comp.py；消除 _qubit_inverse_frequency / _build_h_for_signal 重复；删除 wiener/hammerstein/numerical_inverse/cryoscope_calib/delay_ramsey_calib/tail.py |
 | v2.3 | 2026-05-15 | 频率标定双模人工失谐测频：`_fit_ramsey_frequency` 拆分 `_fft_peak` + `_run_ramsey_sweep` + 编排层，支持单扫（`f_artificial`=float）和双扫（`f_artificial`=None）两种模式；闭环反馈新增 step_method=bisection 和 bracket_tightening 参数；_measure_frequency 切换双扫提高鲁棒性；瞬态测频 `_measure_frequency_transient` 完成实现。实验层新增 DelayRamseyExperiment 和 PiPulseCompensationExperiment，均支持 t_fall 参数；PiPulseComp z* 提取新增抛物线插值。IQ 读出新增 `_resample_hamiltonian` 统一时间网格 + max_step 选项消除插值伪影 |
 | v2.4 | 2026-05-16 | **P6**：用户可操作接口补完。P6a: `reconfigure()` 扩展至覆盖全部 6 层 CONFIG (AWG/Pulse/Reconstruction/Simulation/Transmon/ControlLine)。P6d: `SensingWorkflow` 统一科研入口 — `configure()` + `run(measure, reconstruct, calibrate)` + `sweep(param, values)` + `compare(methods)` + `plot()` + 11 个科研接口 stub。新增 `WorkflowResult`/`SweepResult`/`CompareResult` 数据结构。P6c: `Simulation_sqc.ipynb` 新增参数扫描演示 cell（扫幅度、扫 λ、扫 flux bias、reconfigure() 演示）。测试: +30 单元测试 (tests/unit/test_workflow.py)。 |
+| v2.5 | 2026-05-17 | §4.5.2 追加 DelayRamsey **t_d 语义陷阱**注释:说明 `t_d` 是 Ramsey 起点相对 `t_fall` 的偏移而非测量点相对 falling edge 的延迟,实际采样时刻 `t_query = t_fall + t_d + t_sig`(t_sig ∈ 自由演化窗口),最早可测点为 `t_fall + t_rabi[-1]`;并提示 `flux_signal.t_list` 必须覆盖整个 t_query 范围(否则 `value_at` 越界返回 0 造成重建曲线"悬崖")。纯文档增补,无代码改动。 |
+| v2.6 | 2026-05-17 | **Cryoscope/DelayRamsey 相位 unwrap 统一**:消除 calibration 反演的 ~70 μΦ₀ DC 偏置。(1) 新建 `sqc/reconstruction/dispersion.py` 共享 4 个函数 — `omega_q_at_flux`/`cryoscope_phase_theory`/`cumulative_phase_theory`/`unwrap_phase_with_model`,作为相位 unwrap 唯一真理源。(2) 4 处迁移到统一 API:`CryoscopeExperiment`/`CryoscopeCalibration`/`DelayRamseyExperiment`/`DelayRamseyCalibration` 全部用 model-guided unwrap,实验端用累积积分锚定、标定端用方波相位锚定;旧的 baseline-subtraction + `np.unwrap` 残骸清理。(3) `CryoscopeCalibration` 末尾追加 h=0 锚定 — 减掉 `varphi[h≈0]` 让 `cal.inverse(0) == 0`,消除 IQReadout 系统相位污染。(4) `CryoscopeExperiment` `trunc_list` 越界 sanity check + 默认 `flux_signal.t_list` 延长到 100 ns,避免 `truncate()` 静默失效(silent failure)。(5) `DelayRamseyExperiment.run_baseline` 字段保留兼容性但标 deprecated。详见 §4.6.7。22 单元测试 + 5 物理回归 baseline 全绿(无需重生成)。数值验证:DC offset 由 +6.88e-5 → +2.15e-9 Φ₀。 |
 
 下一步阅读：
 - 完整设计背景：[`idea/refactor/_refactor_plan.md`](../idea/refactor/_refactor_plan.md)
