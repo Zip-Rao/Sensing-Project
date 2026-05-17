@@ -945,21 +945,34 @@ from sqc.reconstruction.dispersion import (
 
 `unwrap_phase_with_model` 通过比对每个测量点的理论相位 φ_theory，按 `round((φ_theory − φ_raw) / 2π)` 选 2π 分支——把绝对零点锚定到解析色散公式上。所有调用同一锚点 → 路径间约定一致。
 
-##### 4.6.7.2 为什么还需要 cal_table h=0 锚定
+##### 4.6.7.2 为什么还需要 cal_table h=0 锚定（重建波形整体平移的根因）
 
-即使 unwrap 用了 model-guided 一致约定，`IQReadoutModel` 仍会在 h=0（无 detuning）时产生**有限残余相位** ~1e-1 rad，来源是：
+**症状**：Cryoscope 反演图里，`inversion="calibration"` 给出的曲线与 `inversion="response"`、`original` 黑线**形态一致但整体上移** ~1e-4 Φ₀；幅度无关、横轴位置无关，是典型的常数 DC 偏置。
 
-- π/2 脉冲有限时长内的非 RWA 修正
-- RWA 残余项
-- mesolve 数值积分初值
+**根因链**（按数据流顺序）：
 
-理论公式 `(ω_q − ω_d) · τ` **不包含**这些。`unwrap_phase_with_model` 因 < π 不会做 2π 修正，所以保留这个残余。
+| 步骤 | 内容 | 是否引入偏置 |
+|---|---|---|
+| ① IQ 测量 (`IQReadoutModel.measure`) | π/2 脉冲有限时长 + RWA 残余 + mesolve 数值积分初值，在 h=0（无 detuning）时产生**系统相位**约 +0.147 rad | **是**，~1e-1 rad |
+| ② `varphi_raw = arctan2(0.5-p_e_I, p_e_Q-0.5)` | 把 IQ 转成相位，系统相位**完整保留** | 透传 |
+| ③ `unwrap_phase_with_model(varphi_raw, varphi_theory)` | 理论模型 `(ω_q − ω_d)·τ` 在 h=0 处 = 0，与实测 +0.147 rad 差 < π，**不做 2π 修正** | 透传 |
+| ④ `cal_table.outputs = varphi`（标定表存原始值） | outputs[h=0] = +0.147 rad，**而不是 0** | **关键**：表零点错位 |
+| ⑤ 实验端 `varphi_exp(t_d)` 同样含 +0.147 系统相位 | 同 ②③ | 透传 |
+| ⑥ 重建端 `phi_equiv = dφ/dt · τ` | **导数消掉常数偏置**，phi_equiv 在 t_d=0 处 ≈ 0 | 消除 |
+| ⑦ `cal.inverse(phi_equiv)` | 输入是"无偏"的 phi_equiv，但表的零点错位 → 反查得到 h≠0 | **暴露**：重建出现 DC 偏置 |
 
-下游 `CryoscopeReconstruction` 用 `phi_equiv = dφ/dt · τ`，**求导自动消掉常数残余**——但 `cal_table.outputs` 仍带着它。`cal.inverse(0)` 因此返回非零 h，导致重建结果整体平移 ~1e-4 Φ₀。
+简言之：**实测系统相位会被求导消掉，但标定表里的同一份偏置没被消掉，两边零点错位**——这是为什么"形态对、只有 DC 错"的本质。
 
-**修复**：`CryoscopeCalibration.calibrate()` 末尾减掉 `varphi[argmin(|h_list|)]`，让 `cal.inverse(0) == 0`。
+**修复**：`CryoscopeCalibration.calibrate()` 末尾减掉 `varphi[argmin(|h_list|)]`，把 cal_table 在 h=0 处的输出强制归零，与 phi_equiv 的零点对齐：
 
-这一步是**数据驱动发现**——理论模型不足以预测系统相位，要靠实测的 h=0 点扣减。
+```python
+# CryoscopeCalibration.calibrate() — last step before returning
+i_h0 = int(np.argmin(np.abs(h_list_arr)))
+varphi = varphi - varphi[i_h0]
+return CalibrationTable(..., outputs=varphi)
+```
+
+这一步是**数据驱动发现**：理论公式 `(ω_q − ω_d) · τ` 不足以预测 IQReadout 的系统相位，必须用实测 h=0 点扣减。**不能**改 `unwrap_phase_with_model` 去掉系统相位（它需要保留绝对相位约定以正确处理 2π 分支）；只能在标定表落表前做这一步零点对齐。
 
 数值验证（Cell 15 wave-packet, τ=50 ns, flux=arctan(√2)/π）：
 
