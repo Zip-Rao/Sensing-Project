@@ -70,8 +70,11 @@ class RabiExperiment(Experiment):
             + QobjEvo(rabi_pulse.hamiltonian_on(t_global),
                        tlist=t_global, order=1)
         )
+        # max_step prevents adaptive stepper from skipping over narrow
+        # pulse windows on the long t_global axis.
         result = mesolve(
             H_rabi, self.qubit.state, t_global, [],
             e_ops=[psi_e * psi_e.dag()],
+            options={"max_step": float(CONFIG.awg.dt)},
         )
         return result

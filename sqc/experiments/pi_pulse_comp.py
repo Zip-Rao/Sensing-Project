@@ -152,12 +152,15 @@ class PiPulseCompensationExperiment(Experiment):
                     + QobjEvo(H_pi_global, tlist=t_global, order=1)
                 )
 
+                # max_step prevents adaptive stepper from skipping the
+                # narrow pi-pulse window on the long t_global axis.
                 result = mesolve(
                     H_total,
                     self.qubit.state,
                     t_global,
                     [],
                     e_ops=[psi_e * psi_e.dag()],
+                    options={"max_step": float(CONFIG.awg.dt)},
                 )
                 p_e_2d[i, j] = float(result.expect[0][-1])
 

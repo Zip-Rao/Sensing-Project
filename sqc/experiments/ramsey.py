@@ -129,9 +129,12 @@ class RamseyExperiment(Experiment):
                     order=1,
                 )
             )
+            # max_step prevents adaptive stepper from skipping over
+            # narrow pi/2 pulse windows on the long t_global axis.
             result = mesolve(
                 H, self.qubit.state, t_global, [],
                 e_ops=[psi_e * psi_e.dag()],
+                options={"max_step": float(CONFIG.awg.dt)},
             )
             p_e_list[i] = result.expect[0][-1]
 

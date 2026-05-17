@@ -137,7 +137,7 @@ class DelayRamseyExperiment(Experiment):
                 & (t_sig <= self.t_rabi[-1] + self.tau_R)
             )
             signal[free_mask] = np.array(
-                [self.flux_signal.value_at(self.t_fall + t_d + float(t))
+                [self.flux_signal.value_at(self.t_fall + t_d + float(t) - self.t_rabi[-1])
                  for t in t_sig[free_mask]],
                 dtype=float,
             )
