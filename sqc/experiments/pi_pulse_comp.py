@@ -123,21 +123,28 @@ class PiPulseCompensationExperiment(Experiment):
 
         p_e_2d = np.zeros((n_tau, n_z), dtype=float)
 
-        for i, tau in enumerate(self.tau_list):
-            # Sample the tail value at delay tau (constant during pi-pulse).
-            tail_val = float(self.flux_signal.value_at(
-                self.t_fall + tau + 0.0
-            ))
-            for j, z in enumerate(self.z_list):
-                flux_val = tail_val + float(z)
+        # Pulse window indices on t_global (shared across all τ).
+        pulse_mask = (
+            (t_global >= 0.0)
+            & (t_global <= float(self.t_rabi[-1]))
+        )
+        # Pulse-window time grid on t_global (local time 0…t_rabi[-1]).
+        t_pulse = t_global[pulse_mask]
 
+        for i, tau in enumerate(self.tau_list):
+            # Sample the tail value across the pulse window
+            # (Φ_tail varies during T_π — required so z* measures the
+            # time-average ⟨Φ_tail⟩ over [τ, τ+T_π], matching the
+            # accumulated-phase definition of the protocol).
+            tail_window = np.array(
+                [float(self.flux_signal.value_at(self.t_fall + tau + float(t)))
+                 for t in t_pulse],
+                dtype=float,
+            )
+            for j, z in enumerate(self.z_list):
                 # Flux is non-zero only during the pi-pulse window.
                 flux_samples = np.zeros(len(t_global), dtype=float)
-                pulse_mask = (
-                    (t_global >= 0.0)
-                    & (t_global <= float(self.t_rabi[-1]))
-                )
-                flux_samples[pulse_mask] = flux_val
+                flux_samples[pulse_mask] = tail_window + float(z)
 
                 phi = FluxSignal(
                     type=8, t_list=t_global, signal=flux_samples,
