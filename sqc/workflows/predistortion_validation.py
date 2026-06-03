@@ -55,6 +55,10 @@ class PredistortionValidationWorkflow(Workflow):
     designer: Optional[object] = None  # PredistortionDesigner
     control_line_params: dict = field(default_factory=dict)
 
+    # -- P9.B: protocol-driven measurement --
+    qubit: object | None = None
+    measurement_protocol: str | None = None  # None => analytical path
+
     def run(self) -> dict:
         """Execute the predistortion validation workflow.
 
@@ -78,15 +82,27 @@ class PredistortionValidationWorkflow(Workflow):
         # 2. Without predistortion: AWG -> on-chip is distorted
         on_chip_uncorrected = line.apply(self.target_waveform)
 
-        # 3. Calibrate transfer function (in simulation, measure directly)
-        # Auto-detect best fit_type based on distortion type
+        # 3. Calibrate transfer function
+        #    Protocol-driven path:  measurement_protocol → quantum simulation.
+        #    Analytical path:       distortion.step_response() directly.
         fit_type = self._infer_fit_type(self.true_distortion)
-        cal = WaveformCalibration(
-            distortion=self.true_distortion,
-            method="simulation",
-            fit_type=fit_type,
-            n_exp_components=3,
-        )
+        if self.measurement_protocol is not None:
+            cal = WaveformCalibration(
+                qubit=self.qubit,
+                control_line=line,
+                measurement_protocol=self.measurement_protocol,
+                method="transfer_function",
+                fit_type=fit_type,
+                n_exp_components=3,
+                t_max=float(self.target_waveform.t_list[-1]) * 2,
+            )
+        else:
+            cal = WaveformCalibration(
+                distortion=self.true_distortion,
+                method="simulation",
+                fit_type=fit_type,
+                n_exp_components=3,
+            )
         measured_table = cal.calibrate()
         measured_model = cal.to_distortion_model()
 

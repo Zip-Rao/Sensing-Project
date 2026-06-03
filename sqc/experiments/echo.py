@@ -62,6 +62,9 @@ class DiffEchoExperiment(Experiment):
     )
     omega_d: float | None = None
 
+    # -- P9.B --
+    control_line: object | None = None
+
     def __post_init__(self):
         if self.omega_d is None:
             self.omega_d = self.qubit.frequency
@@ -108,7 +111,8 @@ class DiffEchoExperiment(Experiment):
         t_global = self.t_global
 
         # Build composite flux signal: k*2 copies, then project onto t_global.
-        phi_list = [self.flux_signal.copy() for _ in range(2 * self.k)]
+        flux_routed = self._route_flux(self.flux_signal)
+        phi_list = [flux_routed.copy() for _ in range(2 * self.k)]
         composite_phi = CompositeSignal(phi_list)
         flux_global = FluxSignal(
             type=8, t_list=t_global,

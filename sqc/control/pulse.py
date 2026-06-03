@@ -57,7 +57,10 @@ class Pulse(PulseBase):
     phase : float
         Rotation axis phase (rad).
     Omega : Signal-like or float
-        Rabi frequency envelope (GHz).
+        Rabi frequency envelope — I (in-phase) component (GHz).
+    Omega_Q : Signal-like, float, or None
+        Q (quadrature) component for DRAG pulses. If None, the
+        pulse is single-quadrature (backward-compatible).
     is_rwa : bool
         Whether to use rotating wave approximation.
     qubit : TransmonQubit or None
@@ -70,6 +73,7 @@ class Pulse(PulseBase):
         omega_d: float = 0.0,
         phase: float = 0.0,
         Omega=None,
+        Omega_Q=None,
         is_rwa: bool = True,
         qubit=None,
         trigger: float = 0.0,
@@ -78,6 +82,7 @@ class Pulse(PulseBase):
         self.omega_d: float = omega_d
         self.phase: float = phase
         self.Omega = Omega
+        self.Omega_Q = Omega_Q
         self.is_rwa: bool = is_rwa
         self.qubit = qubit
         self.trigger: float = trigger
@@ -128,24 +133,39 @@ class Pulse(PulseBase):
         n = self.n_levels
         a = destroy(n)
         adag = create(n)
-        Omega_t = self.get_Rabi_frequency(t)
+        Omega_I_t = self.get_Rabi_frequency(t)
+
+        # Q component
+        Omega_Q_t = 0.0
+        if self.Omega_Q is not None:
+            if hasattr(self.Omega_Q, "value_at"):
+                Omega_Q_t = self.Omega_Q.value_at(t)
+            elif isinstance(self.Omega_Q, (int, float)):
+                Omega_Q_t = float(self.Omega_Q)
+
         if self.frame == 0:  # lab frame
-            phase_term = self.omega_d * t + self.phase
-            return Omega_t * np.cos(phase_term) * (a + adag)
+            coeff = (Omega_I_t * np.cos(self.omega_d * t + self.phase)
+                     + Omega_Q_t * np.sin(self.omega_d * t + self.phase))
+            return coeff * (a + adag)
         else:  # rotating frame
-            H_rwa_co = Omega_t / 2.0 * (
+            H_rwa = Omega_I_t / 2.0 * (
                 a * np.exp(1j * self.phase)
                 + adag * np.exp(-1j * self.phase)
             )
+            if Omega_Q_t != 0.0:
+                H_rwa += Omega_Q_t / 2.0 * (
+                    -1j * a * np.exp(1j * self.phase)
+                    + 1j * adag * np.exp(-1j * self.phase)
+                )
             if self.is_rwa:
-                return H_rwa_co
+                return H_rwa
             else:
                 phase_cr = 2 * self.omega_d * t + self.phase
-                H_cr = Omega_t / 2.0 * (
+                H_cr = Omega_I_t / 2.0 * (
                     a * np.exp(-1j * phase_cr)
                     + adag * np.exp(1j * phase_cr)
                 )
-                return H_rwa_co + H_cr
+                return H_rwa + H_cr
 
     # -- Full Hamiltonian (list format) -------------------------------------
 
@@ -165,39 +185,66 @@ class Pulse(PulseBase):
         t_list = np.asarray(self.Omega.t_list)
 
         if hasattr(self.Omega, "signal"):
-            Omega = np.array(self.Omega.signal, dtype=float)
+            Omega_I = np.array(self.Omega.signal, dtype=float)
         else:
-            Omega = float(self.Omega)
+            Omega_I = float(self.Omega)
+
+        # -- Q quadrature (DRAG) ----------------------------------------------
+        has_q = self.Omega_Q is not None
+        if has_q:
+            if hasattr(self.Omega_Q, "signal"):
+                Omega_Q = np.array(self.Omega_Q.signal, dtype=float)
+            else:
+                Omega_Q = float(self.Omega_Q)
 
         if self.frame == 0:  # lab frame
-            coeff = Omega * np.cos(self.omega_d * t_list + self.phase)
+            coeff = Omega_I * np.cos(self.omega_d * t_list + self.phase)
+            if has_q:
+                coeff = coeff + Omega_Q * np.sin(
+                    self.omega_d * t_list + self.phase
+                )
             H = [[a + adag, coeff]]
         else:  # rotating frame
-            H1 = 0.5 * (
+            # I operator: σ_φ / 2
+            H_I = 0.5 * (
                 a * np.exp(1j * self.phase) + adag * np.exp(-1j * self.phase)
             )
-            coeff_rwa = np.ones_like(t_list) if np.isscalar(Omega) else Omega
-            if not np.isscalar(Omega):
-                coeff_rwa = Omega.astype(complex)
-            else:
-                coeff_rwa = np.full(len(t_list), float(Omega), dtype=complex)
+            # Q operator: σ_{φ+π/2} / 2
+            H_Q = 0.5 * (
+                -1j * a * np.exp(1j * self.phase)
+                + 1j * adag * np.exp(-1j * self.phase)
+            )
+
+            def _coeff(arr_or_scalar):
+                if np.isscalar(arr_or_scalar):
+                    return np.full(len(t_list), float(arr_or_scalar),
+                                   dtype=complex)
+                return arr_or_scalar.astype(complex)
+
             if self.is_rwa:
-                H = [[H1, coeff_rwa]]
+                H = [[H_I, _coeff(Omega_I)]]
+                if has_q:
+                    H.append([H_Q, _coeff(Omega_Q)])
             else:
+                if has_q:
+                    raise NotImplementedError(
+                        "DRAG with is_rwa=False is not yet supported."
+                    )
                 H_cr1 = 0.5 * a * np.exp(-1j * self.phase)
                 H_cr2 = 0.5 * adag * np.exp(1j * self.phase)
                 coeff_cr1 = (
-                    Omega * np.exp(-2j * self.omega_d * t_list)
+                    Omega_I * np.exp(-2j * self.omega_d * t_list)
                     if isinstance(self.Omega, (int, float))
-                    else Omega * np.exp(-2j * self.omega_d * t_list)
+                    else Omega_I * np.exp(-2j * self.omega_d * t_list)
                 )
                 coeff_cr2 = (
-                    Omega.astype(complex) * np.exp(2j * self.omega_d * t_list)
-                    if not np.isscalar(Omega)
-                    else np.full(len(t_list), float(Omega), dtype=complex)
+                    Omega_I.astype(complex) * np.exp(2j * self.omega_d * t_list)
+                    if not np.isscalar(Omega_I)
+                    else np.full(len(t_list), float(Omega_I), dtype=complex)
                     * np.exp(2j * self.omega_d * t_list)
                 )
-                H = [[H1, coeff_rwa], [H_cr1, coeff_cr1], [H_cr2, coeff_cr2]]
+                H = [[H_I, _coeff(Omega_I)],
+                     [H_cr1, coeff_cr1], [H_cr2, coeff_cr2]]
         return H, t_list
 
     # -- Global time axis projection ----------------------------------------

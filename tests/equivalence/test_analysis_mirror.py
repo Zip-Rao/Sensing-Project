@@ -125,8 +125,20 @@ def test_analysis_mirror_wiener():
 # Hammerstein-Wiener deconvolution
 # ---------------------------------------------------------------------------
 
+@pytest.mark.xfail(
+    reason=(
+        "src/analysis.py hammerstein_wiener_deconvolution has a pre-existing "
+        "NaN bug (arccos domain error when argument ∉ [−1,1]). "
+        "sqc/reconstruction/transient.py correctly clips with np.clip(…, 0, 1). "
+        "src/ frozen by R1 — divergence is intentional."
+    ),
+    strict=True,
+)
 def test_analysis_mirror_hammerstein():
-    """HammersteinWiener: old vs new produce identical (B_list, B)."""
+    """HammersteinWiener: old vs new produce identical (B_list, B).
+
+    XFAIL: src/ has a NaN bug in arccos that sqc/ correctly fixes.
+    """
     from src.analysis import Analysis as OldAnalysis
     from src_mirror.analysis import Analysis as NewAnalysis
 

@@ -61,6 +61,9 @@ class CryoscopeExperiment(Experiment):
     trunc_list: np.ndarray | None = None
     omega_d: float | None = None
 
+    # -- P9.B: control-line distortion injection --
+    control_line: object | None = None
+
     def __post_init__(self):
         if self.omega_d is None:
             self.omega_d = self.qubit.frequency
@@ -73,6 +76,7 @@ class CryoscopeExperiment(Experiment):
                 amplitude=0.01,
             )
         if self.trunc_list is None:
+            print("Warning: trunc_list not provided, defaulting to flux_signal.t_list[140:20:-")
             self.trunc_list = self.flux_signal.t_list[180:40:-1]
 
         # -- boundary sanity check -------------------------------------------
@@ -109,7 +113,7 @@ class CryoscopeExperiment(Experiment):
         )
         p_e_I_list: list[float] = []
         p_e_Q_list: list[float] = []
-
+        print("trunc_list:", self.trunc_list)
         # Iterate truncation delays in reverse order (matching legacy)
         for trunc in self.trunc_list:
             # Copy flux signal and truncate in-place (legacy semantics)
@@ -117,6 +121,7 @@ class CryoscopeExperiment(Experiment):
             phi_truncated.truncate(0, float(trunc))
 
             # Couple flux to qubit
+            phi_truncated = self._route_flux(phi_truncated)
             self.qubit.qubit_in_mag(
                 phi_truncated, frame=1, omega_d=self.omega_d,
             )

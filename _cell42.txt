@@ -1,0 +1,13 @@
+=== Cell [42] ===
+# === 10.4.2 Chevron 复检: 预失真后的 Rabi Chevron ===
+# 预失真驱动包络: AWG 先经逆滤波器，再经失真线 → 到达 qubit
+pulse_predistorted = inv_filter.apply(Omega * np.ones(n_t), dt)
+pulse_corrected_drive = dist.apply(pulse_predistorted, dt)
+
+print("Simulating corrected Chevron...")
+p_e_corrected = np.zeros((n_det, n_t))
+H1_op = 0.5 * sigmax()
+for i, delta in enumerate(delta_list):
+    H0_op = 0.5 * delta * sigmaz()
+    H_corr = [[H0_op, np.ones(n_t)], [H1_op, pulse_corrected_drive]]
+    result = mesolve(H_corr, psi0, t_chevro

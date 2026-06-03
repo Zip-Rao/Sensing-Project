@@ -50,6 +50,9 @@ class RamseyExperiment(Experiment):
     qubit: object  # TransmonQubit (duck typed)
     flux_signal: FluxSignal | None = None
     omega_d: float | None = None
+
+    # -- P9.B --
+    control_line: object | None = None
     t_rabi: np.ndarray = field(
         default_factory=lambda: CONFIG.pulse.t_rabi.copy()
     )
@@ -93,7 +96,8 @@ class RamseyExperiment(Experiment):
         t_global = self.t_global
 
         # 1. Project flux signal onto global time axis and couple to qubit
-        flux_samples_global = self.flux_signal.samples_on(t_global)
+        flux_routed = self._route_flux(self.flux_signal)
+        flux_samples_global = flux_routed.samples_on(t_global)
         flux_global = FluxSignal(
             type=8, t_list=t_global, signal=flux_samples_global,
             trigger=0.0,

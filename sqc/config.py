@@ -183,7 +183,7 @@ class ReconstructionConfig:
     """Default hyper-parameters for waveform reconstruction algorithms."""
 
     # Wiener deconvolution
-    lambda_reg: float = 10.0
+    lambda_reg: float = 30.0
 
     # Kernel estimation (stimulus perturbation)
     stim_amplitude: float = 0.0215     #: Φ₀ — hardcoded legacy default

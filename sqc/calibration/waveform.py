@@ -9,13 +9,14 @@ Two components:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Literal, Optional
+from typing import Literal
 
 import numpy as np
 from scipy.optimize import curve_fit
 from scipy.signal import bilinear
 
 from sqc.calibration.base import Calibration, CalibrationTable
+from sqc.config import CONFIG
 from sqc.control.waveform import Waveform
 
 
@@ -37,7 +38,17 @@ class WaveformCalibration(Calibration):
     ----------------------------
     distortion : DistortionModel
         The distortion model to characterise (in simulation mode, its
-        step response is measured directly).
+        step response is measured directly).  Ignored when
+        *measurement_protocol* is set.
+    measurement_protocol : str or None
+        ``"cryoscope"``, ``"delay_ramsey"``, ``"transient"``,
+        ``"pi_pulse"``, or ``None`` (analytical path).  When set,
+        the step response is measured via a quantum-simulation
+        protocol instead of the analytical formula.
+    qubit : TransmonQubit or None
+        Required when *measurement_protocol* is set.
+    control_line : ControlLine or None
+        Required when *measurement_protocol* is set.
     method : str
         "transfer_function" or "predistortion".
     fit_type : str
@@ -48,6 +59,8 @@ class WaveformCalibration(Calibration):
         Maximum time for step response (ns).
     n_points : int
         Number of time points.
+    step_amplitude : float
+        Step height in Φ₀ for protocol-driven default unit step.
 
     Predistortion parameters
     ------------------------
@@ -62,6 +75,13 @@ class WaveformCalibration(Calibration):
         Regularisation for frequency-domain inverse.
     dt : float or None
         Sample spacing (ns). If None, inferred from target waveform.
+
+    Backward-compat
+    ---------------
+    measurement : ProtocolDrivenMeasurement or None
+        Pre-constructed measurement object.  Deprecated in favour of
+        passing *measurement_protocol* + *qubit* + *control_line*
+        directly (which auto-constructs the internal object).
     """
 
     # Shared
@@ -74,6 +94,15 @@ class WaveformCalibration(Calibration):
     t_max: float = 500.0
     n_points: int = 2000
 
+    # -- protocol-driven measurement (P9.B) --
+    qubit: object | None = None
+    control_line: object | None = None
+    measurement_protocol: str | None = None
+    step_amplitude: float = 0.05
+
+    # -- pre-constructed measurement (backward compat) --
+    measurement: object | None = None
+
     # -- predistortion params --
     transfer_model: object | None = None
     predistortion_method: Literal[
@@ -82,6 +111,26 @@ class WaveformCalibration(Calibration):
     n_taps: int = 64
     regularization: float = 1e-4
     dt: float | None = None
+
+    def __post_init__(self):
+        if self.measurement_protocol is not None:
+            if self.qubit is None:
+                raise ValueError(
+                    "qubit is required when measurement_protocol is set."
+                )
+            if self.measurement is not None:
+                raise ValueError(
+                    "Cannot set both measurement_protocol and measurement. "
+                    "Use measurement_protocol + qubit + control_line, "
+                    "or pass a pre-constructed measurement object directly."
+                )
+            self.measurement = _ProtocolDrivenMeasurement(
+                qubit=self.qubit,
+                control_line=self.control_line,
+                protocol=self.measurement_protocol,
+                step_amplitude=self.step_amplitude,
+                t_max=self.t_max,
+            )
 
     # ------------------------------------------------------------------
     def calibrate(self) -> CalibrationTable:
@@ -119,9 +168,26 @@ class WaveformCalibration(Calibration):
         )
 
     def _measure_step_response(self) -> tuple[np.ndarray, np.ndarray]:
+        if self.measurement is not None:
+            return self.measurement.measure()
+        # Legacy analytical path
         t = np.linspace(0, self.t_max, self.n_points)
         step = self.distortion.step_response(t)
         return t, step
+
+    def measure_waveform(self, test_signal) -> tuple[np.ndarray, np.ndarray]:
+        """Measure the on-chip waveform of an arbitrary test signal.
+
+        Shortcut that requires ``measurement`` to be configured.
+        Calls ``measurement.measure(test_signal)``, returning the raw
+        reconstructed (t, flux) without normalisation.
+        """
+        if self.measurement is None:
+            raise RuntimeError(
+                "measure_waveform() requires a ProtocolDrivenMeasurement. "
+                "Configure WaveformCalibration with measurement=... first."
+            )
+        return self.measurement.measure(test_signal)
 
     def _fit_step_response(self, t: np.ndarray, step: np.ndarray) -> dict:
         if self.fit_type == "single_exp":
@@ -351,9 +417,16 @@ class PredistortionDesigner:
         raise ValueError(f"Unknown method: {resolved}")
 
     @staticmethod
+    @staticmethod
     def _auto_method(transfer_model: object) -> str:
-        cls_name = type(transfer_model).__name__
-        return "iir_inverse" if "Exponential" in cls_name else "frequency_inverse"
+        """Resolve ``"auto"`` method.
+
+        If the model has its own ``design_inverse``, use it.
+        Otherwise fall back to frequency-domain inversion.
+        """
+        if hasattr(transfer_model, "design_inverse"):
+            return "iir_inverse"
+        return "frequency_inverse"
 
     # -- IIR inverse -------------------------------------------------------
 
@@ -373,28 +446,15 @@ class PredistortionDesigner:
     def _single_exp_to_iir_inverse(
         model: "SingleExponentialDistortion", dt: float,
     ) -> "IIRDistortion":
-        from sqc.hardware.distortion import IIRDistortion
-
-        amp = model.amplitude
-        tau = model.tau
-        b_cont = [tau, 1.0]
-        a_cont = [tau * (1.0 - amp), 1.0]
-        b, a = bilinear(b_cont, a_cont, fs=1.0 / dt)
-        return IIRDistortion(b_coeffs=b, a_coeffs=a)
+        """Compatibility wrapper — delegates to model.design_inverse()."""
+        return model.design_inverse(dt, formula="bilinear")
 
     @staticmethod
     def _multi_exp_to_iir_inverse(
         model: "MultiExponentialDistortion", dt: float,
     ) -> object:
-        from sqc.hardware.distortion import CustomTransferDistortion
-
-        n_fft = 4096
-        omega_grid = 2.0 * np.pi * np.fft.fftfreq(n_fft, d=dt)
-        H = model.frequency_response(omega_grid)
-        H_inv = np.conj(H) / (np.abs(H) ** 2 + 1e-4)
-        return CustomTransferDistortion(
-            omega_grid=omega_grid.copy(), H_grid=H_inv.copy(),
-        )
+        """Compatibility wrapper — delegates to model.design_inverse()."""
+        return model.design_inverse(dt, formula="bilinear")
 
     # -- FIR inverse -------------------------------------------------------
 
@@ -465,7 +525,202 @@ class PredistortionDesigner:
         return bool(np.all(np.abs(roots) < 1.0 - 1e-10))
 
 
-# ---------------------------------------------------------------------------
-# Module-level convenience import
-# ---------------------------------------------------------------------------
-from sqc.config import CONFIG
+# ===================================================================
+# ProtocolDrivenMeasurement -- quantum-protocol waveform measurement (P9.B)
+# ===================================================================
+
+# -- protocol registry (lazy to avoid circular imports) ----------------------
+
+_PROTOCOL_REGISTRY: dict[str, tuple[type, type]] = {}
+
+
+def _build_protocol_registry() -> dict[str, tuple[type, type]]:
+    """Build the protocol -> (ExpCls, RecCls) lookup on first call."""
+    from sqc.experiments.cryoscope import CryoscopeExperiment
+    from sqc.experiments.delay_ramsey import DelayRamseyExperiment
+    from sqc.experiments.transient import TransientSensingExperiment
+    from sqc.experiments.pi_pulse_comp import PiPulseCompensationExperiment
+    from sqc.reconstruction.cryoscope import CryoscopeReconstruction
+    from sqc.reconstruction.delay_ramsey import DelayRamseyReconstruction
+    from sqc.reconstruction.transient import TransientReconstruction
+    from sqc.reconstruction.pi_pulse_comp import PiPulseCompReconstruction
+
+    return {
+        "cryoscope":    (CryoscopeExperiment,           CryoscopeReconstruction),
+        "delay_ramsey": (DelayRamseyExperiment,         DelayRamseyReconstruction),
+        "transient":    (TransientSensingExperiment,    TransientReconstruction),
+        "pi_pulse":     (PiPulseCompensationExperiment, PiPulseCompReconstruction),
+    }
+
+
+@dataclass
+class _ProtocolDrivenMeasurement:
+    """Protocol-driven control-line characterisation.
+
+    Replaces the analytical ``distortion.step_response(t)`` with a true
+    quantum-simulation measurement through a ControlLine.  Runs the
+    chosen sensing protocol on a test signal, reconstructs the on-chip
+    flux waveform, and optionally normalises.
+
+    Parameters
+    ----------
+    qubit : TransmonQubit
+        Qubit at the appropriate flux bias (caller is responsible).
+    control_line : ControlLine or None
+        Control line whose transfer function is being characterised.
+    protocol : str
+        One of ``"cryoscope"``, ``"delay_ramsey"``, ``"transient"``,
+        ``"pi_pulse"``.
+    step_amplitude : float
+        Default step height (used when ``measure()`` is called without
+        a ``test_signal``).
+    t_max : float
+        Default maximum time for auto-generated step signal (ns).
+    dt : float or None
+        Sample spacing (ns).  Default from ``CONFIG.awg.dt``.
+    """
+
+    qubit: object
+    control_line: object | None = None
+    protocol: Literal["cryoscope", "delay_ramsey", "transient", "pi_pulse"] = (
+        "cryoscope"
+    )
+    step_amplitude: float = 0.05
+    t_max: float = 500.0
+    dt: float | None = None
+
+    def __post_init__(self):
+        registry = _build_protocol_registry()
+        if self.protocol not in registry:
+            raise ValueError(
+                f"Unknown protocol '{self.protocol}'. "
+                f"Valid: {sorted(registry.keys())}"
+            )
+        if self.dt is None:
+            self.dt = float(CONFIG.awg.dt)
+        self._warn_flux_bias()
+
+    def _warn_flux_bias(self):
+        """Warn if the qubit flux bias is sub-optimal for the protocol."""
+        import warnings
+
+        flux = float(getattr(self.qubit, "flux", 0.0))
+        if self.protocol == "cryoscope":
+            if abs(flux) > 1e-9:
+                warnings.warn(
+                    "Cryoscope works best at sweet spot "
+                    f"(flux=0). Current flux={flux:.4f}.",
+                    stacklevel=2,
+                )
+        elif self.protocol in ("delay_ramsey", "transient", "pi_pulse"):
+            try:
+                fluxes = np.linspace(0, 0.25, 101)
+                kappas = np.abs(
+                    [self.qubit.frequency_sensitivity(f) for f in fluxes]
+                )
+                kappa_max = fluxes[int(np.argmax(kappas))]
+            except Exception:
+                kappa_max = 0.1
+            if abs(flux) < 0.01 and abs(kappa_max) > 0.01:
+                warnings.warn(
+                    f"{self.protocol} works best at kappa-max flux bias "
+                    f"(~{kappa_max:.3f}). Current flux={flux:.4f}.",
+                    stacklevel=2,
+                )
+
+    # -- public API -----------------------------------------------------------
+
+    def measure(
+        self, test_signal: "FluxSignal | None" = None,
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """Run the protocol-driven measurement.
+
+        Parameters
+        ----------
+        test_signal : FluxSignal or None
+            Arbitrary test waveform to inject through the control line.
+            When ``None`` (default), auto-generates a unit step of
+            amplitude *step_amplitude* and normalises the output.
+
+        Returns
+        -------
+        t : np.ndarray
+            Time axis (ns).
+        s : np.ndarray
+            Reconstructed on-chip flux.  For the default step, divided
+            by *step_amplitude* to give normalised step response.
+        """
+        from sqc.control.flux_signal import FluxSignal
+
+        if test_signal is None:
+            t_axis = CONFIG.pulse.make_time(0, self.t_max)
+            v_in = FluxSignal(
+                type=1, t_list=t_axis, amplitude=self.step_amplitude,
+            )
+            normalise = True
+        else:
+            v_in = test_signal
+            normalise = False
+
+        registry = _build_protocol_registry()
+        ExpCls, RecCls = registry[self.protocol]
+
+        exp_kwargs = self._build_exp_kwargs(v_in)
+        exp = ExpCls(**exp_kwargs)
+        result = exp.run()
+
+        rec_kwargs = self._build_rec_kwargs(result)
+        rec = RecCls(**rec_kwargs)
+        flux_R = rec.reconstruct(result)
+
+        t_out = np.asarray(flux_R.t_list, dtype=float)
+        s_out = np.asarray(flux_R.samples, dtype=float)
+        if normalise:
+            s_out = s_out / self.step_amplitude
+
+        return t_out, s_out
+
+    def _build_exp_kwargs(self, v_in) -> dict:
+        base = {
+            "qubit": self.qubit,
+            "control_line": self.control_line,
+            "flux_signal": v_in,
+        }
+        if self.protocol == "cryoscope":
+            base.setdefault("tau", CONFIG.reconstruction.cryoscope_tau)
+        elif self.protocol == "delay_ramsey":
+            base.setdefault("tau_R", CONFIG.reconstruction.delay_ramsey_tau)
+            base.setdefault("t_fall", 0.0)
+        elif self.protocol == "pi_pulse":
+            base.setdefault("T_pi", CONFIG.reconstruction.pi_pulse_T_pi)
+            base.setdefault("t_fall", 0.0)
+        return base
+
+    def _build_rec_kwargs(self, result) -> dict:
+        if self.protocol == "cryoscope":
+            return {
+                "inversion": "response",
+                "qubit": self.qubit,
+                "tau": result.config.get(
+                    "tau", CONFIG.reconstruction.cryoscope_tau,
+                ),
+            }
+        elif self.protocol == "delay_ramsey":
+            return {
+                "inversion": "response",
+                "qubit": self.qubit,
+                "tau_R": result.config.get(
+                    "tau_R", CONFIG.reconstruction.delay_ramsey_tau,
+                ),
+            }
+        elif self.protocol == "transient":
+            return {"method": "wiener"}
+        elif self.protocol == "pi_pulse":
+            return {}
+        return {}
+
+
+# backward-compat alias (deprecated — use WaveformCalibration with
+# measurement_protocol="..." instead of constructing directly)
+StepResponseMeasurement = _ProtocolDrivenMeasurement
+

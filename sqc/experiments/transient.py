@@ -49,6 +49,9 @@ class TransientSensingExperiment(Experiment):
         default_factory=lambda: CONFIG.pulse.t_rabi.copy()
     )
     omega_d: float | None = None
+
+    # -- P9.B --
+    control_line: object | None = None
     scan_list: np.ndarray | None = None
 
     # Populated during run()
@@ -101,7 +104,7 @@ class TransientSensingExperiment(Experiment):
         # Sliding measurement with flux signal
         runner = SlidingMeasurementRunner()
         result_sig = runner.run(
-            self.qubit, self.flux_signal, self.control_pulse,
+            self.qubit, self._route_flux(self.flux_signal), self.control_pulse,
             scan_list=self.scan_list,
         )
         scan_list = result_sig.axes["scan"]

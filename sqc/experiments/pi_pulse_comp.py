@@ -73,6 +73,9 @@ class PiPulseCompensationExperiment(Experiment):
         default_factory=lambda: CONFIG.reconstruction.pi_pulse_T_pi
     )
     omega_bias: float | None = None
+
+    # -- P9.B --
+    control_line: object | None = None
     t_rabi: np.ndarray = field(
         default_factory=lambda: CONFIG.pulse.t_rabi.copy()
     )
@@ -123,21 +126,22 @@ class PiPulseCompensationExperiment(Experiment):
 
         p_e_2d = np.zeros((n_tau, n_z), dtype=float)
 
-        # Pulse window indices on t_global (shared across all τ).
+        # Pulse window indices on t_global (shared across all τ) 
         pulse_mask = (
-            (t_global >= 0.0)
+            (t_global >= 0)
             & (t_global <= float(self.t_rabi[-1]))
         )
-        # Pulse-window time grid on t_global (local time 0…t_rabi[-1]).
+        # Pulse-window time grid on t_global .
         t_pulse = t_global[pulse_mask]
 
+
         for i, tau in enumerate(self.tau_list):
-            # Sample the tail value across the pulse window
+            # Sample the tail value across the pulse window(centered)
             # (Φ_tail varies during T_π — required so z* measures the
             # time-average ⟨Φ_tail⟩ over [τ, τ+T_π], matching the
             # accumulated-phase definition of the protocol).
             tail_window = np.array(
-                [float(self.flux_signal.value_at(self.t_fall + tau + float(t)))
+                [float(self.flux_signal.value_at(self.t_fall + tau + float(t) - self.t_rabi[-1] / 2))  
                  for t in t_pulse],
                 dtype=float,
             )

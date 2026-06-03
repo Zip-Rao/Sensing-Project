@@ -370,11 +370,8 @@ class Analysis:
         recon = TransientReconstruction(
             method="hammerstein", qubit=qubit, lambda_reg=lambdas,
         )
-        wiener = TransientReconstruction(method="wiener", lambda_reg=lambdas)
-        omega_signal = wiener.reconstruct(delta_p, kernel, dt=dt)
-        omega_lists = omega_signal.t_list
-        B = recon.reconstruct(delta_p, kernel, dt=dt)
-        return omega_lists, B
+        result = recon.reconstruct(delta_p, kernel, dt=dt)
+        return np.asarray(result.t_list), np.asarray(result.signal)
 
     # ------------------------------------------------------------------
     # LM numerical inversion (P3b)

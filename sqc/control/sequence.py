@@ -53,6 +53,7 @@ class PulseSequence:
 
 def create_pulse(
     qubit, frame, type, t_list, omega_d, phase, angle=None, trigger=0.0,
+    Omega_Q=None,
     **kwargs,
 ):
     """Create a single Pulse with auto-calibrated amplitude.
@@ -74,6 +75,8 @@ def create_pulse(
         Target rotation angle (rad). If given, amplitude is auto-scaled.
     trigger : float
         Global start time (ns).
+    Omega_Q : FluxSignal or None
+        Q quadrature envelope for DRAG pulses.
     **kwargs
         Passed to Signal constructor.
 
@@ -84,8 +87,8 @@ def create_pulse(
     """
     Omega_signal = Signal(type=type, t_list=t_list, **kwargs)
     Omega_pulse = Pulse(
-        frame, omega_d, phase, Omega=Omega_signal, is_rwa=True, qubit=qubit,
-        trigger=trigger,
+        frame, omega_d, phase, Omega=Omega_signal, Omega_Q=Omega_Q,
+        is_rwa=True, qubit=qubit, trigger=trigger,
     )
     current_angle = Omega_pulse.get_angle_simple()
     # Adjust amplitude for target angle
@@ -95,8 +98,8 @@ def create_pulse(
     kwargs["amplitude"] = Omega_signal.params["amplitude"]
     signal = Signal(type=type, t_list=t_list, **kwargs)
     pulse = Pulse(
-        frame, omega_d, phase, Omega=signal, is_rwa=True, qubit=qubit,
-        trigger=trigger,
+        frame, omega_d, phase, Omega=signal, Omega_Q=Omega_Q,
+        is_rwa=True, qubit=qubit, trigger=trigger,
     )
     H_t = pulse.hamiltonian
     return QobjEvo(H_t, tlist=t_list)

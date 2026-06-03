@@ -1,0 +1,3 @@
+### 10.2.1 Cryoscope 测量阶跃响应
+
+Cryoscope 在 qubit 甜点工作，使用 IQ Ramsey 读相。流程：标定 φ(h) → 截断 flux 脉冲测量 φ(t_d) → 反演 h(t)。

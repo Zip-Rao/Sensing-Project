@@ -110,9 +110,10 @@ def _fit_ramsey_frequency(
 
     **Single-sweep** (``f_artificial`` is a positive float, default 0.1 GHz):
       Applies a known artificial detuning *f_a* large enough to guarantee
-      Δ + f_a > 0 (i.e. *f_a* > |Δ|_max).  The FFT-measured frequency is::
+      f_a − Δ > 0 (i.e. *f_a* > |Δ|_max).  Due to the n+I/2 convention
+      used by ``qubit_in_mag``, the FFT-measured frequency is::
 
-          f_meas = |Δ + f_a| = Δ + f_a   →   Δ = f_meas − f_a
+          f_meas = |f_a − Δ| = f_a − Δ   →   Δ = f_a − f_meas
 
       Fast (1×τ-sweep), but the caller must ensure *f_a* exceeds the
       worst-case |f_q − ω_d|.  Default 100 MHz suffices for measurements
@@ -122,9 +123,10 @@ def _fit_ramsey_frequency(
       Two sweeps with ±50 MHz artificial detuning.  Signed detuning
       follows from the identity::
 
-          Δ = (f_p² − f_n²) / (4·f_a)    (f_a = 0.05 GHz)
+          Δ = (f_n² − f_p²) / (4·f_a)    (f_a = 0.05 GHz)
 
-      Robust for arbitrary |Δ|, at 2× the time cost.
+      where f_p = |f_a − Δ| and f_n = |−f_a − Δ|.  Robust for arbitrary
+      |Δ|, at 2× the time cost.
 
     Parameters
     ----------
@@ -167,7 +169,7 @@ def _fit_ramsey_frequency(
         f_meas = _fft_peak(p_e, dt_val)
         if f_meas is None:
             return float(omega_d)
-        detuning_ghz = f_meas - f_artificial  # Δ + f_a > 0 guaranteed by caller
+        detuning_ghz = f_artificial - f_meas  # f_meas = |f_a - Δ| (n+I/2 convention)
         return float(omega_d + 2.0 * np.pi * detuning_ghz)
 
     # -- double-sweep mode (f_artificial is None) -------------------------
@@ -185,11 +187,11 @@ def _fit_ramsey_frequency(
     if f_p is None and f_n is None:
         return float(omega_d)
     if f_p is None:
-        detuning_ghz = -_fa  # |Δ + f_a| = 0  ⇒  Δ = −f_a
+        detuning_ghz = +_fa  # |f_a - Δ| = 0  ⇒  Δ = +f_a
     elif f_n is None:
-        detuning_ghz = +_fa  # |Δ − f_a| = 0  ⇒  Δ = +f_a
+        detuning_ghz = -_fa  # |-f_a - Δ| = 0  ⇒  Δ = -f_a
     else:
-        detuning_ghz = (f_p ** 2 - f_n ** 2) / (4.0 * _fa)
+        detuning_ghz = (f_n ** 2 - f_p ** 2) / (4.0 * _fa)
 
     return float(omega_d + 2.0 * np.pi * detuning_ghz)
 
@@ -268,20 +270,37 @@ def _measure_frequency_transient(
 
     p_diff = (p_x - p_mx) / 2.0
 
-    # -- kernel sensitivity G_α = ∫ k(t) dt ------------------------------
+    # -- differential kernel at the bias point ---------------------------
+    # The kernel is a property of the pulse + qubit operating point.  We
+    # use CompositePulse.get_kernel() which builds the baseline H_0 from
+    # qubit.get_hamiltonian_rwa(qubit.frequency) — this gives the canonical
+    # kernel at the bias point (Δ=0 in the rotating frame).
     ctrl_x.get_kernel(qubit)
-    kernel = np.asarray(ctrl_x.kernel, dtype=float)
+    k_x = np.asarray(ctrl_x.kernel, dtype=float)
     t_kernel = np.asarray(ctrl_x.t_samples, dtype=float)
-    G_alpha = float(np.trapezoid(kernel, t_kernel))
+
+    ctrl_mx.get_kernel(qubit)
+    k_mx = np.asarray(ctrl_mx.kernel, dtype=float)
 
     # restore qubit state after get_kernel side effects
     qubit.qubit_in_mag(Phi, frame=1, omega_d=omega_d)
 
-    if abs(G_alpha) < 1e-15:
+    k_diff = (k_x - k_mx) / 2.0
+    G_diff = float(np.trapezoid(k_diff, t_kernel))
+
+    if abs(G_diff) < 1e-5:
         return float(omega_d)
 
-    delta_omega = p_diff / G_alpha
-    return float(omega_d + delta_omega)
+    # Unit conversion: the code's kernel is built with a *flux* stimulus
+    # (FluxSignal with stim_area in Φ₀·ns), so G_diff has units 1/Φ₀ and
+    # corresponds to the *flux* sensitivity dp_diff/dΦ.  The theoretical
+    # transient formula is Δω = p_diff / G_freq where G_freq = dp_diff/dω.
+    # Convert via κ = dω/dΦ:
+    #     G_freq = G_diff / κ   ⇒   Δω = p_diff · κ / G_diff
+    # κ is evaluated at the measurement flux (qubit.flux + flux).
+    kappa = qubit.frequency_sensitivity(qubit.flux + flux)
+    delta_omega = p_diff * kappa / G_diff
+    return float(omega_d - delta_omega)
 
 
 # ===================================================================
@@ -337,11 +356,12 @@ class FluxResponseCalibration(Calibration):
     def _calibrate_ramsey(self) -> CalibrationTable:
         """Scan flux Φ, fit Ramsey detuning at each step → f(Φ) table."""
         omega_d = self.qubit.frequency
-        tau_list = CONFIG.pulse.make_time(0, 200)
+        tau_list = CONFIG.pulse.make_time(0, 100)
         t_global = CONFIG.pulse.t_global.copy()
         frequency_list: list[float] = []
 
         for h in self.h_list:
+            print(f"Calibrating f(Φ) at Φ={h:.4f} ...")
             f01 = _fit_ramsey_frequency(
                 self.qubit, omega_d, tau_list,
                 self.t_rabi, t_global, flux=float(h),
@@ -450,6 +470,7 @@ class FrequencyMeasurement(Calibration):
                     flux=flux_val, f_artificial=self.f_artificial,
                 )
             case "transient":
+                print("test")
                 return _measure_frequency_transient(
                     self.qubit, omega_d,
                     self.t_rabi, self.t_global,

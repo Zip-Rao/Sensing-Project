@@ -1,0 +1,65 @@
+# === 10.0 全局设置：qubit + 失真模型 + 控制线 ===
+from sqc.config import CONFIG
+from sqc.devices.transmon import TransmonQubit
+from sqc.control.flux_signal import FluxSignal
+from sqc.control.waveform import Waveform
+from sqc.hardware.distortion import (
+    SingleExponentialDistortion,
+    MultiExponentialDistortion,
+)
+from sqc.hardware.control_line import ControlLine
+from sqc.calibration.waveform import PredistortionDesigner, WaveformCalibration
+from sqc.workflows.predistortion_validation import PredistortionValidationWorkflow
+
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.gridspec import GridSpec
+from qutip import basis, mesolve, sigmax, sigmaz, QobjEvo
+
+# --- qubit ---
+qubit = TransmonQubit(
+    EC=0.2 * 2 * np.pi, EJ=10.0 * 2 * np.pi,
+    T1=100.0e3, T2=50.0e3, flux=0.0, n_levels=2,
+)
+f01 = qubit.frequency / (2 * np.pi)
+print(f"f_01 = {f01:.4f} GHz, bare qubit at sweet spot")
+
+# --- 失真模型：故意夸大以保证可视化清晰 ---
+# 真实系统中 amp 通常 1-10%; 这里用 30% 让 Chevron 失真肉眼可见
+dist = SingleExponentialDistortion(amplitude=0.3, tau=50.0)
+print(f"Distortion: amp={dist.amplitude:.3f}, tau={dist.tau:.1f} ns "
+      f"(initial drive = {1-dist.amplitude:.0%} of nominal)")
+
+# 失真模型的阶跃响应（理论真值）
+t_step = CONFIG.pulse.make_time(0, 200)
+s_true = dist.step_response(t_step)
+
+# 建立控制线
+line = ControlLine(
+    name="Z0", kind="z", source="AWG0:CH0", target="Q0",
+    transfer_function=dist,
+)
+
+# 快速可视化失真
+fig, axes = plt.subplots(1, 3, figsize=(13, 3.5))
+axes[0].plot(t_step, s_true, color="#377eb8")
+axes[0].set(xlabel="t (ns)", ylabel="s(t)", title="Step response s(t)")
+axes[0].axhline(y=1.0, color="gray", ls="--", lw=0.8)
+axes[0].axhline(y=1-dist.amplitude, color="red", ls=":", lw=0.8, alpha=0.5,
+                label=f"initial: {1-dist.amplitude:.2f}")
+axes[0].legend(fontsize=8); axes[0].grid(alpha=0.3)
+
+t_h = CONFIG.pulse.make_time(0, 100)
+h = dist.impulse_response(t_h)
+axes[1].plot(t_h, h, color="#e41a1c")
+axes[1].set(xlabel="t (ns)", ylabel="h(t)", title="Impulse response h(t)")
+axes[1].grid(alpha=0.3)
+
+omega = 2 * np.pi * np.linspace(-0.5, 0.5, 512)
+H = dist.frequency_response(omega)
+axes[2].semilogy(omega / (2 * np.pi), np.abs(H), color="#4daf4a")
+axes[2].set(xlabel="f (GHz)", ylabel="|H(ω)|", title="Frequency response")
+axes[2].grid(alpha=0.3)
+
+fig.tight_layout(); plt.show()
+print("控制线就绪。")

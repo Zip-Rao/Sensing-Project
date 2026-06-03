@@ -1,0 +1,21 @@
+=== Cell [44] ===
+# === 10.4.3 PredistortionValidationWorkflow 端到端 + 全流程总结 ===
+from sqc.workflows.predistortion_validation import PredistortionValidationWorkflow
+
+# 构造目标阶跃波形
+t_wf = CONFIG.pulse.make_time(0, 150)
+target = Waveform(
+    t_list=t_wf,
+    samples=np.where((t_wf > 30) & (t_wf < 100), 1.0, 0.0),
+)
+
+wf = PredistortionValidationWorkflow(
+    target_waveform=target,
+    true_distortion=dist,
+    designer=PredistortionDesigner(method="auto"),
+)
+result = wf.run()
+m = result["metrics"]
+
+# --- 全流程总结面板 ---
+fig

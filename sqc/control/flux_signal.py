@@ -378,13 +378,19 @@ class FluxSignal(Waveform):
     def copy(self) -> "FluxSignal":
         """Create a deep copy of this signal.
 
+        Overrides the _params-based construction to preserve the *current*
+        samples, so that in-place mutations (truncate, update_signal, etc.)
+        are not lost when copy() is called.
+
         Returns
         -------
         FluxSignal
         """
-        return FluxSignal(
+        new = FluxSignal(
             type=self._type, t_list=self.t_list.copy(), **self._params
         )
+        new.samples = self.samples.copy()
+        return new
 
     def plot(self, ax=None, **kwargs):
         """Plot the signal waveform.
@@ -409,6 +415,56 @@ class FluxSignal(Waveform):
         ax.set_title("Signal Waveform")
         ax.grid(True)
         return ax
+
+
+# ---------------------------------------------------------------------------
+# DRAG envelope helper
+# ---------------------------------------------------------------------------
+
+def make_drag_envelope(
+    t_list,
+    amplitude: float,
+    sigma: float,
+    beta: float,
+    phi: float = 0.0,
+):
+    """Generate I/Q envelope pair for a DRAG pulse.
+
+    Parameters
+    ----------
+    t_list : array-like
+        Time axis (ns).
+    amplitude : float
+        Gaussian amplitude (GHz). For a target rotation angle θ,
+        use amplitude = θ / (σ * sqrt(2π)).
+    sigma : float
+        Gaussian width (ns).
+    beta : float
+        DRAG coefficient. Typically beta = -1 / anharmonicity (ns).
+    phi : float
+        Rotation axis phase (rad). phi=0 gives X rotation,
+        phi=π/2 gives Y rotation.
+
+    Returns
+    -------
+    (FluxSignal, FluxSignal)
+        (Omega_I, Omega_Q) envelope pair.
+    """
+    t_arr = np.asarray(t_list, dtype=float)
+    t0 = (t_arr[0] + t_arr[-1]) / 2.0
+
+    env = amplitude * np.exp(-0.5 * ((t_arr - t0) / sigma) ** 2)
+    drag = -amplitude * (t_arr - t0) / (sigma ** 2) * np.exp(
+        -0.5 * ((t_arr - t0) / sigma) ** 2
+    )
+
+    omega_i = env * np.cos(phi) - beta * drag * np.sin(phi)
+    omega_q = env * np.sin(phi) + beta * drag * np.cos(phi)
+
+    return (
+        FluxSignal(type=8, t_list=t_list, signal=omega_i),
+        FluxSignal(type=8, t_list=t_list, signal=omega_q),
+    )
 
 
 # ---------------------------------------------------------------------------

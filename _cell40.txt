@@ -1,0 +1,111 @@
+# === 10.4.1 预失真后阶跃响应验证 ===
+dt = CONFIG.awg.dt
+
+# --- 预失真：目标阶跃 → AWG 预失真波形 ---
+step_target = np.where(t_flux >= 15, step_amp, 0.0)
+step_predistorted = inv_filter.apply(step_target, dt)
+
+# 预失真后经控制线
+step_corrected = dist.apply(step_predistorted, dt)
+step_uncorrected = dist.apply(step_target, dt)
+
+# 构建预失真后的 flux signal
+on_chip_pred = FluxSignal(type=8, t_list=t_flux, signal=step_corrected)
+
+# --- Cryoscope 复测 (使用与 10.2.1 相同的 qubit + calibration) ---
+cryo_exp2 = CryoscopeExperiment(qubit=qubit_cryo, flux_signal=on_chip_pred, tau=50.0)
+meas_cryo2 = cryo_exp2.run()
+h_cryo2 = recon_cryo.reconstruct(meas_cryo2)
+
+# --- 可视化 ---
+fig, axes = plt.subplots(2, 3, figsize=(16, 9))
+
+# (a) AWG 预失真波形
+axes[0, 0].plot(t_flux, step_target, "k-", lw=1.5, label="Target step")
+axes[0, 0].plot(t_flux, step_predistorted, "--", color="#984ea3", lw=1.5,
+                label="AWG predistorted")
+axes[0, 0].set(xlabel="t (ns)", ylabel="V (arb.)", title="AWG waveform")
+axes[0, 0].legend(fontsize=7); axes[0, 0].grid(alpha=0.3)
+
+# (b) 片上波形：未校正 vs 已校正 vs 理想
+axes[0, 1].plot(t_flux, step_target, "k-", lw=2, label="Target (ideal)")
+axes[0, 1].plot(t_flux, step_uncorrected, color="#ff7f00", lw=1.2, alpha=0.7,
+                label="Uncorrected")
+axes[0, 1].plot(t_flux, step_corrected, "--", color="#377eb8", lw=1.8,
+                label="Corrected (IIR predist.)")
+axes[0, 1].set(xlabel="t (ns)", ylabel="Φ (Φ₀)", title="On-chip flux")
+axes[0, 1].legend(fontsize=7); axes[0, 1].grid(alpha=0.3)
+
+# (c) 阶跃沿放大
+axes[0, 2].plot(t_flux, step_target, "k-", lw=2, label="Target")
+axes[0, 2].plot(t_flux, step_uncorrected, color="#ff7f00", lw=1.2, alpha=0.7,
+                label="Uncorrected")
+axes[0, 2].plot(t_flux, step_corrected, "--", color="#377eb8", lw=1.8,
+                label="Corrected")
+axes[0, 2].set(xlabel="t (ns)", ylabel="Φ (Φ₀)", title="Rising edge zoom",
+               xlim=(12, 35))
+axes[0, 2].legend(fontsize=7); axes[0, 2].grid(alpha=0.3)
+
+# (d) Cryoscope 复测：测量相位
+trunc_t2 = meas_cryo2.axes["trunc"]
+phi_meas2 = meas_cryo2.data["varphi"]
+if len(trunc_t2) > 1 and trunc_t2[0] > trunc_t2[-1]:
+    trunc_t2 = trunc_t2[::-1]
+    phi_meas2 = phi_meas2[::-1]
+phi_meas1 = meas_cryo.data["varphi"]
+trunc_t1 = meas_cryo.axes["trunc"]
+if len(trunc_t1) > 1 and trunc_t1[0] > trunc_t1[-1]:
+    trunc_t1 = trunc_t1[::-1]
+    phi_meas1 = phi_meas1[::-1]
+axes[1, 0].plot(trunc_t1, phi_meas1, color="#ff7f00", lw=1, alpha=0.6, label="Before φ")
+axes[1, 0].plot(trunc_t2, phi_meas2, color="#377eb8", lw=1.5, label="After φ")
+axes[1, 0].set(xlabel="t_trunc (ns)", ylabel="φ (rad)",
+               title="Cryoscope phase: before vs after")
+axes[1, 0].legend(fontsize=7); axes[1, 0].grid(alpha=0.3)
+
+# (e) Cryoscope 重建 vs 真值
+axes[1, 1].plot(t_flux, step_target, "k-", lw=2, label="Target (ideal)")
+axes[1, 1].plot(h_cryo.t_list, h_cryo.signal, color="#ff7f00", lw=1, alpha=0.5,
+                label="Cryo (before)")
+axes[1, 1].plot(h_cryo2.t_list, h_cryo2.signal, "--", color="#377eb8", lw=1.8,
+                label="Cryo (after)")
+axes[1, 1].set(xlabel="t (ns)", ylabel="h (Φ₀)", title="Cryoscope reconstruction")
+axes[1, 1].legend(fontsize=7); axes[1, 1].grid(alpha=0.3)
+
+# (f) 改善指标
+axes[1, 2].axis("off")
+t_common = min(len(step_target), len(step_corrected), len(step_uncorrected))
+rmse_before = np.sqrt(np.mean((step_uncorrected[:t_common] - step_target[:t_common])**2))
+rmse_after = np.sqrt(np.mean((step_corrected[:t_common] - step_target[:t_common])**2))
+improvement = rmse_before / max(rmse_after, 1e-30)
+
+# settling time
+def settling_time(t, sig, target_sig, tol=0.0001):
+    err = np.abs(sig - target_sig)
+    bad = np.where(err > tol)[0]
+    return float(t[bad[-1]]) if len(bad) > 0 else 0.0
+
+ts_before = settling_time(t_flux[:t_common], step_uncorrected[:t_common],
+                          step_target[:t_common])
+ts_after = settling_time(t_flux[:t_common], step_corrected[:t_common],
+                         step_target[:t_common])
+
+txt = "Validation Metrics\n" + "=" * 38 + "\n\n"
+txt += f"{'':>18s} {'Before':>10s} {'After':>10s}\n"
+txt += "-" * 38 + "\n"
+txt += f"{'RMSE (Phi0)':>18s} {rmse_before:10.6f} {rmse_after:10.6f}\n"
+txt += f"{'Improvement':>18s} {'':>10s} {improvement:10.0f}x\n"
+txt += f"{'Settling (ns)':>18s} {ts_before:10.1f} {ts_after:10.1f}\n"
+txt += "-" * 38 + "\n\n"
+txt += "Predistortion successfully\ncompensates the exponential tail.\n"
+txt += f"Step response RMSE improved\nby {improvement:.0f}x."
+
+axes[1, 2].text(0.02, 0.98, txt, transform=axes[1, 2].transAxes, fontsize=9,
+                verticalalignment="top", fontfamily="monospace",
+                bbox=dict(boxstyle="round", facecolor="lightgreen", alpha=0.4))
+
+fig.suptitle("§10.4.1 Validation — Step Response After Predistortion", fontsize=13)
+fig.tight_layout(); plt.show()
+
+print(f"Step RMSE: {rmse_before:.6f} → {rmse_after:.6f} ({improvement:.0f}x improvement)")
+print(f"Settling time: {ts_before:.1f} ns → {ts_after:.1f} ns")

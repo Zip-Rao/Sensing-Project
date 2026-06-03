@@ -1,0 +1,93 @@
+# === 10.2.2 瞬态磁场协议: 阶跃响应测量 ===
+from sqc.experiments.transient import TransientSensingExperiment
+from sqc.reconstruction.transient import TransientReconstruction
+
+# --- 使用相同的 qubit + 阶跃信号（在 10.2.1 中已构造）---
+# 这样两种方法对比公平：相同 step_amp, 相同片上 flux
+qubit_sens = qubit_cryo  # 复用敏感点 qubit
+kappa = qubit_sens.frequency_sensitivity(0.25) / (2 * np.pi)
+print(f"Sensitive point: flux=0.25, f={qubit_sens.frequency/(2*np.pi):.3f} GHz, "
+      f"κ={kappa:.3f} GHz/Φ₀")
+
+# --- 滑动扫描时间轴 ---
+t_scan = CONFIG.pulse.make_time(0, 70)
+trans_exp = TransientSensingExperiment(
+    qubit=qubit_sens,
+    flux_signal=on_chip_flux,  # 来自 10.2.1
+    scan_list=t_scan,
+)
+trans_result = trans_exp.run()
+kernel = trans_result.data["kernel"]
+print(f"Δp_e range: [{trans_result.data['delta_p'].min():.4f}, "
+      f"{trans_result.data['delta_p'].max():.4f}] (linear regime → Wiener works)")
+
+# --- 重建：Wiener + Hammerstein ---
+lambda_reg = 100.0  # 阶跃信号较弱，需要较强正则化避免 ringing
+rec_wiener = TransientReconstruction(method="wiener", lambda_reg=lambda_reg)
+rec_hammer = TransientReconstruction(method="hammerstein", lambda_reg=lambda_reg,
+                                     qubit=qubit_sens)
+
+B_wiener = rec_wiener.reconstruct(trans_result, kernel=kernel)
+try:
+    B_hammer = rec_hammer.reconstruct(trans_result, kernel=kernel)
+    has_hammer = True
+except Exception as e:
+    print(f"Hammerstein failed: {e}")
+    B_hammer = None
+    has_hammer = False
+
+# --- 真值 ---
+s_truth_scan = dist.step_response(t_scan) * step_amp
+
+# --- 可视化 ---
+fig, axes = plt.subplots(2, 3, figsize=(15, 9))
+
+axes[0, 0].plot(trans_result.axes["scan"], trans_result.data["delta_p"],
+                color="#1f77b4", lw=1)
+axes[0, 0].set(xlabel="Scan delay (ns)", ylabel="Δp_e", title="Sliding Δp_e")
+axes[0, 0].grid(alpha=0.3)
+
+axes[0, 1].plot(range(len(kernel)), kernel, color="#4daf4a")
+axes[0, 1].set(xlabel="Sample index", ylabel="k(t)", title="Control kernel")
+axes[0, 1].grid(alpha=0.3)
+
+# Qubit 频率灵敏度
+h_test = np.linspace(-0.05, 0.05, 100)
+f_test = np.array([qubit_sens.frequency_sensitivity(h)/(2*np.pi) for h in h_test])
+axes[0, 2].plot(h_test, f_test, color="#984ea3")
+axes[0, 2].axvline(x=0.25, color="#e41a1c", ls="--", lw=0.8, label="work point")
+axes[0, 2].set(xlabel="Φ (Φ₀)", ylabel="κ (GHz/Φ₀)", title="Frequency sensitivity")
+axes[0, 2].legend(fontsize=7); axes[0, 2].grid(alpha=0.3)
+
+axes[1, 0].plot(t_scan, s_truth_scan, "k-", lw=2, label="True s(t)")
+axes[1, 0].plot(B_wiener.t_list, B_wiener.signal, "--", color="#e41a1c", lw=1.5,
+                label="Wiener")
+if has_hammer:
+    axes[1, 0].plot(B_hammer.t_list, B_hammer.signal, "-.", color="#4daf4a",
+                    lw=1.5, label="Hammerstein")
+axes[1, 0].set(xlabel="t (ns)", ylabel="h (Φ₀)",
+               title="Step response reconstruction")
+axes[1, 0].legend(fontsize=7); axes[1, 0].grid(alpha=0.3)
+
+# Wiener 残差
+s_truth_wiener = np.interp(B_wiener.t_list, t_scan, s_truth_scan)
+residual_w = B_wiener.signal - s_truth_wiener
+axes[1, 1].plot(B_wiener.t_list, residual_w, color="#ff7f00")
+axes[1, 1].axhline(y=0, color="gray", ls="--", lw=0.8)
+axes[1, 1].set(xlabel="t (ns)", ylabel="Δh (Φ₀)", title="Wiener residual")
+axes[1, 1].grid(alpha=0.3)
+
+# 阶跃沿放大
+axes[1, 2].plot(t_scan, s_truth_scan, "k-", lw=2, label="True")
+axes[1, 2].plot(B_wiener.t_list, B_wiener.signal, "--", color="#e41a1c",
+                lw=1.5, label="Wiener")
+axes[1, 2].axvline(x=15, color="gray", ls=":", lw=0.8, label="step edge")
+axes[1, 2].set(xlabel="t (ns)", ylabel="h (Φ₀)", title="Rising edge zoom",
+               xlim=(10, 35))
+axes[1, 2].legend(fontsize=7); axes[1, 2].grid(alpha=0.3)
+
+fig.suptitle("§10.2.2 Step Response via Transient-Field Protocol", fontsize=13)
+fig.tight_layout(); plt.show()
+
+rmse_transient = np.sqrt(np.mean(residual_w**2))
+print(f"Transient (Wiener) step response RMSE = {rmse_transient:.6f} Φ₀")

@@ -1,0 +1,10 @@
+## 10.3 预失真滤波器设计
+
+有了阶跃响应测量（无论用 Cryoscope 还是瞬态协议），下一步是设计逆滤波器 $H_{inv}(\omega)$，使得 $H_{inv}(\omega) \cdot H(\omega) \approx 1$。
+
+`PredistortionDesigner` 提供三种方法：
+- **`iir_inverse`**：针对指数失真模型的解析逆（交换分子/分母）
+- **`fir_inverse`**：$H_{inv} = H^*/(|H|^2 + \lambda^2)$ → IFFT → 截断为 $N_{tap}$ 阶 FIR
+- **`frequency_inverse`**：保留完整频域表示 `CustomTransferDistortion`
+
+下面设计 IIR 逆滤波器（因为是单指数失真，用解析逆最精确），然后展示 FIR 逆作为对比。

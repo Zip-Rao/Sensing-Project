@@ -1,0 +1,3 @@
+### 10.4.2 Chevron 复检 — 预失真后 Rabi Chevron
+
+施加预失真后重新运行 Rabi Chevron。如果预失真成功，Chevron 应恢复对称性，振荡模式清晰。

@@ -1,8 +1,9 @@
-# 仿真产出与结论
+# 波形重建仿真
 按照脉冲扫描的方式，可以将时变磁场测量分为三种协议：
 - 基于脉冲延迟时间扫描的瞬态磁场协议
 - 基于演化时间扫描的Ramsey协议和差分回波协议
 - 基于频谱扫描的CPMG协议
+- tomo，pi补偿，delay Ramsey
 
 为了达到最高的磁场灵敏度，Transmon qubit的偏置工作磁场设置在斜率最大处。为了能测量正负磁场，这种偏置是必要的
 ## 延迟时间扫描
@@ -105,3 +106,50 @@ qubit频率标定有两种，一种是标定$f(\Phi)$曲线，一种是在确定
 - 预失真标定（适用，推导？）
 
 
+
+# 频率标定仿真
+## 频率测量比较
+### flux=0.0
+![alt text](image-29.png)
+### flux=0.9
+![alt text](image-28.png)
+
+- 精度提高的方法
+    - 用高斯stim求一阶核函数还是有一定误差，可以用virtual Z模拟理想delta函数，减小误差
+    - QSL方法中做了很多线性近似，例如核函数只近似到一阶，从而概率的线性近似为
+$
+\Delta p = G \Delta 
+$
+    其中$G$为核函数的积分，实际上，核函数可以有高阶项，则$\Delta p$可以写成$\Delta $的任意奇数阶展开，可以发展多阶核函数理论以提高精度。不走核函数路线，直接拟合$\Delta p$也可以
+        - 不过拟合也有上限，如图，$\Delta p$的变换并非单调函数，因此当$\Delta$较大时，可能存在多个解，这时可能需要进行unwrap，或者增加一些先验知识来选择合适的解
+        ![alt text](../transient_recovery.png)
+
+    - 对于优化qubit频率至特定频率这个具体的应用场景，还可以采用动态改$\omega_d$，采用双变量并行优化的方法，即在每次迭代中同时更新$\omega_d$和flux$，从而更快地收敛到目标频率。
+    - transient测频方法在不同的flux bias的delta omega符号问题需要修正
+## 闭环反馈演示
+![alt text](image-26.png)
+## 混合方案
+从上面的闭环反馈方法中可以看到，QSL方法可以快速接近目标频率，但是精度有限。因此可以考虑在误差较大时使用QSL方法快速接近目标频率，在误差较小时使用Ramsey方法进行精细调整，从而实现快速且高精度的频率标定。
+# 预失真仿真
+## 失真波形探测
+### Chevron 实验
+![alt text](image-15.png)
+理想情况下，flux没有失真，则给定驱动频率，Rabi实验激发态的峰值出现在失谐为零的位置不变。
+
+而当存在失真时，flux可能需要一定时间才能达到目标幅度，共振条件不在是严格的失谐为零，导致flux的峰值偏移，形成Chevron图案的扭曲。
+## 失真波形测量
+### pi脉冲补偿法
+![alt text](image-16.png)
+![alt text](image-18.png)
+### Ramsey
+![alt text](image-17.png)
+![alt text](image-19.png)
+### cryoscope
+![alt text](image-23.png)
+![alt text](image-21.png)
+cryoscope是作差分，因此对高频变化的表征更好
+### QSL
+![alt text](image-22.png)
+
+## 滤波器设计与验证
+![alt text](image-27.png)

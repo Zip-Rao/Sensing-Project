@@ -1,0 +1,104 @@
+# === 10.1 Rabi Chevron: 理想 vs 失真 ===
+dt = CONFIG.awg.dt
+Omega = 0.1 * 2 * np.pi  # Rabi frequency (rad·GHz)
+
+# 扫描网格
+n_det = 41
+delta_list = 2 * np.pi * np.linspace(-0.15, 0.15, n_det)
+t_chevron = CONFIG.pulse.make_time(0, 80)
+n_t = len(t_chevron)
+
+# ---- 理想脉冲 vs 失真脉冲包络 ----
+pulse_ideal = Omega * np.ones(n_t)
+pulse_distorted = dist.apply(pulse_ideal, dt)
+
+# ---- 理想 Chevron (解析公式) ----
+delta_grid, t_grid = np.meshgrid(delta_list, t_chevron, indexing="ij")
+Omega_eff = np.sqrt(Omega**2 + delta_grid**2)
+p_e_ideal = (Omega**2 / Omega_eff**2) * np.sin(0.5 * Omega_eff * t_grid)**2
+
+# ---- 失真 Chevron (数值仿真) ----
+print(f"Simulating distorted Chevron ({n_det} detunings × {n_t} time steps)...")
+p_e_distorted = np.zeros((n_det, n_t))
+psi0 = basis(2, 0)
+proj_e = basis(2, 1).proj()
+H1_op = 0.5 * sigmax()  # σ_x/2, coeff = Ω(t)
+for i, delta in enumerate(delta_list):
+    H0_op = 0.5 * delta * sigmaz()  # Δ/2 σ_z
+    H = [[H0_op, np.ones(n_t)], [H1_op, pulse_distorted]]
+    result = mesolve(H, psi0, t_chevron, e_ops=[proj_e])
+    p_e_distorted[i, :] = result.expect[0]
+    if (i + 1) % 10 == 0:
+        print(f"  detuning {i+1}/{n_det}")
+print("Done.")
+
+# ============= 可视化: 6 面板布局 =============
+fig = plt.figure(figsize=(16, 10))
+gs = GridSpec(2, 3, figure=fig, hspace=0.35, wspace=0.3)
+
+# (a) Ideal Chevron
+ax = fig.add_subplot(gs[0, 0])
+im = ax.pcolormesh(t_chevron, delta_list/(2*np.pi), p_e_ideal,
+                    cmap="RdYlBu_r", shading="auto", vmin=0, vmax=1)
+ax.set(xlabel="Pulse duration (ns)", ylabel="Δ (GHz)", title="(a) Ideal Chevron")
+plt.colorbar(im, ax=ax, label="$P_e$")
+
+# (b) Distorted Chevron
+ax = fig.add_subplot(gs[0, 1])
+im = ax.pcolormesh(t_chevron, delta_list/(2*np.pi), p_e_distorted,
+                    cmap="RdYlBu_r", shading="auto", vmin=0, vmax=1)
+ax.set(xlabel="Pulse duration (ns)", ylabel="Δ (GHz)", title="(b) Distorted Chevron")
+plt.colorbar(im, ax=ax, label="$P_e$")
+
+# (c) Difference: 突出失真效果
+diff = p_e_distorted - p_e_ideal
+vmax = max(abs(diff.min()), abs(diff.max()))
+ax = fig.add_subplot(gs[0, 2])
+im = ax.pcolormesh(t_chevron, delta_list/(2*np.pi), diff,
+                    cmap="RdBu_r", shading="auto", vmin=-vmax, vmax=vmax)
+ax.set(xlabel="Pulse duration (ns)", ylabel="Δ (GHz)", title="(c) Distorted − Ideal")
+plt.colorbar(im, ax=ax, label="$\\Delta P_e$")
+
+# (d) 驱动包络对比 — 解释为什么 Chevron 不同
+ax = fig.add_subplot(gs[1, 0])
+ax.plot(t_chevron, pulse_ideal / (2*np.pi) * 1000, "k-", lw=2, label="Ideal Ω(t)")
+ax.plot(t_chevron, pulse_distorted / (2*np.pi) * 1000, color="#e41a1c", lw=1.8,
+        label="Distorted Ω(t)")
+ax.set(xlabel="t (ns)", ylabel="Ω/(2π) (MHz)",
+       title="(d) Drive envelope: AWG vs on-chip")
+ax.legend(fontsize=8); ax.grid(alpha=0.3)
+ax.set_ylim(0, Omega/(2*np.pi)*1000 * 1.1)
+
+# (e) Δ=0 共振线截面 — 最清晰的差异展示
+ax = fig.add_subplot(gs[1, 1])
+i_res = n_det // 2  # Δ=0
+ax.plot(t_chevron, p_e_ideal[i_res], "k-", lw=2, label="Ideal")
+ax.plot(t_chevron, p_e_distorted[i_res], color="#e41a1c", lw=1.5, label="Distorted")
+ax.set(xlabel="Pulse duration (ns)", ylabel="$P_e$",
+       title="(e) On-resonance (Δ=0) Rabi oscillation")
+ax.legend(fontsize=8); ax.grid(alpha=0.3)
+ax.set_ylim(-0.05, 1.05)
+
+# (f) 累积相位对比
+ax = fig.add_subplot(gs[1, 2])
+phi_ideal = np.cumsum(pulse_ideal) * dt
+phi_dist = np.cumsum(pulse_distorted) * dt
+ax.plot(t_chevron, phi_ideal / np.pi, "k-", lw=2, label="Ideal $\\int\\Omega dt$")
+ax.plot(t_chevron, phi_dist / np.pi, color="#e41a1c", lw=1.5,
+        label="Distorted $\\int\\Omega dt$")
+ax.set(xlabel="t (ns)", ylabel="Accumulated phase (π rad)",
+       title="(f) Accumulated rotation angle")
+ax.legend(fontsize=8); ax.grid(alpha=0.3)
+
+fig.suptitle("§10.1 Rabi Chevron — Distortion Diagnosis", fontsize=13, y=0.995)
+plt.show()
+
+# ---- 定量 ----
+rmse_chevron_before = np.sqrt(np.mean(diff**2))
+print(f"\nChevron RMSE (distorted vs ideal) = {rmse_chevron_before:.4f}")
+print(f"Max |ΔP_e| = {np.abs(diff).max():.4f}")
+print(f"On-resonance peak shift: ideal first peak at t≈{t_chevron[np.argmax(p_e_ideal[i_res])]:.1f} ns, "
+      f"distorted at t≈{t_chevron[np.argmax(p_e_distorted[i_res])]:.1f} ns")
+print(f"→ 失真使驱动包络逐渐建立: Ω(0)={pulse_distorted[0]/(2*np.pi)*1000:.1f} MHz, "
+      f"Ω(80)={pulse_distorted[-1]/(2*np.pi)*1000:.1f} MHz")
+print(f"→ Chevron 振荡周期从约 t≈{2*np.pi/Omega:.1f} ns（理想）变为初期更慢，导致条纹整体右移、扭曲。")

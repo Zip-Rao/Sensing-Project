@@ -76,6 +76,9 @@ class DelayRamseyExperiment(Experiment):
         default_factory=lambda: CONFIG.pulse.t_rabi.copy()
     )
     omega_d: float | None = None
+
+    # -- P9.B --
+    control_line: object | None = None
     run_baseline: bool = False  # Deprecated.  Model-guided unwrap
                                 # (via sqc.reconstruction.dispersion)
                                 # now sets the absolute-phase reference
@@ -122,7 +125,7 @@ class DelayRamseyExperiment(Experiment):
         p_e_Q_list: list[float] = []
 
         for t_d in self.t_d_list:
-            # Window the tail segment starting at t_d, but ZERO outside
+            # Window the tail segment centering at t_d, but ZERO outside(i.e., no flux during π/2 pulses) to avoid detuning and corrupting the Ramsey sequence. The tail segment is defined as the flux signal during
             # the free-evolution window [t_rabi[-1], t_rabi[-1]+tau_R].
             # Flux during π/2 pulses would detune them and corrupt φ.
             signal = np.zeros(len(t_sig), dtype=float)
@@ -131,11 +134,12 @@ class DelayRamseyExperiment(Experiment):
                 & (t_sig <= self.t_rabi[-1] + self.tau_R)
             )
             signal[free_mask] = np.array(
-                [self.flux_signal.value_at(self.t_fall + t_d + float(t) - self.t_rabi[-1])
+                [self.flux_signal.value_at(self.t_fall + t_d + float(t) - self.t_rabi[-1] - self.tau_R/2)
                  for t in t_sig[free_mask]],
                 dtype=float,
             )
             phi_windowed = FluxSignal(type=8, t_list=t_sig, signal=signal)
+            phi_windowed = self._route_flux(phi_windowed)
 
             self.qubit.qubit_in_mag(
                 phi_windowed, frame=1, omega_d=self.omega_d,

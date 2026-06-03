@@ -2,10 +2,62 @@
 
 > **状态**: 规划阶段，待实施。将 delay Ramsey 和 Ramsey sensing 的"脉冲期 flux 零遮盖"近似替换为完整的 filter function 卷积模型。
 > **前置**: P0–P7 全部完成（P7 的时间轴统一是理想前提，但 P8 可与 P7 并行实施——P8 的 filter function 计算和卷积重建不依赖 t_global）。
+> **与 P10 的关系（执行顺序约定，方案 A）**: **P10 先实施，P8 后实施**。具体 gate 与契约见 §1.0。
 > **理论配套**: [`_sensing theory.md`](../_sensing%20theory.md) "核函数与卷积测量：统一理论框架"节、"瞬态磁场协议 → 从哈密顿量到卷积结构"节。
 > **配套文件**:
 > - 重构总方案: [_refactor_plan.md](_refactor_plan.md) §8、§13
 > - 当前交接状态: [_handoff_state.md](_handoff_state.md)
+> - 上游 phase: [phase_10_kernel_extension_handbook.md](phase_10_kernel_extension_handbook.md)（核函数三维扩展，P8 启动的前置）
+
+---
+
+## §1.0 P8 ↔ P10 协调（方案 A：P10 先 → P8 后）
+
+### 决策
+
+**P8 必须在 P10 的关键里程碑完成后才启动**。原因：
+
+1. **P8 是 KernelEstimator 的消费者** — P8 §3 Tier A4 已明确"`kernel.py` 无改动"；P8 只调用 estimator。
+2. **避免 κ workaround 扩散** — 若 P8 早于 P10 实施，`delay_ramsey.py` / `ramsey.py` 的 Wiener 反卷积只能复用 [frequency.py:294-302](../../sqc/calibration/frequency.py#L294-L302) 的 flux kernel + κ workaround anti-pattern。P10 先实施后，P8 可以直接用 `mode='omega'`，新代码从一开始就干净。
+3. **P10 的默认行为 byte-equivalent** — P10 设计上保证 `KernelEstimator()`（默认参数）在任何时刻都与当前实现等价；这让 P8 可以放心调用，不会因 P10 中间状态破坏 baseline。
+
+### P8 启动 gate
+
+启动 P8 之前，**必须确认以下 P10 里程碑已合入 master**：
+
+| P10 里程碑 | 给 P8 的能力 | 是否阻塞 P8 启动 |
+|-----------|------------|----------------|
+| **Phase 10.1**（mode 维度 + Virtual Z） | `KernelEstimator(mode='omega', method='exp', order=1)` 可用 | **阻塞**（P8.3/P8.4 用此路径） |
+| **Phase 10.5**（frequency.py 迁移，消除 κ workaround） | `pulse.get_kernel()` shim 稳定，调用模式可参考 | **强烈建议先合入**（P8 沿用一致的调用模式） |
+| Phase 10.2（sim 方法） | sim mode | 不阻塞（P8 默认走 exp） |
+| Phase 10.3（高阶 + 序列化） | order≥2、`KernelResult.save/load` | 不阻塞（P8 默认 order=1） |
+| Phase 10.4（Hammerstein-Volterra） | 高阶反卷积 | 不阻塞（P8 用 order=1 Wiener） |
+
+**最小 gate**：**Phase 10.1 已合入** → P8 可启动；**Phase 10.5 已合入** → P8 才进入 P8.3/P8.4 的标定 + 反卷积层。
+
+### P8 实施时对 P10 的硬约定
+
+1. **优先使用 `mode='omega'`** — P8.3 / P8.4 的 Wiener 反卷积**必须**走 omega kernel + `_omega_to_flux` 反演路径，而不是 flux kernel + 手动 κ。与 P10.5 frequency.py 的做法保持一致。
+2. **不要在 P8 代码里写新的 κ workaround** — 如果发现协议层需要 κ 换算才能完成 wiener 反卷积，**停手并报告**（说明 P10 设计有 gap，需要走 Phase 11 立项扩展 estimator，而不是在 P8 里 patch）。
+3. **kernel 缓存 key 必须包含 `KernelEstimator` 的非默认字段** — §6.1 风险 1 提到的 transfer_function hash 之外，还要加上 `mode`、`method`、`order`、`virtual_z_impl` 等字段。**实操**：直接用 `KernelResult.metadata` 字典序列化后做 hash 当 cache key。
+4. **不动 `sqc/reconstruction/kernel.py`** — P8 实施者若发现需要在 estimator 里加新功能，**停手并升级到 Phase 11 单独立项**。P10 之后的 estimator 是 P8 的依赖，不是 P8 的修改对象。
+5. **不动 `KernelResult` 数据结构** — 同上；P8 只读不写。
+
+### P10 给 P8 的契约（P10 实施者必须保证）
+
+1. **默认参数 byte-equivalent**：`KernelEstimator()`（无参数）在 P10 的任何子 phase 完成后，都等价于当前 [sqc/reconstruction/kernel.py](../../sqc/reconstruction/kernel.py) 的行为。
+2. **`pulse.get_kernel()` shim 始终返回 `(t_samples, kernel_ndarray)`**。
+3. **`KernelResult.k1` 始终是 1D ndarray**（P8 不需要区分 order=1 vs order≥2）。
+4. **`reconstruction/__init__.py` 只增不减**，P10 新导出的符号不能改名或删除。
+
+### 并发场景
+
+短期内不期望 P8 和 P10 并行开发。若出现：
+
+- P8 分支已切出（基于 P10 启动前的 master）→ P10 合入后 P8 必须 rebase 到包含 P10.1 + P10.5 的 master，再继续
+- 严禁 P8 抢先合入 master（会污染 P10.5 frequency.py 迁移的 review）
+
+具体协议层 vs P9（控制路由）的 merge 协调见下文 §6.1。
 
 ---
 
@@ -102,9 +154,9 @@ flux = recon.reconstruct(result)  # 使用 result.data["kernel"] 做 Wiener 反�
 
 | 文件 | 改动内容 |
 |------|---------|
-| [sqc/reconstruction/delay_ramsey.py](sqc/reconstruction/delay_ramsey.py) | `DelayRamseyReconstruction` 新增 `method: Literal["slope", "wiener"] = "slope"`；`method="wiener"` 时从 result 取 kernel 做 Wiener 反卷积；新增 `lambda_reg` 参数 |
-| [sqc/reconstruction/ramsey.py](sqc/reconstruction/ramsey.py) | 同 delay_ramsey，新增 wiener 反卷积路径 |
-| [sqc/reconstruction/kernel.py](sqc/reconstruction/kernel.py) | 无改动（已可复用）；确认 `KernelEstimator` 的默认参数从 CONFIG 读取 |
+| [sqc/reconstruction/delay_ramsey.py](sqc/reconstruction/delay_ramsey.py) | `DelayRamseyReconstruction` 新增 `method: Literal["slope", "wiener"] = "slope"`；`method="wiener"` 时从 result 取 kernel 做 Wiener 反卷积；新增 `lambda_reg` 参数。**必须用 `KernelEstimator(mode='omega', method='exp', order=1)`**（P10 协调约定，§1.0）；不允许复制 frequency.py 的 κ workaround |
+| [sqc/reconstruction/ramsey.py](sqc/reconstruction/ramsey.py) | 同 delay_ramsey，新增 wiener 反卷积路径。同样**走 omega kernel + `_omega_to_flux` 反演**，不写 κ workaround |
+| [sqc/reconstruction/kernel.py](sqc/reconstruction/kernel.py) | **无改动**（P10 已实施完毕，estimator 已扩展）；P8 仅作为消费者调用 |
 
 ### Tier A5: 标定层
 
@@ -192,9 +244,10 @@ flux = recon.reconstruct(result)  # 使用 result.data["kernel"] 做 Wiener 反�
 
 ### 依赖
 
+- **P10（核函数三维扩展）**：**硬依赖**。P10.1（mode 维度上线）是 P8 启动的最小 gate；P10.5（frequency.py 迁移）是 P8.3/P8.4 标定+反卷积的强烈建议前置。详见 §1.0。
 - **P7（时间轴统一）**：非硬依赖。P8 可独立实施；若 P7 先完成，P8 的触发对齐代码可简化。
 - **P9（级联预失真 + 协议驱动测量）**：非硬依赖，详见下文 §6.1。
-- **KernelEstimator**：已存在且可复用。
+- **KernelEstimator**：依赖 P10 之后的版本（带 `mode='omega'` 等扩展），不再使用 P10 前的单点 API。
 - **Wiener 反卷积**：`transient.py` 中已有实现，可直接复用或提取。
 
 ### 6.1 与 P9 的协调
@@ -217,7 +270,7 @@ P9（[phase_9_handbook.md](phase_9_handbook.md)）在 `delay_ramsey.py` / `ramse
 
 ### 风险
 
-1. **kernel 缓存一致性**：kernel 依赖 `(t_rabi, tau_R, omega_d, qubit_spec)`，若 qubit 参数中途改变需刷新缓存。**注意**：若 P9 已实施，kernel 还应隐式依赖 `control_line.transfer_function`——缓存 key 需包含 transfer_function 的 hash 或对象 id，否则跨 control_line 切换时会读到陈旧 kernel
+1. **kernel 缓存一致性**：kernel 依赖 `(t_rabi, tau_R, omega_d, qubit_spec)`，若 qubit 参数中途改变需刷新缓存。**P10 后约束**：cache key 还必须包含 `KernelEstimator` 的非默认字段（`mode`、`method`、`order`、`virtual_z_impl`）和 `control_line.transfer_function` hash（若 P9 已实施）。**实操**：用 `KernelResult.metadata` 字典序列化后做 hash 当 cache key
 2. **性能**：kernel 计算需对每个时间点做两次 mesolve，耗时与脉冲长度成正比——但对 20 点 t_rabi 的 Ramsey 序列（~3×20=60 点），开销可接受
 3. **数值稳定性**：Wiener 反卷积在小信号（深 tail 区）可能放大噪声；λ 正则化参数需合理默认值
 

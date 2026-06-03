@@ -585,13 +585,15 @@ $$
 
 ## 瞬态磁场协议
 
-瞬态磁场测量通过两个连续的$\pi/2$脉冲实现，通过计算脉冲序列的核函数（filter function / kernel），将测量结果表达为待测信号与核函数的卷积，从而通过反卷积突破脉冲宽度的分辨率限制。
+瞬态磁场测量通过两个连续的 $\pi/2$ 脉冲实现：把脉冲序列的核函数（filter function / kernel）定义出来，将测量结果表达为待测信号与核函数的卷积，再通过反卷积突破脉冲宽度的分辨率限制。
 
-### 从哈密顿量到卷积结构
+本节的逻辑主线是：**哈密顿量 → 一阶核函数与卷积结构（§1）→ 核函数的形状（§2）→ 核函数的计算与定义维度（§3）→ 信号重建（§4）→ 与标准 Ramsey 的统一（§5）→ 非线性时的高阶核（§6）**。其中 §1 给出全部理论骨架，§6 是它在大信号 / 强非线性下的系统推广。
 
-#### 1. 旋转系哈密顿量
+### 1. 理论基础：从哈密顿量到卷积结构
 
-Transmon qubit 在旋转坐标系下，经 RWA 近似，二能级截断后的哈密顿量为
+#### 1.1 旋转系哈密顿量与交互系分解
+
+Transmon qubit 在旋转坐标系下，经 RWA 近似、二能级截断后的哈密顿量为
 
 $$
 H(t) = \frac{1}{2}\delta\omega(t)\,\sigma_z + H_{\text{ctrl}}(t)
@@ -603,64 +605,160 @@ $$
 H_{\text{ctrl}}(t) = \frac{\Omega(t)}{2}\bigl(\cos\phi(t)\,\sigma_x + \sin\phi(t)\,\sigma_y\bigr)
 $$
 
-$\Omega(t)$ 为 Rabi 包络，$\phi(t)$ 为脉冲相位。脉冲开启时 $\Omega(t) \neq 0$，自由演化时 $\Omega = 0$。
+$\Omega(t)$ 为 Rabi 包络，$\phi(t)$ 为脉冲相位。脉冲开启时 $\Omega(t)\neq 0$，自由演化时 $\Omega=0$。
 
-#### 2. 小失谐微扰展开
-
-当 $|\delta\omega| \ll \Omega$ 时，失谐项可视为对理想脉冲动力学的微扰。记 $U_0(t_2, t_1)$ 为 $\delta\omega = 0$ 时的演化算符（仅含控制脉冲），将完整演化算符按 Dyson 级数展开至一阶：
+总演化为
 
 $$
-U(T, 0) = U_0(T, 0) - \frac{i}{2}\int_0^T U_0(T, t')\,\sigma_z\,U_0(t', 0)\,\delta\omega(t')\,dt' + \mathcal{O}(\delta\omega^2)
+U(t, 0) = \mathcal{T}\exp\left(-i\int_0^t H(t') dt'\right)
 $$
 
-初始态 $|0\rangle$ 在理想脉冲下的末态为叠加态
+由于一般情况下 $\frac12\delta\omega\,\sigma_z$ 与 $H_{\text{ctrl}}(t)$ 不对易，演化算符无法直接分解为两部分之积，$U(t,0)\neq U_0(t,0)\,U_{\text{ctrl}}(t,0)$。因此引入**交互系（相互作用绘景）**分解：先把纯控制脉冲的演化分出来，
 
 $$
-|\psi_0\rangle = U_0(T, 0)|0\rangle = \frac{|0\rangle + e^{i\phi_0}|1\rangle}{\sqrt{2}}
+U_{\text{ctrl}}(t, 0) = \mathcal{T}\exp\left(-i\int_0^t H_{\text{ctrl}}(t') dt'\right),
+\qquad
+U(t, 0) = U_{\text{ctrl}}(t, 0)\,U_I(t, 0)
 $$
 
-其中 $\phi_0$ 由脉冲序列的相位选择决定。
-
-末态激发概率 $P_e = |\langle 1|U(T,0)|0\rangle|^2$ 展开至 $\delta\omega$ 一阶：
+代入薛定谔方程，交互系演化算符满足
 
 $$
-P_e = \underbrace{|\langle 1|\psi_0\rangle|^2}_{P_e^{(0)} = 1/2} + \Delta P_e
+i\frac{d}{dt}U_I(t, 0) = \underbrace{\tfrac12\,U_{\text{ctrl}}^\dagger(t, 0)\,\sigma_z\,U_{\text{ctrl}}(t, 0)}_{\textstyle W(t)}\,\delta\omega(t)\,U_I(t, 0) = V_I(t)\,U_I(t, 0)
 $$
 
-$$
-\Delta P_e = \int_0^T k(t)\,\delta\omega(t)\,dt
-$$
-
-其中 $k(t)$ 即为**核函数（kernel / filter function）**：
+为后续高阶推导方便，这里一次性定义**交互系记号**：有效 $\sigma_z$ 算符
 
 $$
-\boxed{k(t) \equiv \Im\Bigl[\langle 0|U_0^\dagger(T,0)\,\sigma_z\,U_0(T,t)\,\sigma_z\,U_0(t,0)|0\rangle\Bigr]}
+Z_c(t) = U_{\text{ctrl}}^\dagger(t, 0)\,\sigma_z\,U_{\text{ctrl}}(t, 0),
+\qquad
+W(t) = \tfrac12 Z_c(t)
 $$
 
-**物理含义**：$k(t)$ 是 qubit 在时刻 $t$ 对频率扰动 $\delta\omega(t)$ 的瞬时灵敏度——在 $t$ 时刻施加一个小的 $\delta$ 函数式频率偏移，测量结果的相对变化即为 $k(t)$。
-
-#### 3. 卷积结构
-
-当待测信号 $\delta\omega(t)$ 随时间变化时，脉冲序列整体在时间轴上平移至延迟 $t_d$ 处（等效采样），则
+于是交互系扰动哈密顿量 $V_I(t)=\delta\omega(t)\,W(t)$，总演化写为
 
 $$
-\Delta P_e(t_d) = \int k(t - t_d)\,\delta\omega(t)\,dt = (k * \delta\omega)(t_d)
+U(t, 0) = U_{\text{ctrl}}(t, 0)\,\mathcal{T}\exp\left(-\frac{i}{2}\int_0^t Z_c(t')\,\delta\omega(t')\,dt'\right)
 $$
 
-即**测量结果是核函数与待测信号的卷积**。在线性色散近似 $\delta\omega(t) \approx \kappa\,\Phi(t)$ 下：
+同时把测量算符也搬到理想控制框架，定义
 
 $$
-\boxed{\Delta P_e(t_d) = \kappa \cdot (k * \Phi)(t_d)}
+Q = U_{\text{ctrl}}^\dagger(T, 0)\,M\,U_{\text{ctrl}}(T, 0)
 $$
 
-#### 4. 核函数的形状
+则期望值可写为 $\langle M\rangle=\langle 0|U_I^\dagger(T,0)\,Q\,U_I(T,0)|0\rangle$。记号 $W(t)$、$Z_c(t)$、$Q$ 贯穿 §1 与 §6。
 
-**（a）理想瞬时脉冲**（$\Omega \to \infty$，$T_{\pi/2} \to 0$）
+#### 1.2 小失谐微扰展开与一阶核函数
 
-对于 $R_y(\pi/2)$—$R_x(\pi/2)$ 序列（两个 $\pi/2$ 首尾相连，中间无间隙），核函数有解析形式：
+当 $|\delta\omega|\ll\Omega$ 时，失谐项可视为对理想脉冲动力学的微扰。对 $U_I$ 作 Dyson 展开（标准时序约定 $t_1>t_2>\cdots$，左侧算符对应较晚时间）：
 
 $$
-k(t) = \begin{cases}
+U_I(T, 0) = I - i\int_0^T\!\!dt_1\,\delta\omega(t_1)W(t_1) - \int_0^T\!\!dt_1\!\int_0^{t_1}\!\!dt_2\,\delta\omega(t_1)\delta\omega(t_2)W(t_1)W(t_2) + \cdots
+$$
+
+保留至一阶，零阶期望为 $\langle M\rangle_0=\langle 0|Q|0\rangle=\tfrac12$，一阶修正为
+
+$$
+\Delta^{(1)}\langle M\rangle
+= \langle 0|U_I^{(1)\dagger}Q + Q\,U_I^{(1)}|0\rangle
+= i\!\int_0^T\!dt\,\delta\omega(t)\,\langle 0|[W(t),Q]|0\rangle
+$$
+
+故测量结果对失谐的线性响应即为**一阶核函数（kernel / filter function）**：
+
+$$
+\boxed{\,k_1(t)=i\,\langle 0|[W(t),Q]|0\rangle\,}
+$$
+
+**实数性**：$W,Q$ 厄米 $\Rightarrow$ $[W,Q]$ 反厄米 $\Rightarrow$ 其期望为纯虚 $\Rightarrow$ $i\times$（纯虚）为实数，故 $k_1\in\mathbb{R}$。
+
+**等价的迹形式**：利用 $U_{\text{ctrl}}(t,0)U_{\text{ctrl}}^\dagger(T,0)=U_{\text{ctrl}}^\dagger(T,t)$，定义
+
+$$
+G(t)=\langle 0|Q\,Z_c(t)|0\rangle
+= \langle 0|U_{\text{ctrl}}^\dagger(T,0)\,M\,U_{\text{ctrl}}(T,t)\,\sigma_z\,U_{\text{ctrl}}(t,0)|0\rangle
+$$
+
+并且 $\langle 0|Z_c(t)\,Q|0\rangle=G^*(t)$，代入得
+
+$$
+k_1(t)=\tfrac{i}{2}\langle 0|[Z_c(t),Q]|0\rangle=\tfrac{i}{2}\bigl(G^*-G\bigr)=\Im\,G(t)
+=\Im\Bigl[\langle 0|U_{\text{ctrl}}^\dagger(T,0)\,M\,U_{\text{ctrl}}(T,t)\,\sigma_z\,U_{\text{ctrl}}(t,0)|0\rangle\Bigr]
+$$
+
+算符对易子形式 $k_1=i\langle0|[W,Q]|0\rangle$ 与迹形式 $k_1=\Im\,G(t)$ **完全等价**：前者简洁、便于推广到任意阶（§6），后者便于直接数值求值。本文此后统一记一阶核为 $k_1(t)$（旧文中的 $k(t)$、$k_M(t)$、$K_e(t)$ 均指同一对象）。
+
+**物理含义**：$k_1(t)$ 是 qubit 在时刻 $t$ 对频率扰动 $\delta\omega(t)$ 的瞬时灵敏度——在 $t$ 时刻施加一个小的 $\delta$ 函数式频率偏移，测量结果的相对变化即为 $k_1(t)$。
+
+#### 1.3 卷积结构
+
+把一阶响应中的被测信号写成随时间变化的 $\delta\omega(t)$，并让整条脉冲序列在时间轴上平移至延迟 $t_d$ 处（等效采样），则
+
+$$
+\Delta P_e(t_d) = \int k_1(t - t_d)\,\delta\omega(t)\,dt = (k_1 * \delta\omega)(t_d)
+$$
+
+即**测量结果是核函数与待测信号的卷积**。在线性色散近似 $\delta\omega(t)\approx\kappa\,\Phi(t)$ 下：
+
+$$
+\boxed{\Delta P_e(t_d) = \kappa \cdot (k_1 * \Phi)(t_d)}
+$$
+
+信号重建因此等价于**反卷积**（§4）。不同协议的区别**仅在于 $k_1(t)$ 的形状**。
+
+### 2. 一阶核函数的形状
+
+不同脉冲序列对应不同的 $k_1(t)$。下面给出几种典型情形。
+
+**（a）理想瞬时脉冲**（$\Omega\to\infty$，$T_{\pi/2}\to 0$）
+
+脉冲宽度趋于零，核函数退化为由脉冲拓扑决定的窗函数（见 (c) 的 plateau 极限）。
+
+**（b）零间隙 Ramsey**（两个 $\pi/2$ 首尾相连，$\tau=0$）
+
+对于 $R_y(\pi/2)$—$R_x(\pi/2)$ 序列（两个 $\pi/2$ 首尾相连、中间无间隙），控制哈密顿量为
+
+$$
+H_{\text{ctrl}}(t) = \begin{cases} \Omega(t)\,\sigma_y/2, & 0 < t < T_{\pi/2} \\ \Omega(t)\,\sigma_x/2, & T_{\pi/2} < t < 2T_{\pi/2} \\ 0, & \text{else} \end{cases}
+$$
+
+包络满足 $\int_0^{T_{\pi/2}}\Omega\,dt=\int_{T_{\pi/2}}^{2T_{\pi/2}}\Omega\,dt=\pi/2$。设累积转角
+
+$$
+\theta_y(t) = \int_0^t \Omega(t')\,dt', \quad \theta_x(t) = \int_{T_{\pi/2}}^t \Omega(t')\,dt'
+$$
+
+在第一个脉冲内（$t<T_{\pi/2}$），
+
+$$
+U_{\text{ctrl}}(t, 0) = R_y(\theta_y(t)), \qquad
+U_{\text{ctrl}}(T, t) = R_x(\pi/2)\,R_y(\pi/2-\theta_y(t))
+$$
+
+代入一阶核公式，得
+
+$$
+k_1(t) = -\tfrac{1}{2}\sin\theta_y(t), \qquad t < T_{\pi/2}
+$$
+
+在第二个脉冲内（$T_{\pi/2}<t<2T_{\pi/2}$），
+
+$$
+U_{\text{ctrl}}(t, 0) = R_x(\theta_x(t))\,R_y(\tfrac{\pi}{2}), \qquad
+U_{\text{ctrl}}(T, t) = R_x(\pi/2-\theta_x(t))
+$$
+
+代入一阶核公式，得
+
+$$
+k_1(t) = -\tfrac{1}{2}\cos\theta_x(t), \qquad T_{\pi/2} < t < 2T_{\pi/2}
+$$
+
+**方波包络**：$\theta_y(t)=\dfrac{\pi t}{2T_{\pi/2}}$，$\theta_x(t)=\dfrac{\pi(t-T_{\pi/2})}{2T_{\pi/2}}$，核函数化为
+
+$$
+k_1(t+T_{\pi/2}) = \begin{cases}
 \sin\!\bigl[\Omega(\tau_p/2 - |t|)\bigr], & |t| < \tau_p/2 \\[4pt]
 0, & |t| > \tau_p/2
 \end{cases}
@@ -668,31 +766,106 @@ $$
 
 其中 $\tau_p$ 为单个脉冲时长。核函数呈单峰正弦形，FWHM $\approx 0.59\,\tau_p$。
 
-**（b）有限间隙 Ramsey**（两 $\pi/2$ 间插入自由演化 $\tau$）
+**高斯包络**：同理由 $\theta_y(t)=\int_0^t\Omega\,dt'$ 的高斯累积积分（误差函数）代入，得到边沿更光滑的单峰核，无解析闭式，按上式数值积分即可。
 
-核函数由三段组成：正弦上升沿 — 平坦 plateau（高度为 1，宽度 $\approx\tau$） — 正弦下降沿。
+**（c）有限间隙 Ramsey**（两 $\pi/2$ 间插入自由演化 $\tau$）
 
-**（c）一般情况**
+核函数由三段组成：正弦上升沿 — 平坦 plateau（高度为 1，宽度 $\approx\tau$）— 正弦下降沿。$\tau\gg T_{\pi/2}$ 时趋于宽度 $\tau$ 的矩形窗，回到标准 Ramsey（见 §5）。
 
-对于任意脉冲序列（Echo、CPMG 等），核函数可通过上述 $k(t)$ 定义式数值计算，无需解析形式。核函数**由脉冲序列唯一确定**，反卷积框架对 $k(t)$ 的形状无任何假设。
+**（d）一般情况**
 
-#### 5. 核函数的数值计算（$\delta$ 刺激法）
+对于任意脉冲序列（Echo、CPMG 等），核函数可通过 $k_1(t)$ 的定义式数值计算（§3.1），无需解析形式。核函数**由脉冲序列唯一确定**，反卷积框架对 $k_1(t)$ 的形状无任何假设。
+
+### 3. 核函数的计算与定义维度
+
+核函数有三个正交的定义维度：**扰动量**（频率 $\omega$ 还是磁通 $\Phi$）、**提取路径**（理论 sim 还是实验 exp）、**阶数**（$1,\dots,N$）。本节先给出一阶核的数值计算法（§3.1），再说明前两个维度的含义与选择（§3.2、§3.3）；阶数维度留到 §6。
+
+#### 3.1 一阶核的数值计算（$\delta$ 刺激法）
+
+由一阶核满足的关系 $\delta p_e=\int k_1(t')\,\delta\omega(t')\,dt'$，得到核函数的变分定义：
+
+$$
+k_1(t) = \frac{\delta p_e}{\delta\,\delta\omega(t)}\bigg|_{\delta\omega\to 0}
+$$
 
 实际计算中，$\delta$ 函数用窄高斯脉冲近似。对脉冲序列时间轴上的每个采样点 $t_j$ 施加一个窄高斯频率刺激：
 
 $$
-H_{\text{stim}}(t) = \frac{\varepsilon}{2} \exp\!\left[-\frac{(t - t_j)^2}{2\sigma^2}\right] \sigma_z, \quad \sigma \ll \tau_p,\; \varepsilon \ll \Omega
+H_{\text{stim}}(t) = \frac{\varepsilon}{2}\exp\!\left[-\frac{(t-t_j)^2}{2\sigma^2}\right]\sigma_z, \qquad \sigma\ll\tau_p,\;\varepsilon\ll\Omega
 $$
 
-分别施加 $+\varepsilon$ 和 $-\varepsilon$，计算差分响应：
+则 $\delta p_e\approx k_1(t_j)\cdot\varepsilon\cdot\sqrt{2\pi}\,\sigma$。分别施加 $+\varepsilon$ 与 $-\varepsilon$ 取差分，消去偶次项：
 
 $$
-k(t_j) = \frac{P_e|_{+\varepsilon} - P_e|_{-\varepsilon}}{2\varepsilon\cdot\sqrt{2\pi}\sigma}
+k_1(t_j) = \frac{P_e|_{+\varepsilon} - P_e|_{-\varepsilon}}{2\varepsilon\cdot\sqrt{2\pi}\,\sigma}
 $$
 
-扫描 $t_j$ 覆盖整个脉冲序列，即得完整核函数。这是在 `sqc/control/sequence.py` 中 `get_kernel()` 的实现原理。
+扫描 $t_j$ 覆盖整个脉冲序列即得完整核函数。这是 `sqc/control/sequence.py` 中 `get_kernel()` 的实现原理（二阶推广见 §6.6）。
 
-#### 6. 从核函数到信号重建：Wiener 反卷积
+#### 3.2 扰动量维度：$\omega$ 核 vs flux 核
+
+上面推导用的扰动量是**频率失谐** $\delta\omega(t)$，得到的核 $k^{(\omega)}$ 满足
+
+$$
+\Delta p_e(t_d) = \int k^{(\omega)}(t-t_d)\,\delta\omega(t)\,dt, \qquad [k^{(\omega)}]=\text{rad}^{-1}\cdot\text{ns}^{-1}
+$$
+
+但实验 / 工程中真正可控的物理量往往是**磁通** $\delta\Phi(t)$（DC bias、Z 线脉冲），频率失谐通过色散关系产生：
+
+$$
+\delta\omega(t)=\kappa\,\delta\Phi(t)+\tfrac12\kappa'\,\delta\Phi(t)^2+\cdots,
+\qquad \kappa=\left.\tfrac{d\omega}{d\Phi}\right|_{\Phi_w}
+$$
+
+因此也可以直接定义 **flux 核函数** $k^{(\Phi)}$，其满足相同的卷积关系但作用在 $\delta\Phi$ 上，单位为 $\Phi_0^{-1}\cdot\text{ns}^{-1}$。**一阶**两套核通过 $\kappa$ 简单联系：
+
+$$
+\boxed{\,k_1^{(\Phi)}(t)=\kappa\,k_1^{(\omega)}(t)\,}
+$$
+
+（线性色散下高阶亦成立 $k_n^{(\Phi)}=\kappa^n k_n^{(\omega)}$；非线性色散下的完整换算关系见 §6.7。）
+
+**两种单位的物理含义**：$k^{(\omega)}$ **物理意义最干净**——只反映脉冲序列本身的动力学；$k^{(\Phi)}$ 是**工程方便量**——把 dispersion 与 qubit 动力学打包进同一个核。
+
+#### 3.3 提取路径维度：sim 法 vs exp 法
+
+数值上提取核函数有两条路径：
+
+**sim 法**（"理论"路径）：直接把 $\sigma_z$ 频率刺激加进 Hamiltonian，绕开 $\omega(\Phi)$ 色散：
+
+$$
+H_{\text{stim}}^{\text{sim}}=\hbar\,\delta\omega(t-t_j)\,a^\dagger a
+$$
+
+$\delta\omega$ 取窄高斯。$a^\dagger a$ 在 2 能级时与 $-\sigma_z/2$ 差一个常数项（对差分无影响），但写成 $a^\dagger a$ 可无缝推广到含 leakage 的多能级 transmon。
+
+**exp 法**（"实验"路径）：对应硬件可实现的两种刺激方式之一：
+
+1. **Virtual Z**：在 $t_j$ 后所有子脉冲相位整体平移 $\pm\phi_z$，等价于在 $t_j$ 处插入瞬时 $\sigma_z\phi_z/2$ 旋转，即 $\delta\omega(t)=\phi_z\,\delta(t-t_j)$。代入卷积式立得 $\Delta p_e(t_j)=\phi_z\,k_1^{(\omega)}(t_j)+O(\phi_z^2)$。
+2. **磁通刺激**：施加窄磁通脉冲 $\delta\Phi(t-t_j)$，通过 $\omega(\Phi)$ 全过程演化。这是当前 `KernelEstimator` 的默认实现。
+
+**等价性**（小信号区、2 能级、线性色散）：
+
+| 方法 | 给出的核 | 与 sim($\omega$) 的关系 |
+|---|---|---|
+| sim（$\sigma_z$ 频率刺激） | $k_1^{(\omega)}$ | 参考基准 |
+| exp Virtual Z | $k_1^{(\omega)}$ | 相同（自动含 leakage） |
+| exp 磁通刺激 | $k_1^{(\Phi)}$ | $k_1^{(\Phi)}=\kappa\,k_1^{(\omega)}$ |
+
+非法组合 **(flux, sim)**：磁通刺激必须经过 $\omega(\Phi)$ 色散才能进入 qubit，没有 qubit 时"flux 单位 + 不算 dispersion"没有物理意义。若想要纯理论 flux 核，等价于把 omega+sim 的结果手乘 $\kappa$，没必要在 API 里再造一个伪组合。
+
+#### 3.4 三维度的选择指南
+
+| 任务 | mode | method | 理由 |
+|---|---|---|---|
+| 验证脉冲序列核函数公式（对照 §2 闭式解） | omega | sim | 物理最干净，直接与 $-\tfrac12\sin\theta$ 等解析式对照 |
+| 频率标定（要的是 $\delta\omega$ 不是 $\delta\Phi$） | omega | exp | Virtual Z，含 qubit leakage 修正，最贴近实验 |
+| 磁通波形反演（cryoscope、阶跃响应、串扰矩阵） | flux | exp | 一步到位，工程友好 |
+| 大信号、强非线性 | 任意 | 任意 | 配合高阶 Volterra（§6） |
+
+当前 `sqc/reconstruction/kernel.py` 默认输出 $k^{(\Phi)}$（`mode='flux'`）；频率标定路径 [sqc/calibration/frequency.py:294-302](../sqc/calibration/frequency.py#L294) 通过乘 $1/\kappa$ 反推 $\delta\omega$，但这只在线性色散下严格成立。三个维度（mode、method、order）正交，详细 API 设计见 [`idea/refactor/phase_10_kernel_extension_handbook.md`](refactor/phase_10_kernel_extension_handbook.md)。
+
+### 4. 从核函数到信号重建：Wiener 反卷积
 
 测得 $\Delta P_e(t_d)$ 后，通过 Wiener 反卷积还原 $\Phi(t)$：
 
@@ -700,21 +873,212 @@ $$
 \Phi = \frac{1}{\kappa}\,\mathcal{F}^{-1}\!\left[\frac{\hat{K}^*(\omega)}{|\hat{K}(\omega)|^2 + \lambda^2}\,\Delta\hat{P}_e(\omega)\right]
 $$
 
-其中 $\hat{K}(\omega) = \mathcal{F}[k](\omega)$，$\lambda$ 为正则化参数。此即 `sqc/reconstruction/wiener.py` 的数学基础。
+其中 $\hat{K}(\omega)=\mathcal{F}[k_1](\omega)$，$\lambda$ 为正则化参数。此即 `sqc/reconstruction/wiener.py` 的数学基础。
 
-若色散非线性不可忽略（大信号），则需使用 Hammerstein-Wiener 模型或 LM 数值反演（`sqc/reconstruction/hammerstein.py` / `numerical_inverse.py`）。
+若色散非线性不可忽略（大信号），则需使用 Hammerstein-Wiener 模型或 LM 数值反演（`sqc/reconstruction/hammerstein.py` / `numerical_inverse.py`）；其理论依据是 §6 的高阶 Volterra 核。
 
-#### 7. 与标准 Ramsey 框架的统一
+### 5. 与标准 Ramsey 框架的统一
 
 | | 标准 Ramsey | 瞬态磁场协议 |
 |---|---|---|
-| 测的是什么 | $\int \delta\omega\,dt$（积分） | $(k*\delta\omega)(t_d)$（卷积） |
+| 测的是什么 | $\int\delta\omega\,dt$（积分） | $(k_1*\delta\omega)(t_d)$（卷积） |
 | 核函数形状 | rect（矩形窗，宽度 $\tau_R$） | 由脉冲序列决定 |
 | 时间分辨率 | $\tau_R$（窗口宽度） | 反卷积恢复，可达采样间隔 |
-| 灵敏度 | $\propto \tau_R$（可任意延长） | $\propto \int k\,dt \approx \tau_p$（有限） |
-| 适用场景 | 静态/慢变频率标定 | 快速瞬态波形测量 |
+| 灵敏度 | $\propto\tau_R$（可任意延长） | $\propto\int k_1\,dt\approx\tau_p$（有限） |
+| 适用场景 | 静态 / 慢变频率标定 | 快速瞬态波形测量 |
 
-两者的数学关系：标准 Ramsey 是瞬态磁场协议在 $k(t) = \text{rect}(t/\tau_R)$ 时的特例。瞬态协议通过缩短脉冲获得高时间分辨率（代价是灵敏度降低），标准 Ramsey 通过延长 $\tau_R$ 获得高灵敏度（代价是分辨率降低）。反卷积可以部分恢复被宽核函数模糊的分辨率，但会放大高频噪声。
+两者的数学关系：标准 Ramsey 是瞬态磁场协议在 $k_1(t)=\text{rect}(t/\tau_R)$ 时的特例（即 §2(c) 的 plateau 极限）。瞬态协议通过缩短脉冲获得高时间分辨率（代价是灵敏度降低），标准 Ramsey 通过延长 $\tau_R$ 获得高灵敏度（代价是分辨率降低）。反卷积可以部分恢复被宽核函数模糊的分辨率，但会放大高频噪声。
+
+### 6. 高阶核函数与非线性响应
+
+§1–§5 建立在一阶（线性响应）近似上。本节系统处理它失效时的非线性修正：把 $\langle M\rangle$ 看成 $\delta\omega(\cdot)$ 的泛函作 Volterra 展开，逐阶给出核函数的算符表达、数值提取法、与 $\Phi$ 核的换算，以及适用边界。
+
+#### 6.1 一阶近似的失效判据
+
+一阶核 $k_1(t)=\delta\langle M\rangle/\delta\,\delta\omega(t)|_{\delta\omega=0}$ 是测量结果对瞬时频率扰动的一阶泛函导数。只要积累相位
+
+$$
+\phi_{\rm acc}\;\sim\;\int|k_1(t)\,\delta\omega(t)|\,dt\;\lesssim\;|\delta\omega|_{\max}\cdot T_{\rm eff},
+\qquad T_{\rm eff}\equiv\int|k_1(t)|\,dt
+$$
+
+充分小（$\phi_{\rm acc}\ll 1$），则一阶近似 $\Delta\langle M\rangle\approx\int k_1\,\delta\omega\,dt$ 足以涵盖全部信号-探针响应。下列三种情形会破坏这一近似：
+
+1. **大信号**：$|\delta\omega|_{\max}\cdot T_{\rm eff}\gtrsim 1$ 时，Bloch 矢量转过的角度不再小，$\sin\phi$ 的非线性必须保留；
+2. **频率-磁通映射的二阶以上项不可忽略**：$\delta\omega=\kappa\Phi+\tfrac12\kappa'\Phi^2+\cdots$，例如工作点偏离最优灵敏度点、或信号幅度较大；
+3. **多频混频**：信号含 $\omega_a,\omega_b$ 两分量时，二阶响应在 $\omega_a\pm\omega_b$ 处产生新频率成分。
+
+注意 (1) 是**脉冲动力学**的非线性（即便 $\delta\omega$ 严格线性于 $\Phi$ 也存在），(2) 是**色散关系**的非线性。两者来源不同，在 §6.7 中会分别体现为 $k_n^{(\omega)}$ 与 $\kappa',\kappa''$。
+
+#### 6.2 Volterra 展开
+
+把 $\langle M\rangle$ 视为 $\delta\omega(\cdot)$ 的泛函，作 **Volterra 展开**：
+
+$$
+\Delta\langle M\rangle = \sum_{n=1}^{\infty}\frac{1}{n!}\int\!\cdots\!\int k_n(t_1,\ldots,t_n)\prod_{j=1}^n\delta\omega(t_j)\,dt_j
+$$
+
+$$
+k_n(t_1,\ldots,t_n)= \left.\frac{\delta^n\langle M\rangle}{\delta\,\delta\omega(t_1)\cdots\delta\,\delta\omega(t_n)}\right|_{\delta\omega=0}
+$$
+
+按定义 $k_n$ 关于其参数**完全对称**：$k_n(t_1,\ldots,t_n)=k_n(t_{\sigma(1)},\ldots,t_{\sigma(n)})$ 对任意置换 $\sigma$ 成立——这是 Volterra 展开的对称化约定。$n=1$ 即 §1.2 的一阶核 $k_1=i\langle 0|[W,Q]|0\rangle$；$n=2$ 给出第一项非线性修正。沿用 §1.1 的交互系记号 $W(t)=\tfrac12 Z_c(t)$、$Q=U_{\rm ctrl}^\dagger(T,0)M\,U_{\rm ctrl}(T,0)$ 与 Dyson 级数即可逐阶展开。
+
+#### 6.3 二阶核：Dyson 推导
+
+二阶项有三个来源：
+
+$$
+\Delta^{(2)}\langle M\rangle = \langle 0|\underbrace{U_I^{(2)\dagger}Q}_{\text{(a)}}+\underbrace{Q\,U_I^{(2)}}_{\text{(b)}}+\underbrace{U_I^{(1)\dagger}Q\,U_I^{(1)}}_{\text{(c)}}|0\rangle
+$$
+
+(a)、(b) 已自然带时序约束 $t_1>t_2$。对 (c)，把 $\delta\omega(t_1)\delta\omega(t_2)$ 的双重积分按 $t_1>t_2$ 与 $t_1<t_2$ 拆开，对后者交换积分变量，使三项在同一区域 $t_1>t_2$ 内汇合。算符部分整理：
+
+$$
+-W(t_2)W(t_1)Q-Q\,W(t_1)W(t_2)+W(t_1)Q\,W(t_2)+W(t_2)Q\,W(t_1) = -[W(t_2),[W(t_1),Q]]
+$$
+
+故
+
+$$
+\Delta^{(2)}\langle M\rangle = -\int_{t_1>t_2}\!\!dt_1\,dt_2\,\delta\omega(t_1)\delta\omega(t_2)\,\langle 0|[W(t_2),[W(t_1),Q]]|0\rangle
+$$
+
+要把它化成对称 Volterra 形式 $\Delta^{(2)}\langle M\rangle=\tfrac12\int_0^T\!\int_0^T k_2(t_1,t_2)\delta\omega(t_1)\delta\omega(t_2)\,dt_1dt_2$。由对称性 $k_2(t_1,t_2)=k_2(t_2,t_1)$，对称化积分恰好两倍于时序楔形区域，因此
+
+$$
+\boxed{\,k_2(t_>,t_<)=-\,\langle 0|[W(t_<),[W(t_>),Q]]|0\rangle\,}
+$$
+
+其中 $t_>=\max(t_1,t_2)$，$t_<=\min(t_1,t_2)$。写回 $Z_c$：
+
+$$
+k_2(t_>,t_<)=-\tfrac{1}{4}\langle 0|[Z_c(t_<),[Z_c(t_>),Q]]|0\rangle
+$$
+
+**实数性与对称性**：$k_2\in\mathbb{R}$ 由 $\langle M\rangle\in\mathbb{R}$ 与 Volterra 实信号假设直接保证；$k_2(t_1,t_2)=k_2(t_2,t_1)$ 由对称化约定本身保证（时序楔形区域写法只是求值的便捷形式）。
+
+**对角线 $t_1=t_2$**：时序约束退化为对易子结构 $-\langle 0|[W(t),[W(t),Q]]|0\rangle$，可作 $t_>\to t_<$ 的连续延拓使用。
+
+#### 6.4 任意阶：时序楔形区域的统一表达
+
+对一般 $n$ 阶项，类似的 Dyson 推导给出**时序楔形区域**（$t_{(1)}>t_{(2)}>\cdots>t_{(n)}$）内的核函数
+
+$$
+k_n^{\rm ord}(t_{(1)},\ldots,t_{(n)}) = i^n\,\bigl\langle 0\bigl|\bigl[W(t_{(n)}),\bigl[\cdots,[W(t_{(1)}),Q]\cdots\bigr]\bigr]\bigr|0\bigr\rangle
+$$
+
+（$n=1$：$k_1=i\langle 0|[W,Q]|0\rangle$，与 §1.2 一致；$n=2$：$k_2^{\rm ord}=i^2\langle 0|[W(t_{(2)}),[W(t_{(1)}),Q]]|0\rangle=-\langle 0|[W(t_<),[W(t_>),Q]]|0\rangle$，与 §6.3 一致。）
+
+完全对称化的 Volterra 核为
+
+$$
+k_n(t_1,\ldots,t_n)=k_n^{\rm ord}\bigl(t_{\pi(1)},\ldots,t_{\pi(n)}\bigr)
+$$
+
+其中 $\pi$ 是把 $(t_1,\ldots,t_n)$ 排成降序的置换。该写法在每个时序楔形区域内显式给出对易子表达，对称性自动由置换实现。
+
+激发态概率测量取 $M=P_e=|1\rangle\langle 1|$ 即得 $p_e$ 的高阶核：
+
+$$
+\Delta p_e = \int k_1(t)\delta\omega(t)\,dt + \frac{1}{2}\!\int\!\!\int\! k_2(t_1,t_2)\delta\omega(t_1)\delta\omega(t_2)\,dt_1dt_2 + \cdots
+$$
+
+#### 6.5 数值 $\delta$ 刺激法的二阶推广
+
+对两个采样点 $t_i,t_j$ 同时施加窄高斯频率刺激：
+
+$$
+\delta\omega(t)=\varepsilon_i\,g_i(t-t_i)+\varepsilon_j\,g_j(t-t_j),\qquad A_i=\!\int\!g_i(t)\,dt
+$$
+
+在窄脉冲极限 $g\to A\,\delta(\cdot)$ 下代入 Volterra 展开：
+
+$$
+\Delta\langle M\rangle \approx \sum_{\alpha\in\{i,j\}}\!\varepsilon_\alpha A_\alpha\,k_1(t_\alpha) +\!\!\sum_{\alpha,\beta\in\{i,j\}}\!\!\tfrac{1}{2}\varepsilon_\alpha\varepsilon_\beta A_\alpha A_\beta\,k_2(t_\alpha,t_\beta)+\cdots
+$$
+
+记 $P_{s_is_j}\equiv\langle M\rangle$，其中分别施加幅度 $s_i\varepsilon_i,\,s_j\varepsilon_j$（$s_{i,j}\in\{+,-\}$）。
+
+**异点 $i\neq j$**——四点中心差分：一阶项（$\propto s_\alpha$）与对角二阶项（$\propto s_\alpha^2=1$，与符号无关的常数）正负相消，仅交叉项 $s_is_j$ 保留：
+
+$$
+\boxed{\,k_2(t_i,t_j)\approx\frac{P_{++}-P_{+-}-P_{-+}+P_{--}}{4\,\varepsilon_i\varepsilon_j A_iA_j}\,}
+$$
+
+**对角点 $i=j$**——单点二阶中心差分：
+
+$$
+\boxed{\,k_2(t_i,t_i)\approx\frac{P_{+\varepsilon}-2P_0+P_{-\varepsilon}}{\varepsilon^2 A_i^2}\,}
+$$
+
+**误差控制**：$\varepsilon$ 的选取要同时压低 $O(\varepsilon^4)$ 截断差分误差与放大读出噪声方差。可扫描多个 $\varepsilon$ 做 Richardson 外推或线性回归提高鲁棒性。$N$ 个采样点需 $O(N^2)$ 次四点差分，每点 4 次演化，故二阶核的数值成本约为一阶的 $O(N)$ 倍。
+
+#### 6.6 $\omega$ 核与 flux 核的高阶换算
+
+§3.2 给出一阶换算 $k_1^{(\Phi)}=\kappa k_1^{(\omega)}$。高阶时，把非线性色散
+
+$$
+\delta\omega(t)=\kappa\,\delta\Phi(t)+\tfrac12\kappa'\,\delta\Phi(t)^2+\tfrac16\kappa''\,\delta\Phi(t)^3+\cdots
+$$
+
+代入 $\omega$ 核的 Volterra 展开，再按 $\delta\Phi$ 的幂次重新收集，即得 flux 核。**线性色散**（$\kappa'=0$）下逐阶简单缩放：
+
+$$
+k_n^{(\Phi)}(t)=\kappa^n\,k_n^{(\omega)}(t)
+$$
+
+**非线性色散**（$\kappa'\neq 0$）下，一个 $\delta\Phi$ 的高次项会向更高阶核"注入"低阶 $\omega$ 核，产生 $\delta$ 函数收缩项。逐阶展开并对称化后（其中 $\circ\,\delta$ 表示对应时间变量收缩为同一点）：
+
+$$
+k_1^{(\Phi)}(t)=\kappa\,k_1^{(\omega)}(t)
+$$
+
+$$
+k_2^{(\Phi)}(t_1,t_2)=\kappa^2\,k_2^{(\omega)}(t_1,t_2)+\kappa'\,k_1^{(\omega)}(t_1)\,\delta(t_1-t_2)
+$$
+
+$$
+k_3^{(\Phi)}(t_1,t_2,t_3)=\kappa^3\,k_3^{(\omega)}+\kappa\kappa'\!\!\sum_{\text{3 对称项}}\!\! k_2^{(\omega)}\!\circ\!\delta+\kappa''\,k_1^{(\omega)}\!\circ\!\delta\!\circ\!\delta
+$$
+
+其中 $k_3^{(\Phi)}$ 的二项展开式为 $\kappa\kappa'\bigl[k_2^{(\omega)}(t_1,t_2)\delta(t_2-t_3)+k_2^{(\omega)}(t_2,t_3)\delta(t_1-t_3)+k_2^{(\omega)}(t_1,t_3)\delta(t_1-t_2)\bigr]+\kappa''k_1^{(\omega)}(t_1)\delta(t_1-t_2)\delta(t_1-t_3)$。
+
+> **修正说明**：本文早期版本把 $k_2^{(\Phi)}$ 的色散贡献写作 $\tfrac12\kappa'k_1^{(\omega)}\delta$、$k_3^{(\Phi)}$ 写作 $\tfrac32\kappa\kappa'(\cdots)+\tfrac16\kappa''(\cdots)$。这些系数有误。正确系数（$\kappa'$、$\kappa\kappa'\times 3$ 对称项、$\kappa''$）由对 $\Delta\langle M\rangle$ 关于 $\delta\Phi$ 作对称泛函求导得到，已用符号微分逐项验证，且 $k_2^{(\Phi)}$ 的 $\kappa'$ 系数与 §6.8 的 Hammerstein-Wiener 退化极限 $k_2^{\rm HW}=\kappa'k_1\delta$ 自洽。
+
+**各阶物理含义**：
+
+| 阶 | $k_n^{(\omega)}$ 含义 | $k_n^{(\Phi)}$ 含义 |
+|---|---|---|
+| $n=1$ | qubit 对频率扰动的线性响应（**纯脉冲动力学**） | dispersion × 脉冲动力学 |
+| $n=2$ | 脉冲动力学的纯二阶非线性 | dispersion 二阶（$\kappa'$）+ 脉冲动力学交叉项 |
+| $n=3$ | 脉冲动力学的纯三阶非线性 | dispersion 三阶（$\kappa''$）+ 多重交叉项 |
+
+**怎么选**：$k^{(\omega)}$ 物理意义最干净——验证理论公式、跨 qubit 比较脉冲质量、做频率标定用它；$k^{(\Phi)}$ 把 dispersion 与 qubit 动力学的非线性都打包进同一个核，做磁通波形反演时一步到位。
+
+#### 6.7 与 Hammerstein-Wiener 模型的对应
+
+当非线性主要来自频率-磁通映射的**静态非线性** $g(\Phi)=\kappa\Phi+\tfrac12\kappa'\Phi^2+\cdots$、而脉冲序列保持线性的 $k_1$ 响应时，二阶 Volterra 核退化为对角形式
+
+$$
+k_2^{\rm HW}(t_1,t_2)=\kappa'\,k_1^{(\omega)}(t_1)\,\delta(t_1-t_2)
+$$
+
+即"$\Phi^2$ 项 $\to$ 一阶核做积分"。这正是 §6.6 中 $k_2^{(\Phi)}$ 在 $k_2^{(\omega)}=0$（脉冲动力学无二阶非线性）时的剩余项，两处自洽。**检查测得的 $k_2$ 是否近似对角，是判断 Hammerstein-Wiener 假设是否成立的有效手段**：
+
+- $k_2$ 近似对角 $\Rightarrow$ 非线性可归于静态色散，可用 `sqc/reconstruction/hammerstein.py` 的 HW 模型或 LM 多项式参数化高效反演；
+- $k_2$ 有显著非对角结构 $\Rightarrow$ 存在脉冲动力学的非局域非线性，静态模型无法捕捉，必须回到完整 Volterra 或 time-dependent Hamiltonian 演化。
+
+#### 6.8 适用边界与实用建议
+
+- **维度灾难**：一阶核是一维函数（$N$ 个采样点），二阶核是二维矩阵（$N^2$）；$N\sim 10^2$ 时 $k_2$ 已到 $10^4$ 量级，三阶则到 $10^6$。**实际中很少把 $k_2$ 直接用作反卷积矩阵**——更多用于估计与校核。
+- **非 HW 的纯量子贡献**：$k_2$ 的非对角部分反映脉冲动力学中两个不同时刻 $\delta\omega$ 的非局域耦合——纯静态非线性模型（HW、LM 多项式参数化）无法捕捉这部分，必须回到完整 Volterra 或 time-dependent Hamiltonian 演化。
+- **典型用法**：
+  - 估计**线性反卷积的残差量级**：把已知小信号 $\delta\omega$ 代入 Volterra 二阶项，预测一阶反卷积的系统偏差；
+  - 验证 **Hammerstein-Wiener 模型**有效性：测得 $k_2$ 是否近似对角（§6.7）；
+  - 提供**校核基准**：以静态信号或单频正弦代入 Volterra 展开，与 `mesolve()` 直接演化的结果对比，检验数值实现。
+- **多频混频的诊断**：对双频输入 $\delta\omega=A\cos\omega_a t+B\cos\omega_b t$，二阶核在频域 $\hat k_2(\omega_a,\omega_b)$ 处的非零值直接给出 $\omega_a\pm\omega_b$ 和频 / 差频成分的幅度，可与频谱测量对照。
+- **何时切换到完整数值演化**：若 $|\delta\omega|_{\max}\cdot T_{\rm eff}\gtrsim 0.3$（即 $\phi_{\rm acc}$ 已不在小角度区域），任何阶截断的 Volterra 展开都会逐渐失准。此时直接调用 `sqc/reconstruction/numerical_inverse.py` 中的 LM 反演（基于完整 time-dependent Hamiltonian）通常比尝试三阶以上 Volterra 更稳健。
 
 ## cryoscope协议
 cryoscope将qubit作为片上示波器，可以达到脉冲宽度的分辨率。
@@ -758,7 +1122,7 @@ $$
 
 
 以下两种方法主要用于测量方波脉冲的拖尾，用于波形的预失真。
-## $\pi$脉冲补偿法
+## $\pi$脉冲补偿法（类似光谱学方法）
 ![alt text](image-12.png)
 上图是$\pi$脉冲补偿法的示意图。
 
@@ -980,12 +1344,15 @@ $$
 
 ##### 频率测量(`measure_frequency`)
 频率测量部分会在后续介绍
+
+下面对比不同策略下的时间开销，主要区分在于频率测量的策略：
 #### 时间开销
 相比于粗扫，闭环反馈控制的时间开销较小。
 
 粗扫对于每个电压点都要做一次spectroscopy，施加可能以min记。闭环控制只需在每次迭代中施加一个Ramsey测量，且迭代次数通常较少（如5-10次），因此总的时间开销较小。
 
-具体的，每次迭代的ramsey测量的时间开销为
+##### 有初始化的Ramsey测量
+对于有初始化的Ramsey测量策略，每次迭代的ramsey测量的时间开销为
 $$
 T_{ramsey} \approx N_{\tau}N_{shot}(T_{reset} + \tau + T_{readout})
 $$
@@ -997,6 +1364,63 @@ $$
 - $T_{readout}$为qubit的读出时间，通常为1-10$\mu$s
 
 
+##### 无初始化的Ramsey测量
+根据[进行restless实验的条件](#进行restless实验的条件)，Ramsey测频实验可以在无初始化的条件进行。
+
+计算翻转率为
+$$
+F(\tau) = \frac{1}{N - 1}\sum_{i=1}^{N-1} q_i \oplus q_{i-1}
+$$
+则$F(\tau)$满足
+$$
+F(\tau) = \frac{1}{2} \left(1 - \cos(2\pi \Delta f \cdot \tau + \phi_0)\right)
+$$
+因此可以通过扫描$\tau$，拟合$F(\tau)$，得到$\Delta f$，从而得到频率。
+
+时间开销为
+$$
+T_{restless} \approx N_{\tau}N_{shot}(\tau + T_{readout})
+$$
+
+当然，工程中还需考虑退相干，能量弛豫等问题，例如读出为1时，还需考虑$T_1$的影响。
+
+##### QSL
+当采用瞬态磁场测量方法时，时间开销为
+$$
+T_{transient} \approx N_{axis}N_{shot}'((T_reset) + \tau_R + T_{readout}) + T_{kernel}
+$$
+其中$N_{axis}$为测量的轴数，通常为2（+X和-X），$N_{shot}'$为每个轴的重复测量次数，其通常较Ramsey要多，因为瞬态方法的信号较弱，$\tau_R$为演化时间，与脉冲重合，$T_{kernel}$为核函数实验测定的时间，可以独立。
+
+- $N_{shot}'$和$N_{shot}$的对比
+$p_e(\delta \omega)$测量精度取决于两个因素：
+    - 灵敏度：$g = \frac{\partial p_e}{\partial (\delta \omega)}$
+    - 测量噪声：由于$p_e$为二项分布，测量噪声为$\sigma_{p_e} = \sqrt{\frac{p_e(1-p_e)}{N_{shot}}}\leq \frac{1}{2\sqrt{N_{shot}}}$
+误差传播为
+$$
+\sigma_{\delta \omega} = \frac{\sigma_{p_e}}{g} \approx \frac{1}{2g\sqrt{N_{shot}}}
+$$
+因此，精度只取决于灵敏度和shot数。
+
+对于Ramsey，灵敏度为
+$$
+g_{Ramsey} = \frac{\partial p_e}{\partial (\delta \omega)} = \frac{\tau}{2}\sin(\delta \omega \tau) ~ \frac{\tau}{2}
+$$
+对于瞬态方法，灵敏度为
+$$
+g_{transient} = \frac{\partial p_e}{\partial (\delta \omega)} = \int_0^{\tau_R} k(t) dt \approx \tau_R
+$$
+因此瞬态方法的灵敏度取决于脉冲时长，而其通常较Ramsey的演化时间要短，因此灵敏度较低，需要更多的shot数来达到同样的精度。
+
+具体的，两者满足关系
+$$
+g_{transient} \approx \frac{2\tau_R}{\tau} g_{Ramsey}
+$$
+则
+$$
+N_{shot}' \approx \left(\frac{\tau}{2\tau_R}\right)^2 N_{shot}
+$$
+
+因此，在相同信噪比下，瞬态方法的shot数要比Ramsey多几个数量级，如果要体现瞬态方法的时间优势，则需要牺牲$p_e$的精度，因此实际使用中，最好采取混合策略，即在闭环控制的初始阶段，采用瞬态方法快速测量频率，快速收敛到目标频率附近；在后续阶段，采用Ramsey方法进行精细测量和调整，以达到更高的标定精度。
 <!--
 分为工作点频率标定和磁通响应频率标定两类。前者适用于所有qubit，后者通常用于可调频qubit。
 
@@ -1422,6 +1846,8 @@ $R_n(t_d)$ 可预计算，$\{c_n\}$ 通过正则化最小二乘一步求解。�
 ### 混合框架
 考虑到Ramsey框架的时间开销以及QSL框架的精度不足，可以考虑一个混合框架，先使用spectroscopy和Ramsey协议进行粗标定，得到一个初始的频率估计值；随后使用QSL框架快速接近目标频率，最后使用长Ramsey进行精确验证和微调。
 
+#### 具体示意图（包括脉冲波形，流程等）
+
 失真可以分为LP和HP失真，LP失真会阻碍高频信号，导致系统响应变慢；HP失真会阻碍低频信号，导致系统在长时间尺度下会逐渐衰减
 ## 预失真
 超导量子处理器中，通过flux-z线施加磁通信号控制qubit频率。但是，磁通信号在室温AWG产生，到传入低温SQUID环的路径中，会产生失真，从而影响门操作。因此，需要对输入的磁通信号进行预失真处理，以补偿失真。
@@ -1474,7 +1900,7 @@ Chevron实验本质上是将两个能级调到近共振，然后看激发数是�
 $$
 p_e(t) = \frac{\Omega^2}{\Omega^2 + \Delta^2} \sin^2\left(\frac{\sqrt{\Omega^2 + \Delta^2}}{2} t\right)
 $$
-扫描脉冲频率$\omega_d$和脉冲持续时间，得到二维图像$p_e(\Delta, t)$，可以得到一个Chevron图像。
+扫描脉冲频率$\omega_d$和脉冲持续时间，得到二维图像$p_e(\Delta, t)$，可以得到一个Chevron图像（即二维光谱图）。若只扫频率，得到$p_e(\Delta)$，也可得到一维光谱图，但是其蕴含的信息没有二维图像丰富，无法直接得到$\pi$脉冲时间等信息。
 ![alt text](image-9.png)
 ![alt text](image-10.png)
 上图为一个理想Chevron图像以及一个波形失真的图像，从图中可以得到以下信息：
@@ -1594,7 +2020,7 @@ $$
 
 由于FIR的非线性不强，且loss函数有多个极小，因此采用CMA-ES进化算法进行优化，找到最优的FIR滤波器系数。
 
-## 瞬态磁场协议
+#### 瞬态磁场协议
 瞬态磁场协议具有更高的时间分辨率，可以测量实际阶跃响应的细节，从而更准确地设计预失真滤波器。
 
 例如，由于cryoscope协议的分辨率受到脉冲宽度的影响，因此无法捕捉到系统在10 ns内的快速响应细节。因此对于CZ门涉及的10ns以下的失真，cryoscope协议可能无法提供足够的信息来设计有效的预失真滤波器。而瞬态磁场协议可以通过选择$\tau = 0$的Ramsey脉冲，获得10 ns以下的时间分辨率，从而捕捉到这些快速失真的细节。
@@ -1608,6 +2034,8 @@ $$
 随后AWG输出两次补偿后的阶跃信号，利用瞬态磁场协议测量SQUID的阶跃响应（关于脉冲具体参数需要根据实际情况调整）。
 
 随后构造FIR滤波器，利用CMA-ES算法优化滤波器系数，使得滤波器的阶跃响应尽可能接近理想阶跃响应。补偿10ns以下的失真。
+
+### 具体示意图（包括流程，滤波器设计等）
 
 ### 多 qubit 推广：从预失真到串扰补偿
 
@@ -1723,3 +2151,21 @@ $$
 
 # 附
 ## 准静态近似的有效范围
+
+
+## 进行restless实验的条件
+假设实验的目的是测量qubit在给定态下经过某个序列后的$p_e$。
+
+则常规实验的记录结果为$\{n_1, n_2, \ldots, n_N\}$，因此得到的$p_e$为
+$$
+p_e = P(1|0) = \frac{1}{N} 1[n_i = 1]
+$$
+初态永远是0，$n_i$满足固定的概率分布。
+
+而对于restless实验，初态是上一次的读出结果$m_i$，因此实验结果为$\{m_1, m_2, \ldots, m_N\}$。由于不同的$m_i$可能对应不同的初态，从而满足不同的概率分布，因此只能计算得到相邻翻转率
+$$
+\epsilon_R = \frac{1}{N - 1}\sum_n 1[m_n \neq m_{n - 1}]
+$$
+相邻翻转率不一定等于$p_e$，因此restless实验不一定可行，需要满足以下几个条件：
+- 1.QND读出：restless的基本逻辑是从上一次读出后的态作为下一次的初态，这要求读出是非破坏的。色散读出通常满足这个条件，因为它通过测量谐振腔的频率偏移来推断qubit态，而不直接激发qubit。
+- 2.双态stay/flip概率对称：即要求$P(stay|0) = P(stay|1)$，或者等价地$P(flip|0) = P(flip|1)$。如果这个条件不满足，则相邻翻转率$\epsilon_R$将受到初态分布的影响，无法直接反映qubit的错误率。

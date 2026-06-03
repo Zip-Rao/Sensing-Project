@@ -26,3 +26,14 @@ class Experiment(ABC):
     def run(self, *args, **kwargs):
         """Execute the experiment and return results."""
         raise NotImplementedError("implemented in Phase 2")
+    def _route_flux(self, signal):
+        """Pass flux signal through optional control_line distortion.
+
+        Subclasses should declare ``control_line: object | None = None``
+        as a dataclass field.  ``None`` (default) => passthrough.
+        """
+        cl = getattr(self, "control_line", None)
+        if cl is None or getattr(cl, "transfer_function", None) is None:
+            return signal.copy()
+        return cl.transfer_function.apply_to_signal(signal)
+

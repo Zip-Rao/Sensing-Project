@@ -50,7 +50,7 @@ class TestPredistortionDesigner:
         assert isinstance(inverse, IIRDistortion)
 
     def test_auto_method_multi_exp(self):
-        """auto should detect MultiExponential and use freq inverse."""
+        """auto should detect MultiExponential.design_inverse -> CascadeDistortion."""
         mdist = MultiExponentialDistortion(
             amplitudes=np.array([0.03, 0.02]),
             taus=np.array([10.0, 50.0]),
@@ -58,9 +58,9 @@ class TestPredistortionDesigner:
         designer = PredistortionDesigner(method="auto")
         dt = 0.1
         inverse = designer.design(mdist, dt=dt)
-        # MultiExp uses CustomTransferDistortion (frequency inverse)
+        # MultiExp now uses model.design_inverse() -> CascadeDistortion (P9.A)
         cls_name = type(inverse).__name__
-        assert "CustomTransfer" in cls_name or "IIR" in cls_name
+        assert cls_name in ("CustomTransferDistortion", "IIRDistortion", "CascadeDistortion")
 
     # ---- IIR inverse (analytical) ----
 

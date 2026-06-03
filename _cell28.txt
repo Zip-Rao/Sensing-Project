@@ -1,0 +1,16 @@
+=== Cell [28] ===
+# === 10.1bis Flux Chevron: 理想 vs 失真（共振脊弯曲） ===
+# Two-level 模型：σz/2 系数 = κ·(A·s(t) − A_res)，σx/2 系数 = 固定耦合 g。
+# 失真作用在 flux 通道（即 σz 系数随时间变化），因此短 T 时共振脊向右弯曲。
+dt = CONFIG.awg.dt
+g     = 0.05 * 2 * np.pi   # 两能级交换耦合 (rad·GHz)
+kappa = 0.30 * 2 * np.pi   # flux → detuning 灵敏度 (rad·GHz / unit A)
+A_res = 1.0                 # 共振 flux 振幅
+
+# 扫描网格：flux 幅度 × 脉冲时长
+n_A = 41
+amp_list = np.linspace(0.5, 1.5, n_A)
+t_flux_ch = CONFIG.pulse.make_time(0, 150)  # 加长到 150 ns 让 ridge 弯曲段可见
+n_tf = len(t_flux_ch)
+
+# ---

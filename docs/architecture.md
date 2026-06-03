@@ -1167,6 +1167,8 @@ corrected = dist.apply_to_waveform(predistorted)
 - `method="fir_inverse"`：IFFT H_inv 得到时域 taps，截断至 n_taps 点
 - `method="iir_inverse"`：拟合 H_inv 为 IIR（极点稳定性检查）
 
+**smooth=True 注意事项** (v2.7)：`SingleExponentialDistortion(smooth=True)` 的传递函数 H(s)=1/(1+sτ)（纯低通，amp 参数被忽略），其精确逆 1+sτ 是不定常传递函数（differentiator），双线性变换产生 z=-1 处的边际不稳定极点。`_single_exp_to_iir_inverse` 会自动检测 `smooth=True` 并添加正则化极点 τ_reg=dt/4，使级联 H_inv·H ≈ 1/(1+s·τ_reg)（近全通，高频滚降 >3 GHz）。
+
 #### 4.7.5 扩展点
 
 - **添加新标定类型**：继承 `Calibration` ABC，实现 `calibrate()`，返回 `CalibrationTable`。
@@ -2315,6 +2317,7 @@ mesolve(H_list, psi0, t_array, c_ops, e_ops)
 | v2.5 | 2026-05-17 | **频率标定职责分离**:`SinglePointFrequencyCalibration` 拆分为两个职责清晰的类。新增 `FrequencyMeasurement(method="ramsey"\|"transient")` 单点测量类(`.measure(flux)` + `.calibrate()`);`SinglePointFrequencyCalibration` 瘦身为只含调谐方法,`method ∈ {"closed_loop"}`(保留 `method` 字段为未来策略预留),内部组合 `FrequencyMeasurement` 完成每步测频。顶层 transient 测频接通 Track B 1.2(`_measure_frequency_transient` 提到模块级,FrequencyMeasurement(method="transient") 即时可用)。Scheduler:`frequency_ramsey` → `frequency_measurement` 统一入口。`__init__.py` 导出 `FrequencyMeasurement`;src_mirror facade、测试、docs、notebooks 同步迁移。 |
 | v2.5 | 2026-05-17 | §4.5.2 追加 DelayRamsey **t_d 语义陷阱**注释:说明 `t_d` 是 Ramsey 起点相对 `t_fall` 的偏移而非测量点相对 falling edge 的延迟,实际采样时刻 `t_query = t_fall + t_d + t_sig`(t_sig ∈ 自由演化窗口),最早可测点为 `t_fall + t_rabi[-1]`;并提示 `flux_signal.t_list` 必须覆盖整个 t_query 范围(否则 `value_at` 越界返回 0 造成重建曲线"悬崖")。纯文档增补,无代码改动。 |
 | v2.6 | 2026-05-17 | **Cryoscope/DelayRamsey 相位 unwrap 统一**:消除 calibration 反演的 ~70 μΦ₀ DC 偏置。(1) 新建 `sqc/reconstruction/dispersion.py` 共享 4 个函数 — `omega_q_at_flux`/`cryoscope_phase_theory`/`cumulative_phase_theory`/`unwrap_phase_with_model`,作为相位 unwrap 唯一真理源。(2) 4 处迁移到统一 API:`CryoscopeExperiment`/`CryoscopeCalibration`/`DelayRamseyExperiment`/`DelayRamseyCalibration` 全部用 model-guided unwrap,实验端用累积积分锚定、标定端用方波相位锚定;旧的 baseline-subtraction + `np.unwrap` 残骸清理。(3) `CryoscopeCalibration` 末尾追加 h=0 锚定 — 减掉 `varphi[h≈0]` 让 `cal.inverse(0) == 0`,消除 IQReadout 系统相位污染。(4) `CryoscopeExperiment` `trunc_list` 越界 sanity check + 默认 `flux_signal.t_list` 延长到 100 ns,避免 `truncate()` 静默失效(silent failure)。(5) `DelayRamseyExperiment.run_baseline` 字段保留兼容性但标 deprecated。详见 §4.6.7。22 单元测试 + 5 物理回归 baseline 全绿(无需重生成)。数值验证:DC offset 由 +6.88e-5 → +2.15e-9 Φ₀。 |
+| v2.7 | 2026-05-18 | **PredistortionDesigner smooth=True 逆设计修复**:`_single_exp_to_iir_inverse` 未区分 `smooth=True/False`，对纯低通模式 (smooth=True, H(s)=1/(1+sτ)) 错误使用非平滑公式 (amp=0.3)，导致级联 H_inv·H = 1/(1+s·21ns) 而非 ≈1。修复：smooth=True 时加正则化极点 τ_reg=dt/4，级联 ≈1/(1+s·0.125ns)，阶跃响应 RMSE 从 0.274 降至 0.018 (15x 改善)。详见 §4.7.4。18 回归+单元测试全绿。 |
 
 下一步阅读：
 - 完整设计背景：[`idea/refactor/_refactor_plan.md`](../idea/refactor/_refactor_plan.md)
