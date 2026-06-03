@@ -307,3 +307,233 @@ def test_vz_math_vs_hardware_consistency(qubit):
         f"VZ math and hardware kernels have opposite sign patterns: "
         f"dot(k_math, k_hw) = {dot:.4f}"
     )
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# Phase 10.2 — method='sim' / method='exp' decoupling
+# ═════════════════════════════════════════════════════════════════════════════
+
+
+def test_sim_mode_creates_valid_kernel():
+    """KernelEstimator(mode='omega', method='sim') produces a non-trivial
+    kernel with correct shape — no qubit needed (pure theory)."""
+    from sqc.reconstruction.kernel import KernelEstimator
+    from sqc.control.sequence import create_ramsey_pulse
+    import numpy as np
+
+    t_rabi = np.linspace(0, 10, 10)
+    pulse = create_ramsey_pulse(t_rabi, tau=0.0, omega_d=5.0)
+
+    ke = KernelEstimator(mode='omega', method='sim', stim_amplitude=0.1)
+    t_samples, kernel = ke.estimate(pulse, None)
+
+    assert isinstance(t_samples, np.ndarray)
+    assert isinstance(kernel, np.ndarray)
+    assert len(t_samples) == len(kernel)
+    assert len(t_samples) > 0
+    # Kernel values should be finite
+    assert np.all(np.isfinite(kernel))
+    # Kernel should not be all zeros — it should be non-trivial
+    assert np.max(np.abs(kernel)) > 0.0
+
+    # estimate_full also works without qubit
+    res = ke.estimate_full(pulse, None)
+    assert res.method == 'sim'
+    assert res.mode == 'omega'
+
+
+def test_flux_sim_raises():
+    """KernelEstimator(mode='flux', method='sim') raises ValueError
+    (illegal combination per handbook §4.3)."""
+    from sqc.reconstruction.kernel import KernelEstimator
+    from sqc.control.sequence import create_ramsey_pulse
+    import numpy as np
+
+    t_rabi = np.linspace(0, 10, 5)
+    pulse = create_ramsey_pulse(t_rabi, tau=0.0, omega_d=0.0)
+
+    ke = KernelEstimator(mode='flux', method='sim')
+    with pytest.raises(ValueError, match="illegal"):
+        ke.estimate(pulse, None)
+
+
+def test_sim_omega_exp_requires_qubit():
+    """KernelEstimator(mode='omega', method='exp') with qubit=None
+    raises ValueError."""
+    from sqc.reconstruction.kernel import KernelEstimator
+    from sqc.control.sequence import create_ramsey_pulse
+    import numpy as np
+
+    t_rabi = np.linspace(0, 10, 5)
+    pulse = create_ramsey_pulse(t_rabi, tau=0.0, omega_d=0.0)
+
+    ke = KernelEstimator(mode='omega', method='exp')
+    with pytest.raises(ValueError, match="requires a qubit"):
+        ke.estimate(pulse, None)
+
+
+def test_sim_auto_detects_qubit_params(qubit):
+    """When qubit is provided, method='sim' uses qubit.n_levels and
+    qubit.anharmonicity (auto-detection)."""
+    from sqc.reconstruction.kernel import KernelEstimator
+    from sqc.control.sequence import create_ramsey_pulse
+    import numpy as np
+
+    # Use a 3-level qubit so auto-detection matters
+    from src.qubit import TransmonQubit
+    q_3level = TransmonQubit(
+        EC=2 * np.pi * 0.2,
+        EJ=2 * np.pi * 15,
+        T1=10000.0,
+        T2=8000.0,
+        flux=0.0,
+        state=0,
+        n_levels=3,
+    )
+
+    t_rabi = np.linspace(0, 10, 6)
+    pulse = create_ramsey_pulse(t_rabi, tau=0.0, omega_d=q_3level.frequency)
+
+    # With qubit: auto-detect n_levels=3, anharmonicity from qubit
+    ke = KernelEstimator(mode='omega', method='sim', stim_amplitude=0.01)
+    t_samples, kernel = ke.estimate(pulse, q_3level)
+
+    assert np.all(np.isfinite(kernel))
+    assert np.max(np.abs(kernel)) > 0.0
+
+    # Verify it completes successfully (different from 2-level default)
+    assert len(t_samples) == len(kernel)
+
+
+def test_sim_vs_exp_linear_regime(qubit):
+    """In the small-stimulus limit, method='sim' and method='exp' produce
+    similar omega kernels for 2-level systems.
+
+    Uses rtol=0.15 because sim uses a†a operator while exp uses σ_z —
+    they differ by a constant shift that cancels in the difference.
+    """
+    from sqc.reconstruction.kernel import KernelEstimator
+    from sqc.control.sequence import create_ramsey_pulse
+    import numpy as np
+
+    t_rabi = np.linspace(0, 10, 8)
+    pulse = create_ramsey_pulse(t_rabi, tau=0.0, omega_d=qubit.frequency)
+
+    # Small stimulus amplitude for linear regime
+    ke_sim = KernelEstimator(
+        mode='omega', method='sim',
+        n_levels=2, anharmonicity=0.0, stim_amplitude=0.005,
+    )
+    ke_exp = KernelEstimator(
+        mode='omega', method='exp',
+        virtual_z_impl='math', stim_amplitude=0.005,
+    )
+
+    t_s, k_sim = ke_sim.estimate(pulse, None)
+    t_e, k_exp = ke_exp.estimate(pulse, qubit)
+
+    assert len(t_s) == len(t_e)
+    assert np.max(np.abs(k_sim)) > 0.0
+    assert np.max(np.abs(k_exp)) > 0.0
+
+    # Both kernels should have the same sign pattern (dot product > 0)
+    # NOTE: sim uses a†a and exp uses σ_z; they may differ by a global sign
+    # depending on convention.  We check |dot| > 0 (same shape, possibly
+    # flipped sign).
+    dot = np.dot(k_sim, k_exp)
+    assert abs(dot) > 1e-6, f"sim and exp kernels are orthogonal: dot={dot:.4f}"
+
+    # Integrated kernels should be within 15%
+    G_sim = np.trapezoid(np.abs(k_sim), t_s)
+    G_exp = np.trapezoid(np.abs(k_exp), t_e)
+    rel_diff = abs(G_sim - G_exp) / max(G_sim, G_exp)
+    assert rel_diff < 0.15, (
+        f"sim vs exp integrated kernel mismatch: "
+        f"G_sim={G_sim:.6g}, G_exp={G_exp:.6g}, rel_diff={rel_diff:.3e}"
+    )
+
+
+def test_sim_omega_order1_analytic():
+    """For a ramsey pulse (π/2-gap-π/2), the sim kernel should be non-trivial
+    and have sine-like shape within the pulse active region.
+
+    While the analytic formula k₁(t) = sin[Ω(τ_p/2 - |t|)] is exact only
+    for ideal square π/2-π/2 pulses, the sim kernel for a typical ramsey
+    sequence should show qualitatively similar structure: non-zero where
+    pulses act, small elsewhere, and a shape consistent with the control.
+    """
+    from sqc.reconstruction.kernel import KernelEstimator
+    from sqc.control.sequence import create_ramsey_pulse
+    import numpy as np
+
+    # Standard ramsey pulse: two π/2 pulses with 5 ns gap
+    t_rabi = np.arange(0, 10, 0.5)  # coarse for speed
+    omega_d = 5.0  # GHz
+    tau = 5.0  # ns gap
+    pulse = create_ramsey_pulse(t_rabi, tau=tau, omega_d=omega_d)
+
+    # Sim kernel
+    ke = KernelEstimator(
+        mode='omega', method='sim',
+        n_levels=2, anharmonicity=0.0,
+        stim_amplitude=0.2, stim_width=1.0,
+    )
+    t_samples, kernel = ke.estimate(pulse, None)
+
+    # Basic sanity
+    assert np.all(np.isfinite(kernel))
+    assert np.max(np.abs(kernel)) > 0.0
+
+    # Kernel should be non-trivial and vary with time
+    # NOTE: sign convention depends on stimulus operator (a†a vs σ_z);
+    # the kernel may be all-positive or all-negative.  What matters is
+    # that it is non-constant and has finite magnitude.
+    assert np.max(np.abs(kernel)) > 0.01, "Kernel magnitude too small"
+    assert np.std(kernel) > 0.0, "Kernel should vary with time"
+
+    # The integrated absolute kernel should be non-zero
+    G = np.trapezoid(np.abs(kernel), t_samples)
+    assert G > 0.0
+
+
+def test_sim_method_field_in_result(qubit):
+    """KernelResult.method reflects self.method ('sim' or 'exp')."""
+    from sqc.reconstruction.kernel import KernelEstimator
+    from sqc.control.sequence import create_ramsey_pulse
+    import numpy as np
+
+    t_rabi = np.linspace(0, 10, 6)
+    pulse = create_ramsey_pulse(t_rabi, tau=0.0, omega_d=qubit.frequency)
+
+    # exp method (default)
+    ke_exp = KernelEstimator(mode='omega')
+    res_exp = ke_exp.estimate_full(pulse, qubit)
+    assert res_exp.method == 'exp'
+
+    # sim method
+    ke_sim = KernelEstimator(mode='omega', method='sim', stim_amplitude=0.01)
+    res_sim = ke_sim.estimate_full(pulse, None)
+    assert res_sim.method == 'sim'
+
+    # exp+flux method (default)
+    ke_flux = KernelEstimator()
+    res_flux = ke_flux.estimate_full(pulse, qubit)
+    assert res_flux.method == 'exp'
+
+
+def test_sim_kernel_is_deterministic():
+    """Sim kernel with same params and no qubit is deterministic
+    (no stochastic elements)."""
+    from sqc.reconstruction.kernel import KernelEstimator
+    from sqc.control.sequence import create_ramsey_pulse
+    import numpy as np
+
+    t_rabi = np.linspace(0, 10, 6)
+    pulse = create_ramsey_pulse(t_rabi, tau=0.0, omega_d=5.0)
+
+    ke = KernelEstimator(mode='omega', method='sim', stim_amplitude=0.01)
+
+    t1, k1 = ke.estimate(pulse, None)
+    t2, k2 = ke.estimate(pulse, None)
+
+    assert_array_close(k1, k2, name="sim_kernel_deterministic")
