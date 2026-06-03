@@ -344,6 +344,32 @@ class Pulse(PulseBase):
         angle = np.trapezoid(Omegas, t_list)
         return angle
 
+    # -- Phase shift (Virtual Z) -------------------------------------------
+
+    def with_phase_shift(self, phi_z: float) -> "Pulse":
+        """Return a new Pulse with phase incremented by *phi_z*.
+
+        Parameters
+        ----------
+        phi_z : float
+            Phase increment (rad).
+
+        Returns
+        -------
+        Pulse
+            New pulse with ``phase = old_phase + phi_z``.
+        """
+        return Pulse(
+            frame=self.frame,
+            omega_d=self.omega_d,
+            phase=self.phase + phi_z,
+            Omega=self.Omega,
+            Omega_Q=self.Omega_Q,
+            is_rwa=self.is_rwa,
+            qubit=self.qubit,
+            trigger=self.trigger,
+        )
+
     # -- get_kernel (DEPRECATED, verbatim port for backward compat) ---------
 
     def get_kernel(self, qubit):
@@ -565,6 +591,43 @@ class CompositePulse(PulseBase):
         plt.title("Composite Pulse Rabi Frequency Envelope")
         plt.grid()
         plt.show()
+
+    # -- Phase shift (Virtual Z) -------------------------------------------
+
+    def with_phase_shift(
+        self, phi_z: float, from_time: float | None = None
+    ) -> "CompositePulse":
+        """Return a new CompositePulse with sub-pulses phase-shifted.
+
+        Parameters
+        ----------
+        phi_z : float
+            Phase increment (rad).
+        from_time : float or None
+            Only sub-pulses whose ``trigger >= from_time`` are shifted.
+            If None, all sub-pulses are shifted.
+
+        Returns
+        -------
+        CompositePulse
+        """
+        new_pulses = []
+        for p in self.pulses:
+            if from_time is None or p.trigger >= from_time:
+                new_pulses.append(p.with_phase_shift(phi_z))
+            else:
+                # Exact copy without phase change
+                new_pulses.append(Pulse(
+                    frame=p.frame,
+                    omega_d=p.omega_d,
+                    phase=p.phase,
+                    Omega=p.Omega,
+                    Omega_Q=p.Omega_Q if hasattr(p, 'Omega_Q') else None,
+                    is_rwa=p.is_rwa,
+                    qubit=p.qubit,
+                    trigger=p.trigger,
+                ))
+        return CompositePulse(new_pulses)
 
     # -- get_kernel (DEPRECATED, verbatim port) -----------------------------
 

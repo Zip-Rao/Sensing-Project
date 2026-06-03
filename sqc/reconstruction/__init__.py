@@ -6,7 +6,7 @@ from .basis import (
     regularization_matrix,
     R,
 )
-from .kernel import KernelEstimator
+from .kernel import KernelEstimator, KernelResult
 from .ramsey import RamseyReconstruction
 from .echo import EchoReconstruction
 from .transient import TransientReconstruction
@@ -21,6 +21,7 @@ __all__ = [
     "regularization_matrix",
     "R",
     "KernelEstimator",
+    "KernelResult",
     "RamseyReconstruction",
     "EchoReconstruction",
     "TransientReconstruction",
