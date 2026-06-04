@@ -537,3 +537,246 @@ def test_sim_kernel_is_deterministic():
     t2, k2 = ke.estimate(pulse, None)
 
     assert_array_close(k1, k2, name="sim_kernel_deterministic")
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# Phase 10.3 — higher-order Volterra + KernelResult serialization
+# ═════════════════════════════════════════════════════════════════════════════
+
+
+def test_order1_default_unchanged(qubit):
+    """KernelEstimator() with default order=1 produces same result as before
+    (backward compat — matches legacy get_kernel)."""
+    from sqc.reconstruction.kernel import KernelEstimator
+    from sqc.control.sequence import create_ramsey_pulse
+    import numpy as np
+
+    t_rabi = np.linspace(0, 10, 8)
+    pulse = create_ramsey_pulse(t_rabi, tau=0.0, omega_d=qubit.frequency)
+
+    # Default order=1 (unchanged path)
+    ke = KernelEstimator()
+    assert ke.order == 1
+    t_new, k_new = ke.estimate(pulse, qubit)
+
+    # Should match legacy
+    pulse.get_kernel(qubit)
+    legacy_k = np.array(pulse.kernel)
+    assert_array_close(k_new, legacy_k, name="order1_default_vs_legacy")
+
+    # estimate_full with order=1
+    res = ke.estimate_full(pulse, qubit)
+    assert res.order == 1
+    assert len(res.kernels) == 1
+    assert_array_close(res.k1, legacy_k, name="order1_full_k1")
+
+
+def test_polynomial_fit_no_constant():
+    """_fit_polynomial_no_constant fits linear and quadratic cases correctly."""
+    from sqc.reconstruction.kernel import _fit_polynomial_no_constant
+    import numpy as np
+
+    # Linear: y = 2*x
+    coeffs_lin = _fit_polynomial_no_constant([1, 2, 3], [2, 4, 6], 1)
+    assert len(coeffs_lin) == 1
+    np.testing.assert_allclose(coeffs_lin, [2.0], atol=1e-10)
+
+    # Quadratic: y = x + x²  →  [2, 6, 12] for x=[1, 2, 3]
+    coeffs_quad = _fit_polynomial_no_constant([1, 2, 3], [2, 6, 12], 2)
+    assert len(coeffs_quad) == 2
+    np.testing.assert_allclose(coeffs_quad, [1.0, 1.0], atol=1e-10)
+
+    # Cubic: y = 3x - 0.5x² + 0.2x³ for x=[1, 2, 3, 4, 5]
+    x = [1, 2, 3, 4, 5]
+    y = [3*xi - 0.5*xi**2 + 0.2*xi**3 for xi in x]
+    coeffs_cubic = _fit_polynomial_no_constant(x, y, 3)
+    np.testing.assert_allclose(coeffs_cubic, [3.0, -0.5, 0.2], atol=1e-10)
+
+
+def test_gauss_integral_factor():
+    """_gauss_integral_factor returns correct values for n=1,2,3."""
+    from sqc.reconstruction.kernel import _gauss_integral_factor
+    import math
+
+    sigma = 2.0
+    # n=1: sigma*sqrt(2π)
+    c1 = _gauss_integral_factor(1, sigma)
+    expected1 = sigma * math.sqrt(2 * math.pi)
+    assert abs(c1 - expected1) < 1e-12
+
+    # n=2: sigma*sqrt(π)/2
+    c2 = _gauss_integral_factor(2, sigma)
+    expected2 = sigma * math.sqrt(math.pi) / 2.0
+    assert abs(c2 - expected2) < 1e-12
+
+    # n=3: sigma*sqrt(2π/3)/6
+    c3 = _gauss_integral_factor(3, sigma)
+    expected3 = sigma * math.sqrt(2 * math.pi / 3) / math.factorial(3)
+    assert abs(c3 - expected3) < 1e-12
+
+
+def test_order2_sim_produces_two_kernels():
+    """KernelEstimator(mode='omega', method='sim', order=2).estimate_full
+    returns a KernelResult with len(kernels)==2, both finite, k2 non-trivial."""
+    from sqc.reconstruction.kernel import KernelEstimator
+    from sqc.control.sequence import create_ramsey_pulse
+    import numpy as np
+
+    t_rabi = np.linspace(0, 10, 5)
+    pulse = create_ramsey_pulse(t_rabi, tau=0.0, omega_d=5.0)
+
+    ke = KernelEstimator(
+        mode='omega', method='sim',
+        order=2, n_amp_samples=5,
+        stim_amplitude=0.1, stim_width=2.0,
+    )
+    res = ke.estimate_full(pulse, None)
+
+    assert res.order == 2
+    assert len(res.kernels) == 2
+    assert res.kernels[0].ndim == 1
+    assert res.kernels[1].ndim == 1
+    assert len(res.kernels[0]) == len(res.t_samples)
+    assert len(res.kernels[1]) == len(res.t_samples)
+
+    # Both k1 and k2 should be finite
+    assert np.all(np.isfinite(res.kernels[0]))
+    assert np.all(np.isfinite(res.kernels[1]))
+
+    # k1 should be non-trivial
+    assert np.max(np.abs(res.kernels[0])) > 0.0
+
+    # k2 should be non-trivial (at least some non-zero values)
+    assert np.max(np.abs(res.kernels[1])) > 0.0
+
+    # Backward compat: estimate() still returns just k1
+    t_s, k1 = ke.estimate(pulse, None)
+    assert len(k1) == len(t_s)
+    assert_array_close(k1, res.kernels[0], name="order2_estimate_vs_full_k1")
+
+
+def test_order2_exp_flux_produces_two_kernels():
+    """KernelEstimator(mode='flux', order=2).estimate_full returns two
+    flux-domain kernels, both finite and k2 non-trivial."""
+    from sqc.reconstruction.kernel import KernelEstimator
+    from sqc.control.sequence import create_ramsey_pulse
+    from src.qubit import TransmonQubit
+    import numpy as np
+
+    # Qubit away from sweet spot for non-zero flux sensitivity
+    q = TransmonQubit(
+        EC=0.2 * 2 * np.pi, EJ=15 * 2 * np.pi,
+        T1=10000, T2=5000, n_levels=2, flux=0.15,
+    )
+    t_rabi = np.linspace(0, 10, 5)
+    pulse = create_ramsey_pulse(t_rabi, tau=0.0, omega_d=q.frequency)
+
+    ke = KernelEstimator(
+        mode='flux', order=2, n_amp_samples=5,
+        stim_amplitude=0.01, stim_width=2.0,
+    )
+    res = ke.estimate_full(pulse, q)
+
+    assert res.order == 2
+    assert res.mode == 'flux'
+    assert len(res.kernels) == 2
+    assert len(res.kernels[0]) == len(res.t_samples)
+    assert len(res.kernels[1]) == len(res.t_samples)
+
+    assert np.all(np.isfinite(res.kernels[0]))
+    assert np.all(np.isfinite(res.kernels[1]))
+
+    # k1 should be non-trivial
+    assert np.max(np.abs(res.kernels[0])) > 0.0
+    # k2 should have some structure
+    assert np.max(np.abs(res.kernels[1])) > 0.0
+
+
+def test_kernel_result_save_load_roundtrip():
+    """KernelResult.save() then KernelResult.load() restores all fields."""
+    from sqc.reconstruction.kernel import KernelEstimator, KernelResult
+    from sqc.control.sequence import create_ramsey_pulse
+    import numpy as np
+    import tempfile
+    import os
+
+    t_rabi = np.linspace(0, 10, 5)
+    pulse = create_ramsey_pulse(t_rabi, tau=0.0, omega_d=5.0)
+
+    ke = KernelEstimator(
+        mode='omega', method='sim',
+        order=2, n_amp_samples=5,
+        stim_amplitude=0.1, stim_width=2.0,
+    )
+    res_orig = ke.estimate_full(pulse, None)
+
+    # Save to temp file
+    with tempfile.TemporaryDirectory() as tmpdir:
+        path = os.path.join(tmpdir, 'test_kernel.npz')
+        res_orig.save(path)
+
+        # Load back
+        res_loaded = KernelResult.load(path)
+
+        # Verify all fields
+        assert_array_close(res_loaded.t_samples, res_orig.t_samples, name="t_samples")
+        assert res_loaded.mode == res_orig.mode
+        assert res_loaded.method == res_orig.method
+        assert res_loaded.order == res_orig.order
+        assert abs(res_loaded.stim_amplitude - res_orig.stim_amplitude) < 1e-15
+        assert res_loaded.units == res_orig.units
+        assert len(res_loaded.kernels) == len(res_orig.kernels)
+        for i in range(len(res_orig.kernels)):
+            assert_array_close(
+                res_loaded.kernels[i], res_orig.kernels[i],
+                name=f"kernel_{i}",
+            )
+
+
+def test_order2_kernel_nonlinearity_increases_with_amplitude():
+    """For a simple pulse, |k2/k1| ratio increases with stim_amplitude,
+    verifying higher-order effects are physically real (not numerical noise)."""
+    from sqc.reconstruction.kernel import KernelEstimator
+    from sqc.control.sequence import create_ramsey_pulse
+    import numpy as np
+
+    t_rabi = np.linspace(0, 10, 5)
+    pulse = create_ramsey_pulse(t_rabi, tau=0.0, omega_d=5.0)
+
+    # Small amplitude
+    ke_small = KernelEstimator(
+        mode='omega', method='sim',
+        order=2, n_amp_samples=5,
+        stim_amplitude=0.02, stim_width=2.0,
+    )
+    res_small = ke_small.estimate_full(pulse, None)
+
+    # Larger amplitude
+    ke_large = KernelEstimator(
+        mode='omega', method='sim',
+        order=2, n_amp_samples=5,
+        stim_amplitude=0.10, stim_width=2.0,
+    )
+    res_large = ke_large.estimate_full(pulse, None)
+
+    # Compute median |k2/k1| ratio across time points (avoid division by ~zero)
+    def ratio_median(res):
+        k1 = np.abs(res.kernels[0])
+        k2 = np.abs(res.kernels[1])
+        # Only consider points where k1 is non-negligible
+        mask = k1 > 0.01 * np.max(k1)
+        if np.sum(mask) < 2:
+            return 0.0
+        return np.median(k2[mask] / k1[mask])
+
+    r_small = ratio_median(res_small)
+    r_large = ratio_median(res_large)
+
+    # The ratio |k2/k1| should increase with amplitude because:
+    # k1 ~ O(1), k2 ~ O(ε) when the nonlinear response is driven by
+    # the stimulus amplitude.  A larger stim_amplitude excites stronger
+    # nonlinear response.
+    assert r_large > r_small, (
+        f"Expected |k2/k1| to increase with stim_amplitude, but "
+        f"small={r_small:.4g}, large={r_large:.4g}"
+    )
