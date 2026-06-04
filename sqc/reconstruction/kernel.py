@@ -926,17 +926,19 @@ class KernelEstimator:
         qubit,
         t_samples: np.ndarray | None = None,
     ) -> tuple[np.ndarray, list]:
-        """Higher-order flux kernel extraction via polynomial-fit amplitude scan.
+        """Higher-order flux kernel via 5-point finite-difference stencil.
 
-        Plan A from handbook §3.5.3.1: direct polynomial scan in flux
-        domain.  For each ``t_j``, scan flux amplitude ``ε`` (Φ₀) across
-        a symmetric grid, build a ``FluxSignal``, run mesolve, fit
-        ``Δp_e`` vs ``ε``, and convert to diagonal flux kernel values.
+        Replaces the old polynomial-fit method (which suffered from
+        Vandermonde ill-conditioning).  Samples ``p_e`` at exactly 5
+        flux amplitudes ``{-2h, -h, 0, +h, +2h}`` and applies fixed-
+        coefficient stencils for k₁…k₃.
 
-        Returns ``(t_samples, [k1_flux, ..., kN_flux])``.
+        Flux perturbation uses ``FluxSignal`` + ``qubit_under_mag()``,
+        identical to the legacy order-1 path.
+
+        Returns ``(t_samples, [k1, ..., kN])``.
         """
         import time
-
         t_start = time.time()
 
         pulse_tlist = np.asarray(pulse.t_list)
@@ -951,77 +953,58 @@ class KernelEstimator:
             H_0 = QobjEvo(qubit.get_hamiltonian_rwa(
                 qubit.frequency if hasattr(qubit, "frequency") else 0.0,
             ))
-
         H_pulse = QobjEvo(pulse.hamiltonian, tlist=pulse_tlist, order=1)
         H_base = H_0 + H_pulse
-
-        # Baseline p_e
-        result_base = mesolve(
-            H_base, qubit.state, pulse_tlist, [],
-            e_ops=[psi_e * psi_e.dag()],
-        )
-        p_e_base = result_base.expect[0][-1]
 
         if t_samples is None:
             t_samples = pulse_tlist.copy()
 
         frame_val = getattr(pulse, "frame", 1)
         omega_d_val = getattr(pulse, "omega_d", qubit.frequency)
-
-        _DT = CONFIG.awg.dt
-        sigma = max(self.stim_width, 2.0 * _DT)
-
-        # Symmetric amplitude grid (flux units Φ₀)
-        M = self.n_amp_samples
-        eps_grid = np.linspace(
-            -self.amp_scan_factor, self.amp_scan_factor, M,
-        ) * self._amplitude_for(qubit)
+        h = self._amplitude_for(qubit) * self.amp_scan_factor
+        # Clamp h to avoid huge flux perturbations
+        h = min(h, 0.05)
 
         kernels = [np.zeros(len(t_samples)) for _ in range(N)]
 
         for i, t_i in enumerate(t_samples):
-            delta_p = np.zeros(M)
-
-            for j, eps in enumerate(eps_grid):
+            # Evaluate p_e at 5 flux amplitudes
+            p_vals = np.zeros(5)
+            for j, mult in enumerate([-2, -1, 0, 1, 2]):
+                eps = mult * h
                 stim = FluxSignal(
-                    type=3,
-                    t_list=pulse_tlist,
-                    amplitude=eps,
-                    center=t_i,
-                    width=sigma,
+                    type=3, t_list=pulse_tlist,
+                    amplitude=eps, center=t_i,
+                    width=self.stim_width,
                 )
-
                 qubit_t = qubit.qubit_under_mag(stim)
-
                 H_stim = QobjEvo(
                     qubit.qubit_under_mag_hamiltonian(
                         qubit_t, stim.t_list, frame_val, omega_d_val,
                     ),
                     tlist=stim.t_list, order=1,
                 )
-
-                H_total = H_0 + H_pulse + H_stim
-                result_stim = mesolve(
-                    H_total, qubit.state, pulse_tlist, [],
+                result = mesolve(
+                    H_base + H_stim, qubit.state, pulse_tlist, [],
                     e_ops=[psi_e * psi_e.dag()],
                 )
-                delta_p[j] = result_stim.expect[0][-1] - p_e_base
+                p_vals[j] = result.expect[0][-1]
 
-            # Fit polynomial: Δp_e = a₁·ε + a₂·ε² + ... + a_N·ε^N
-            coeffs = _fit_polynomial_no_constant(eps_grid, delta_p, N)
+            fm2, fm1, f0, fp1, fp2 = p_vals
 
-            # Convert to diagonal flux kernel values
-            for n in range(1, N + 1):
-                c_n = _gauss_integral_factor(n, sigma)
-                kernels[n - 1][i] = coeffs[n - 1] / c_n
+            # 5-point FD stencils
+            if N >= 1:
+                kernels[0][i] = (fm2 - 8*fm1 + 8*fp1 - fp2) / (12 * h)
+            if N >= 2:
+                kernels[1][i] = (-fm2 + 16*fm1 - 30*f0 + 16*fp1 - fp2) / (12 * h**2)
+            if N >= 3:
+                kernels[2][i] = (-fm2 + 2*fm1 - 2*fp1 + fp2) / (2 * h**3)
 
         elapsed = time.time() - t_start
-        print(f"Higher-order kernel computation (flux, exp, order={N}) "
-              f"took {elapsed:.2f} seconds")
-
+        print(f"FD kernel (flux exp, order={N}) took {elapsed:.2f} seconds")
         return t_samples, kernels
 
-    # -- omega exp: higher-order via VZ amplitude scan ----------------------
+    # -- omega exp: FD stencil via Virtual Z ----------------------------------
 
     def _extract_kn_omega(
         self,
@@ -1029,21 +1012,15 @@ class KernelEstimator:
         qubit,
         t_samples: np.ndarray | None = None,
     ) -> tuple[np.ndarray, list]:
-        """Higher-order omega kernel extraction via Virtual-Z amplitude scan.
+        """Higher-order omega kernel via 5-point finite-difference stencil.
 
-        Uses the math VZ approach (narrow Gaussian σ_z impulse) to scan
-        ``φ_z`` across a symmetric grid.  Fits ``Δp_e`` vs ``φ_z`` and
-        converts polynomial coefficients to diagonal omega kernel values.
-
-        The conversion accounts for the finite width ``σ_t = 2·dt`` of
-        the Gaussian approximation to the delta function.  For ``n=1``
-        this reduces to the same bilateral-difference formula used in
-        the order-1 fast path.
+        Replaces the old polynomial-fit method.  Samples ``p_e`` at
+        exactly 5 VZ amplitudes ``{-2h, -h, 0, +h, +2h}`` (radians)
+        and applies fixed-coefficient stencils.
 
         Returns ``(t_samples, [k1, ..., kN])``.
         """
         import time
-
         t_start = time.time()
 
         pulse_tlist = np.asarray(pulse.t_list)
@@ -1058,75 +1035,51 @@ class KernelEstimator:
             H_0 = QobjEvo(qubit.get_hamiltonian_rwa(
                 qubit.frequency if hasattr(qubit, "frequency") else 0.0,
             ))
-
         H_pulse = QobjEvo(pulse.hamiltonian, tlist=pulse_tlist, order=1)
         H_base = H_0 + H_pulse
-
-        # Baseline p_e
-        result_base = mesolve(
-            H_base, qubit.state, pulse_tlist, [],
-            e_ops=[psi_e * psi_e.dag()],
-        )
-        p_e_base = result_base.expect[0][-1]
 
         if t_samples is None:
             t_samples = pulse_tlist.copy()
 
-        # σ_z in n-level Fock basis: diag(1, -1, 0, …, 0)
         _DT = CONFIG.awg.dt
-        sigma_t = 2.0 * _DT  # narrow Gaussian width for delta approximation
+        sigma_t = 2.0 * _DT
         diag_vals = np.array([1.0, -1.0] + [0.0] * (n_levels - 2))
         sigma_z_op = qutip.Qobj(np.diag(diag_vals))
+        norm_f = 1.0 / (sigma_t * np.sqrt(2 * np.pi))
 
-        # Symmetric phi_z grid (radians)
-        M = self.n_amp_samples
-        phi_z_grid = np.linspace(
-            -self.amp_scan_factor, self.amp_scan_factor, M,
-        ) * self.stim_amplitude
+        h = self.stim_amplitude * self.amp_scan_factor
 
         kernels = [np.zeros(len(t_samples)) for _ in range(N)]
 
         for i, t_j in enumerate(t_samples):
-            # Gaussian shape at t_j (shared across all scan amplitudes)
             gauss = np.exp(-0.5 * ((pulse_tlist - t_j) / sigma_t) ** 2)
-            norm_factor = 1.0 / (sigma_t * np.sqrt(2 * np.pi))
 
-            delta_p = np.zeros(M)
-            for j, phi_z in enumerate(phi_z_grid):
-                coeff = phi_z * norm_factor * gauss
+            p_vals = np.zeros(5)
+            for j, mult in enumerate([-2, -1, 0, 1, 2]):
+                phi_z = mult * h
+                coeff = phi_z * norm_f * gauss
                 H_vz = QobjEvo(
                     [[0.5 * sigma_z_op, coeff]],
                     tlist=pulse_tlist, order=1,
                 )
-
                 result = mesolve(
                     H_base + H_vz, qubit.state, pulse_tlist, [],
                     e_ops=[psi_e * psi_e.dag()],
                 )
-                delta_p[j] = result.expect[0][-1] - p_e_base
+                p_vals[j] = result.expect[0][-1]
 
-            # Fit polynomial: Δp_e = a₁·φ_z + a₂·φ_z² + ... + a_N·φ_z^N
-            coeffs = _fit_polynomial_no_constant(phi_z_grid, delta_p, N)
+            fm2, fm1, f0, fp1, fp2 = p_vals
 
-            # Convert to diagonal omega kernel values.
-            # For an ideal delta: k_n^diag = a_n * n!.
-            # For the narrow Gaussian approximating the delta, the
-            # n-th power integral I_n = ∫[f(t)]^n dt differs from φ_z^n,
-            # introducing a factor:
-            #   k_n^diag = a_n * n! * σ_t^(n-1) * (2π)^((n-1)/2) * √n
-            for n in range(1, N + 1):
-                factor = (
-                    math.factorial(n)
-                    * sigma_t ** (n - 1)
-                    * (2 * math.pi) ** ((n - 1) / 2)
-                    * math.sqrt(n)
-                )
-                kernels[n - 1][i] = coeffs[n - 1] * factor
+            # 5-point FD stencils (derivatives w.r.t. phi_z)
+            if N >= 1:
+                kernels[0][i] = (fm2 - 8*fm1 + 8*fp1 - fp2) / (12 * h)
+            if N >= 2:
+                kernels[1][i] = (-fm2 + 16*fm1 - 30*f0 + 16*fp1 - fp2) / (12 * h**2)
+            if N >= 3:
+                kernels[2][i] = (-fm2 + 2*fm1 - 2*fp1 + fp2) / (2 * h**3)
 
         elapsed = time.time() - t_start
-        print(f"Higher-order kernel computation (omega, exp, order={N}) "
-              f"took {elapsed:.2f} seconds")
-
+        print(f"FD kernel (omega exp, order={N}) took {elapsed:.2f} seconds")
         return t_samples, kernels
 
     # ------------------------------------------------------------------
