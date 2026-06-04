@@ -3,8 +3,8 @@
 Pulse: single control pulse (lab or rotating frame).
 CompositePulse: concatenation of multiple Pulses.
 
-Phase 1: verbatim port from src/pulse.py. get_kernel() retained
-as deprecated method; Phase 2 will refactor to KernelEstimator.
+Phase 1: verbatim port from src/pulse.py.
+Phase 10.5: get_kernel() deprecated → KernelEstimator shim.
 """
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from typing import Optional
 
 import numpy as np
 from qutip import (
-    Qobj, QobjEvo, basis, create, destroy, expect, mesolve, qeye, sigmaz,
+    Qobj, basis, create, destroy, qeye,
 )
 
 
@@ -370,80 +370,53 @@ class Pulse(PulseBase):
             trigger=self.trigger,
         )
 
-    # -- get_kernel (DEPRECATED, verbatim port for backward compat) ---------
+    # -- get_kernel (DEPRECATED shim → KernelEstimator, Phase 10.5) --------
 
-    def get_kernel(self, qubit):
-        """DEPRECATED. Phase 2 will use KernelEstimator.
+    def get_kernel(self, qubit, t_samples=None, *,
+                   _suppress_deprecation: bool = False):
+        """[DEPRECATED] Use ``KernelEstimator(mode='flux', method='exp').estimate()``.
 
-        Estimate control kernel by perturbing with narrow stimuli.
+        This shim forwards to :class:`sqc.reconstruction.KernelEstimator` for
+        backward compatibility.  New code should use ``KernelEstimator``
+        directly.
 
         Parameters
         ----------
         qubit : TransmonQubit
             Qubit for simulation.
+        t_samples : np.ndarray or None
+            Time points to evaluate kernel at.  If None, uses pulse time axis.
+        _suppress_deprecation : bool
+            Internal flag to silence the deprecation warning when called
+            from within the shim itself.
+
+        Returns
+        -------
+        t_samples : np.ndarray
+        kernel : np.ndarray
 
         Notes
         -----
-        Sets self.t_samples and self.kernel in-place.
+        Sets ``self.t_samples`` and ``self.kernel`` in-place for backward compat.
         """
-        kernel = []
-        t_list = self.Omega.t_list
-        samples = range(0, len(t_list), 1)
-        t_samples = t_list[::1]
-        psi_e = basis(qubit.n_levels, 1)
-
-        if self.frame == 0:
-            H_0 = QobjEvo(qubit.hamiltonian)
-        else:
-            H_0 = QobjEvo(qubit.get_hamiltonian_rwa(qubit.frequency))
-        H_pulse = QobjEvo(self.hamiltonian, tlist=t_list, order=1)
-        H_base = H_0 + H_pulse
-
-        result_base = mesolve(
-            H_base, qubit.state, t_list, [], e_ops=[psi_e * psi_e.dag()]
+        import warnings
+        if not _suppress_deprecation:
+            warnings.warn(
+                "Pulse.get_kernel() is deprecated. Use "
+                "sqc.reconstruction.KernelEstimator(mode='flux', method='exp', "
+                "order=1).estimate(pulse, qubit) instead.",
+                DeprecationWarning, stacklevel=2,
+            )
+        from sqc.reconstruction.kernel import KernelEstimator
+        est = KernelEstimator(
+            mode='flux', method='exp', order=1,
+            deprecation_warn_legacy=False,
         )
-        p_e_base = result_base.expect[0][-1]
-
-        # Import Signal from sqc for constructing stimulus
-        from sqc.control.flux_signal import FluxSignal
-
-        for i in samples:
-            t_i = t_list[i]
-            stim_pulse = FluxSignal(
-                type=3,
-                t_list=t_list,
-                amplitude=self._kernel_stimulus_amplitude(),
-                center=t_i,
-                width=self._kernel_stimulus_width(),
-            )
-            H_stim = QobjEvo(
-                [sigmaz(), stim_pulse.signal],
-                tlist=stim_pulse.t_list,
-                order=1,
-            )
-            stim_area = (
-                stim_pulse.params["amplitude"]
-                * stim_pulse.params["width"]
-                / 4.0
-                * np.sqrt(2 * np.pi)
-            )
-            H_total = H_0 + H_pulse + H_stim
-            result_stim = mesolve(
-                H_total, qubit.state, t_list, [], e_ops=[psi_e * psi_e.dag()]
-            )
-            p_e_stim = result_stim.expect[0][-1]
-            kernel.append((p_e_stim - p_e_base) / stim_area)
-
-        self.t_samples = t_samples
-        self.kernel = kernel
-
-    def _kernel_stimulus_amplitude(self) -> float:
-        """Stimulus amplitude for kernel estimation."""
-        return 1.0  # match original Pulse.get_kernel
-
-    def _kernel_stimulus_width(self) -> float:
-        """Stimulus width for kernel estimation."""
-        return 2.0  # match original Pulse.get_kernel
+        result = est.estimate_full(self, qubit, t_samples=t_samples)
+        # Store on self for backward compat
+        self.t_samples = result.t_samples
+        self.kernel = list(result.k1)  # preserve list type for compat
+        return result.t_samples, result.k1
 
 
 # ---------------------------------------------------------------------------
@@ -629,70 +602,50 @@ class CompositePulse(PulseBase):
                 ))
         return CompositePulse(new_pulses)
 
-    # -- get_kernel (DEPRECATED, verbatim port) -----------------------------
+    # -- get_kernel (DEPRECATED shim → KernelEstimator, Phase 10.5) --------
 
-    def get_kernel(self, qubit):
-        """DEPRECATED. Phase 2 will use KernelEstimator.
+    def get_kernel(self, qubit, t_samples=None, *,
+                   _suppress_deprecation: bool = False):
+        """[DEPRECATED] Use ``KernelEstimator(mode='flux', method='exp').estimate()``.
 
-        Estimate control kernel for composite pulse.
+        This shim forwards to :class:`sqc.reconstruction.KernelEstimator` for
+        backward compatibility.  New code should use ``KernelEstimator``
+        directly.
 
         Parameters
         ----------
         qubit : TransmonQubit
+            Qubit for simulation.
+        t_samples : np.ndarray or None
+            Time points to evaluate kernel at.  If None, uses pulse time axis.
+        _suppress_deprecation : bool
+            Internal flag to silence the deprecation warning when called
+            from within the shim itself.
+
+        Returns
+        -------
+        t_samples : np.ndarray
+        kernel : np.ndarray
 
         Notes
         -----
-        Sets self.t_samples and self.kernel in-place.
+        Sets ``self.t_samples`` and ``self.kernel`` in-place for backward compat.
         """
-        from sqc.control.flux_signal import FluxSignal
-
-        kernel = []
-        t_list = self.t_list
-        for i in range(len(t_list) - 1):
-            if t_list[i] == t_list[i + 1]:
-                print(
-                    f"Warning: Duplicate time points at index {i} and "
-                    f"{i+1} with time {t_list[i]}. "
-                    "This may cause issues in kernel calculation."
-                )
-        samples = range(0, len(t_list), 1)
-        t_samples = t_list[::1]
-        psi_e = basis(qubit.n_levels, 1)
-
-        if self.frame == 0:
-            H_0 = QobjEvo(qubit.hamiltonian)
-        else:
-            H_0 = QobjEvo(qubit.get_hamiltonian_rwa(qubit.frequency))
-        H_pulse = QobjEvo(self.hamiltonian, tlist=t_list, order=1)
-        H_base = H_0 + H_pulse
-        result_base = mesolve(
-            H_base, qubit.state, t_list, [], e_ops=[psi_e * psi_e.dag()]
+        import warnings
+        if not _suppress_deprecation:
+            warnings.warn(
+                "CompositePulse.get_kernel() is deprecated. Use "
+                "sqc.reconstruction.KernelEstimator(mode='flux', method='exp', "
+                "order=1).estimate(pulse, qubit) instead.",
+                DeprecationWarning, stacklevel=2,
+            )
+        from sqc.reconstruction.kernel import KernelEstimator
+        est = KernelEstimator(
+            mode='flux', method='exp', order=1,
+            deprecation_warn_legacy=False,
         )
-        p_e_base = result_base.expect[0][-1]
-        for i in samples:
-            t_i = t_list[i]
-            stim_pulse = FluxSignal(
-                type=3,
-                t_list=t_list,
-                amplitude=0.0215,
-                center=t_i,
-                width=3,
-            )
-            stim_area = np.trapezoid(stim_pulse.signal, stim_pulse.t_list)
-            qubit_t = qubit.qubit_under_mag(stim_pulse)
-            H_stim = QobjEvo(
-                qubit.qubit_under_mag_hamiltonian(
-                    qubit_t, stim_pulse.t_list, self.frame, self.omega_d
-                ),
-                tlist=stim_pulse.t_list,
-                order=1,
-            )
-            H_total = H_0 + H_pulse + H_stim
-            result_stim = mesolve(
-                H_total, qubit.state, t_list, [], e_ops=[psi_e * psi_e.dag()]
-            )
-            p_e_stim = result_stim.expect[0][-1]
-            kernel.append((p_e_stim - p_e_base) / stim_area)
-
-        self.t_samples = t_samples
-        self.kernel = kernel
+        result = est.estimate_full(self, qubit, t_samples=t_samples)
+        # Store on self for backward compat
+        self.t_samples = result.t_samples
+        self.kernel = list(result.k1)  # preserve list type for compat
+        return result.t_samples, result.k1

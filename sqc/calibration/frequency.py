@@ -270,36 +270,36 @@ def _measure_frequency_transient(
 
     p_diff = (p_x - p_mx) / 2.0
 
-    # -- differential kernel at the bias point ---------------------------
-    # The kernel is a property of the pulse + qubit operating point.  We
-    # use CompositePulse.get_kernel() which builds the baseline H_0 from
-    # qubit.get_hamiltonian_rwa(qubit.frequency) — this gives the canonical
-    # kernel at the bias point (Δ=0 in the rotating frame).
-    ctrl_x.get_kernel(qubit)
-    k_x = np.asarray(ctrl_x.kernel, dtype=float)
-    t_kernel = np.asarray(ctrl_x.t_samples, dtype=float)
+    # -- omega kernel via KernelEstimator (Phase 10.5) -------------------
+    # Uses the Virtual Z omega kernel to obtain G_freq = dp_diff/d(δω)
+    # directly, eliminating the κ-based unit conversion that was the
+    # legacy workaround.
+    from sqc.reconstruction.kernel import KernelEstimator
 
-    ctrl_mx.get_kernel(qubit)
-    k_mx = np.asarray(ctrl_mx.kernel, dtype=float)
+    estimator = KernelEstimator(
+        mode='omega', method='exp', order=1,
+        virtual_z_impl='math',
+    )
 
-    # restore qubit state after get_kernel side effects
+    result_x = estimator.estimate_full(ctrl_x, qubit)
+    k_omega_x = np.asarray(result_x.k1, dtype=float)
+    t_kernel = np.asarray(result_x.t_samples, dtype=float)
+
+    result_mx = estimator.estimate_full(ctrl_mx, qubit)
+    k_omega_mx = np.asarray(result_mx.k1, dtype=float)
+
+    # restore qubit state after kernel estimation side effects
     qubit.qubit_in_mag(Phi, frame=1, omega_d=omega_d)
 
-    k_diff = (k_x - k_mx) / 2.0
-    G_diff = float(np.trapezoid(k_diff, t_kernel))
+    k_omega_diff = (k_omega_x - k_omega_mx) / 2.0
+    G_freq = float(np.trapezoid(k_omega_diff, t_kernel))
 
-    if abs(G_diff) < 1e-5:
+    if abs(G_freq) < 1e-5:
         return float(omega_d)
 
-    # Unit conversion: the code's kernel is built with a *flux* stimulus
-    # (FluxSignal with stim_area in Φ₀·ns), so G_diff has units 1/Φ₀ and
-    # corresponds to the *flux* sensitivity dp_diff/dΦ.  The theoretical
-    # transient formula is Δω = p_diff / G_freq where G_freq = dp_diff/dω.
-    # Convert via κ = dω/dΦ:
-    #     G_freq = G_diff / κ   ⇒   Δω = p_diff · κ / G_diff
-    # κ is evaluated at the measurement flux (qubit.flux + flux).
-    kappa = qubit.frequency_sensitivity(qubit.flux + flux)
-    delta_omega = p_diff * kappa / G_diff
+    # Direct ω-domain conversion — no κ multiplication needed.
+    # G_freq = dp_diff/dω  ⇒  Δω = p_diff / G_freq
+    delta_omega = p_diff / G_freq
     return float(omega_d - delta_omega)
 
 

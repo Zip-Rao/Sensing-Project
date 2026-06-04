@@ -304,6 +304,11 @@ class KernelEstimator:
     amp_scan_factor: float = 1.0  #: Scan range = [-factor, +factor] * stim_amplitude
     extract_off_diagonal: bool = False  #: Full k_n(t_i, t_j, ...) instead of diagonal
 
+    # -- backward-compat shim (Phase 10.5) ---------------------------------
+    deprecation_warn_legacy: bool = True  #: Reserved; suppresses recursion guard
+    #  When False, internal create of KernelEstimator from the legacy
+    #  Pulse.get_kernel() shim bypasses any future circular-guard logic.
+
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
