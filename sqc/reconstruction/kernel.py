@@ -450,135 +450,26 @@ class KernelEstimator:
         qubit,
         t_samples: np.ndarray | None = None,
     ) -> tuple[np.ndarray, np.ndarray]:
-        """Kernel estimation via direct frequency stimulus (a†a operator).
+        """Kernel estimation via Heisenberg-picture propagator.
 
-        This is the "pure theory" kernel — no qubit dispersion, no
-        ``qubit_under_mag()``.  The stimulus is a frequency perturbation
-        δω(t) applied via the a†a operator.
+        Uses a single ``sesolve`` to compute the control propagator U(t),
+        then evaluates the first-order kernel via the commutator formula:
 
-        Uses bilateral symmetric difference to eliminate O(ε²) error:
-            k₁(tⱼ) = (p_plus − p_minus) / (2 · stim_area)
+            k₁(t) = i ⟨0|[W(t), Q]|0⟩
 
-        Only valid with ``mode='omega'`` (flux+sim is rejected by
-        ``_validate_inputs``).
+        where W(t) = U†(t)σ_z U(t)/2 and Q = U†(T)M U(T).
 
-        When ``qubit`` is provided, ``n_levels`` and ``anharmonicity``
-        are auto-detected; otherwise ``self.n_levels`` and
-        ``self.anharmonicity`` are used.
+        This is the "pure theory" kernel — no perturbation, no mesolve
+        loop, no polynomial fitting.  Only valid with ``mode='omega'``
+        (flux+sim is rejected by ``_validate_inputs``).
+
+        When ``qubit`` is provided, ``n_levels`` is auto-detected;
+        otherwise ``self.n_levels`` is used.
         """
-        import time
-
-        t_start = time.time()
-
-        pulse_tlist = np.asarray(pulse.t_list)
-
-        # Resolve Hilbert space dimension from pulse operators first,
-        # then clamp to qubit n_levels (or self.n_levels) for consistency.
-        pulse_ops = pulse.hamiltonian
-        if isinstance(pulse_ops, list) and len(pulse_ops) > 0:
-            first_op = pulse_ops[0][0] if isinstance(pulse_ops[0], list) else pulse_ops[0]
-            pulse_dim = first_op.shape[0] if hasattr(first_op, 'shape') else 2
-        else:
-            pulse_dim = 2
-
-        # Auto-detect Hilbert space parameters from qubit if available
-        if qubit is not None:
-            n_qubit = getattr(qubit, 'n_levels', self.n_levels)
-            alpha_qubit = getattr(qubit, 'anharmonicity', self.anharmonicity)
-            state_init = qubit.state
-        else:
-            n_qubit = self.n_levels
-            alpha_qubit = self.anharmonicity
-            state_init = qutip.basis(self.n_levels, 0)
-
-        # Clamp n to pulse dimension: a 2-level pulse on a 3-level qubit
-        # cannot be naively promoted; use pulse_dim to avoid QuTiP errors.
-        n = min(n_qubit, pulse_dim)
-        if n < n_qubit:
-            warnings.warn(
-                f"KernelEstimator(method='sim'): pulse operators are "
-                f"{pulse_dim}×{pulse_dim}, but qubit has n_levels={n_qubit}. "
-                f"Using n_levels={n} for compatibility. "
-                f"For multi-level sim kernels, use a pulse with "
-                f"n_levels-dimensional operators."
-            )
-            # Project state to n-level subspace
-            full_state = state_init.full().ravel()
-            state_init = qutip.Qobj(full_state[:n])
-
-        a = qutip.destroy(n)
-
-        # H_0: anharmonicity only (no flux/qubit frequency dependence).
-        if qubit is not None and hasattr(pulse, 'frame') and pulse.frame == 0:
-            # Use the qubit's full Hamiltonian, but projected to n-dim space
-            H_full = qubit.get_hamiltonian()
-            if H_full.shape[0] != n:
-                H_0 = QobjEvo(0 * qutip.qeye(n))
-            else:
-                H_0 = QobjEvo(H_full)
-        elif n == 2:
-            H_0 = QobjEvo(0 * qutip.qeye(2))
-        else:
-            H_0 = QobjEvo((alpha_qubit / 2.0) * (a.dag() * a.dag() * a * a))
-
-        # Build H_pulse from the pulse's own hamiltonian list
-        H_pulse = QobjEvo(pulse.hamiltonian, tlist=pulse_tlist, order=1)
-
-        if t_samples is None:
-            t_samples = pulse_tlist.copy()
-
-        # Baseline p_e
-        psi_e = qutip.basis(n, 1)
-        result_base = mesolve(
-            H_0 + H_pulse, state_init, pulse_tlist, [],
-            e_ops=[psi_e * psi_e.dag()],
+        t_samples_out, kernels_list = self._heisenberg_kernels(
+            pulse, qubit, t_samples, order=1,
         )
-        p_e_base = result_base.expect[0][-1]
-
-        # Stimulus operator: a†a (recommended by handbook §5.1.2)
-        # In n=2: a†a = (I - σ_z)/2 → constant shift cancels in difference
-        a_dag_a = a.dag() * a
-
-        # Gaussian stimulus width
-        _DT = CONFIG.awg.dt
-        sigma = max(self.stim_width, 2.0 * _DT)
-
-        kernel = np.zeros(len(t_samples))
-        for i, t_i in enumerate(t_samples):
-            # Gaussian stimulus: +ε and −ε for bilateral difference
-            gauss = np.exp(-0.5 * ((pulse_tlist - t_i) / sigma) ** 2)
-            coeff_plus = +self.stim_amplitude * gauss
-            coeff_minus = -self.stim_amplitude * gauss
-
-            H_stim_plus = QobjEvo(
-                [a_dag_a, coeff_plus], tlist=pulse_tlist, order=1,
-            )
-            H_stim_minus = QobjEvo(
-                [a_dag_a, coeff_minus], tlist=pulse_tlist, order=1,
-            )
-
-            result_plus = mesolve(
-                H_0 + H_pulse + H_stim_plus, state_init, pulse_tlist, [],
-                e_ops=[psi_e * psi_e.dag()],
-            )
-            result_minus = mesolve(
-                H_0 + H_pulse + H_stim_minus, state_init, pulse_tlist, [],
-                e_ops=[psi_e * psi_e.dag()],
-            )
-
-            p_plus = result_plus.expect[0][-1]
-            p_minus = result_minus.expect[0][-1]
-
-            # Stimulus area for normalization
-            stim_area = self.stim_amplitude * sigma * np.sqrt(2 * np.pi)
-
-            # Bilateral finite difference
-            kernel[i] = (p_plus - p_minus) / (2.0 * stim_area)
-
-        elapsed = time.time() - t_start
-        print(f"Kernel computation (omega, sim) took {elapsed:.2f} seconds")
-
-        return t_samples, kernel
+        return t_samples_out, kernels_list[0]
 
     # ------------------------------------------------------------------
     # Flux-mode estimation (legacy logic, preserved exactly)
@@ -878,29 +769,49 @@ class KernelEstimator:
 
     # -- sim: higher-order via a†a operator ---------------------------------
 
-    def _extract_kn_sim(
+    def _heisenberg_kernels(
         self,
         pulse,
         qubit,
         t_samples: np.ndarray | None = None,
+        order: int = 1,
     ) -> tuple[np.ndarray, list]:
-        """Diagonal Volterra kernel extraction via polynomial-fit amplitude scan.
+        """Compute k₁…k_N via Heisenberg-picture propagator (method='sim').
 
-        For each ``t_j``, scan the stimulus amplitude ``ε`` across a
-        symmetric grid, fit ``Δp_e = a₁·ε + a₂·ε² + ... + a_N·ε^N``,
-        then convert coefficients to diagonal kernel values via
-        :func:`_gauss_integral_factor`.
+        **Algorithm** (see ``idea/refactor/phase_10_kernel_theory_and_fix.md``):
 
-        Returns ``(t_samples, [k1, ..., kN])``.
+        1. ``sesolve(qeye(n), t_grid)`` → propagator U(t) at all times.
+        2. For each t_j, form W(t_j) = U†(t_j) σ_z U(t_j) / 2.
+        3. Evaluate nested commutators:
+
+           - k₁ = i ⟨0| [W, Q] |0⟩
+           - k₂ = −⟨0| [W, [W, Q]] |0⟩
+           - k₃ = −i ⟨0| [W, [W, [W, Q]]] |0⟩
+           - …
+
+        No perturbation, no mesolve loop, no polynomial fitting.
+        Works for any ``order`` ≥ 1 at constant cost (one sesolve total).
+
+        Parameters
+        ----------
+        pulse : Pulse or CompositePulse
+        qubit : TransmonQubit or None
+            If None, uses ``self.n_levels`` (default 2).
+        t_samples : np.ndarray or None
+            Time points where kernels are evaluated.  If None, uses the
+            deduplicated pulse time grid.
+        order : int
+            Highest kernel order (1..N).
+
+        Returns
+        -------
+        (t_samples, [k1, k2, ..., kN]) : tuple
         """
         import time
 
         t_start = time.time()
 
-        pulse_tlist = np.asarray(pulse.t_list)
-        N = self.order
-
-        # Resolve Hilbert space dimension (same logic as _estimate_sim)
+        # -- resolve Hilbert space -----------------------------------------
         pulse_ops = pulse.hamiltonian
         if isinstance(pulse_ops, list) and len(pulse_ops) > 0:
             first_op = pulse_ops[0][0] if isinstance(pulse_ops[0], list) else pulse_ops[0]
@@ -909,93 +820,103 @@ class KernelEstimator:
             pulse_dim = 2
 
         if qubit is not None:
-            n_qubit = getattr(qubit, 'n_levels', self.n_levels)
-            alpha_qubit = getattr(qubit, 'anharmonicity', self.anharmonicity)
-            state_init = qubit.state
+            n = getattr(qubit, 'n_levels', self.n_levels)
         else:
-            n_qubit = self.n_levels
-            alpha_qubit = self.anharmonicity
-            state_init = qutip.basis(self.n_levels, 0)
+            n = self.n_levels
 
-        n = min(n_qubit, pulse_dim)
-        if n < n_qubit:
+        n = min(n, pulse_dim)
+        if n < getattr(qubit, 'n_levels', self.n_levels):
             warnings.warn(
                 f"KernelEstimator(method='sim'): pulse operators are "
-                f"{pulse_dim}x{pulse_dim}, but qubit has n_levels={n_qubit}. "
+                f"{pulse_dim}x{pulse_dim}, but qubit has n_levels="
+                f"{getattr(qubit, 'n_levels', self.n_levels)}. "
                 f"Using n_levels={n} for compatibility."
             )
-            full_state = state_init.full().ravel()
-            state_init = qutip.Qobj(full_state[:n])
 
-        a = qutip.destroy(n)
+        # -- build Hamiltonian on clean (deduplicated) time grid -----------
+        # pulse.t_list may have duplicates at sub-pulse boundaries.
+        # sesolve requires unique time points.
+        raw_tlist = np.asarray(pulse.t_list, dtype=float)
+        t_grid, unique_idx = np.unique(raw_tlist, return_index=True)
 
-        # H_0 (same as _estimate_sim)
-        if qubit is not None and hasattr(pulse, 'frame') and pulse.frame == 0:
-            H_full = qubit.get_hamiltonian()
-            if H_full.shape[0] != n:
-                H_0 = QobjEvo(0 * qutip.qeye(n))
-            else:
-                H_0 = QobjEvo(H_full)
-        elif n == 2:
-            H_0 = QobjEvo(0 * qutip.qeye(2))
-        else:
-            H_0 = QobjEvo((alpha_qubit / 2.0) * (a.dag() * a.dag() * a * a))
-
-        H_pulse = QobjEvo(pulse.hamiltonian, tlist=pulse_tlist, order=1)
-
-        if t_samples is None:
-            t_samples = pulse_tlist.copy()
-
-        psi_e = qutip.basis(n, 1)
-
-        # Baseline p_e
-        result_base = mesolve(
-            H_0 + H_pulse, state_init, pulse_tlist, [],
-            e_ops=[psi_e * psi_e.dag()],
+        # RWA Hamiltonian at qubit frequency (or 0 if no qubit)
+        omega_ref = (
+            qubit.frequency if qubit is not None and hasattr(qubit, 'frequency')
+            else 0.0
         )
-        p_e_base = result_base.expect[0][-1]
+        if qubit is not None and hasattr(pulse, 'frame') and pulse.frame == 0:
+            H0 = QobjEvo(qubit.get_hamiltonian())
+        elif n == 2:
+            H0 = QobjEvo(0 * qutip.qeye(2))
+        else:
+            alpha = getattr(qubit, 'anharmonicity', self.anharmonicity) if qubit is not None else self.anharmonicity
+            a = qutip.destroy(n)
+            H0 = QobjEvo((alpha / 2.0) * (a.dag() * a.dag() * a * a))
 
-        # Gaussian stimulus
-        _DT = CONFIG.awg.dt
-        sigma = max(self.stim_width, 2.0 * _DT)
-        a_dag_a = a.dag() * a
+        H_pulse = QobjEvo(pulse.hamiltonian_on(t_grid), tlist=t_grid, order=1)
+        H_full = H0 + H_pulse
 
-        # Symmetric amplitude grid
-        M = self.n_amp_samples
-        eps_grid = np.linspace(
-            -self.amp_scan_factor, self.amp_scan_factor, M,
-        ) * self.stim_amplitude
+        # -- single sesolve: U(t) as n x n operator -----------------------
+        I_op = qutip.qeye(n)
+        res = qutip.sesolve(
+            H_full, I_op, t_grid,
+            options={'max_step': float(CONFIG.awg.dt), 'store_states': True},
+        )
+        U_list = res.states  # U(t_i, 0) at each t_i
 
-        kernels = [np.zeros(len(t_samples)) for _ in range(N)]
+        # -- Heisenberg operators at final time ----------------------------
+        sigma_z = qutip.Qobj(np.diag([1.0, -1.0] + [0.0] * (n - 2)))
+        M = qutip.basis(n, 1) * qutip.basis(n, 1).dag()   # |1><1|
+        U_T = U_list[-1]
+        Q = U_T.dag() * M * U_T                            # Heisenberg M
 
-        for i, t_i in enumerate(t_samples):
-            gauss = np.exp(-0.5 * ((pulse_tlist - t_i) / sigma) ** 2)
-            delta_p = np.zeros(M)
+        state0 = qutip.basis(n, 0)
 
-            for j, eps in enumerate(eps_grid):
-                coeff = eps * gauss
-                H_stim = QobjEvo(
-                    [a_dag_a, coeff], tlist=pulse_tlist, order=1,
-                )
-                result = mesolve(
-                    H_0 + H_pulse + H_stim, state_init, pulse_tlist, [],
-                    e_ops=[psi_e * psi_e.dag()],
-                )
-                delta_p[j] = result.expect[0][-1] - p_e_base
+        # -- resolve output time points -----------------------------------
+        if t_samples is None:
+            t_out = t_grid.copy()
+        else:
+            t_out = np.asarray(t_samples, dtype=float)
 
-            # Fit polynomial: Δp_e = a₁·ε + a₂·ε² + ... + a_N·ε^N
-            coeffs = _fit_polynomial_no_constant(eps_grid, delta_p, N)
+        # -- evaluate k1…kN at each t_j via nested commutators ------------
+        kernels = [np.zeros(len(t_out)) for _ in range(order)]
 
-            # Convert to diagonal kernel values
-            for n in range(1, N + 1):
-                c_n = _gauss_integral_factor(n, sigma)
-                kernels[n - 1][i] = coeffs[n - 1] / c_n
+        for i_out, t_j in enumerate(t_out):
+            # Find nearest propagator on t_grid
+            idx = int(np.argmin(np.abs(t_grid - t_j)))
+            U_t = U_list[idx]
+            Z_t = U_t.dag() * sigma_z * U_t     # Heisenberg sigma_z
+            W = Z_t / 2.0                         # effective perturbation op
+
+            # Compute nested commutators iteratively
+            # comm[n] = ad_W^n (Q) = [W, [W, ..., [W, Q]...]] (n nestings)
+            comm = Q  # comm[0] = Q
+            for n_order in range(1, order + 1):
+                comm = W * comm - comm * W        # comm[n] = [W, comm[n-1]]
+                val = state0.dag() * comm * state0
+                scalar = val[0, 0] if hasattr(val, 'shape') and val.shape == (1, 1) else complex(val)
+                # k_n = i^n * <0|ad_W^n(Q)|0>
+                kernels[n_order - 1][i_out] = float(np.real(
+                    (1j) ** n_order * scalar
+                ))
 
         elapsed = time.time() - t_start
-        print(f"Higher-order kernel computation (omega, sim, order={N}) "
+        print(f"Heisenberg kernel (sim, order={order}) "
               f"took {elapsed:.2f} seconds")
 
-        return t_samples, kernels
+        return t_out, kernels
+
+    def _extract_kn_sim(
+        self,
+        pulse,
+        qubit,
+        t_samples: np.ndarray | None = None,
+    ) -> tuple[np.ndarray, list]:
+        """Higher-order sim kernels via Heisenberg propagator.
+
+        Thin wrapper around :meth:`_heisenberg_kernels` for order ≥ 2.
+        """
+        return self._heisenberg_kernels(pulse, qubit, t_samples, order=self.order)
 
     # -- flux exp: higher-order via FluxSignal scan -------------------------
 
