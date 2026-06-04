@@ -1,11 +1,13 @@
 """sqc.reconstruction.transient — transient-field sensing reconstruction.
 
-    method="wiener":      linear Wiener deconvolution
-    method="hammerstein": Hammerstein-Wiener nonlinear block model
-    method="lm":          Levenberg-Marquardt full density-matrix inversion
+    method="wiener":                linear Wiener deconvolution
+    method="hammerstein":           Hammerstein-Wiener nonlinear block model
+    method="hammerstein_volterra":  iterative higher-order Volterra inversion
+    method="lm":                    Levenberg-Marquardt full density-matrix inversion
 """
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from typing import Literal
 
@@ -37,6 +39,74 @@ def _get_qubit_params(qubit) -> tuple[float, float, float]:
     return EC, EJ, freq
 
 
+def _wiener_deconvolution(Y, K, dt, lambda_reg):
+    """Wiener deconvolution of ``Y = K * X`` in the frequency domain.
+
+    Solves the inverse problem via the Wiener filter::
+
+        X_f = conj(K_f) / (|K_f|^2 + lambda_reg^2) * Y_f / dt
+
+    Parameters
+    ----------
+    Y : np.ndarray
+        Measurement data (1-D).
+    K : np.ndarray
+        Kernel array (1-D, length <= len(Y)).
+    dt : float
+        Time step for scaling.
+    lambda_reg : float
+        Regularisation parameter.
+
+    Returns
+    -------
+    np.ndarray
+        Reconstructed signal X (same length as ``Y``).
+    """
+    n = len(Y)
+    K_padded = np.zeros(n)
+    K_padded[:len(K)] = K
+    Y_fft = np.fft.fft(Y)
+    K_fft = np.fft.fft(K_padded)
+    H = np.conj(K_fft) / (np.abs(K_fft) ** 2 + lambda_reg ** 2)
+    X_fft = H * Y_fft / dt
+    X = np.fft.ifft(X_fft).real
+    return X
+
+
+def _omega_to_flux(delta_omega: np.ndarray, qubit) -> np.ndarray:
+    """Invert ω(Φ) → Φ using the Transmon dispersion relation.
+
+    Transmon frequency::
+
+        ω(Φ) ≈ √(8 EC EJ |cos(π Φ)|) − EC
+
+    Inverting::
+
+        |cos(π Φ)| = (ω + EC)² / (8 EC EJ)
+        Φ = (1/π) arccos(clip(ratio, 0, 1))
+
+    Subtracts the working-point flux bias to return the excursion ``h``.
+
+    Parameters
+    ----------
+    delta_omega : np.ndarray
+        Frequency shift relative to the working point (GHz).
+    qubit : QubitSpec or TransmonQubit
+        Qubit with EC, EJ, frequency, and flux/flux_bias attributes.
+
+    Returns
+    -------
+    np.ndarray
+        Flux values Φ (in Φ₀), relative to the bias point.
+    """
+    EC, EJ, freq = _get_qubit_params(qubit)
+    omega_total = np.asarray(delta_omega, dtype=float) + freq
+    ratio = np.clip((omega_total + EC) ** 2 / (8 * EC * EJ), 0.0, 1.0)
+    phi_abs = (1.0 / np.pi) * np.arccos(ratio)
+    bias = getattr(qubit, "flux_bias", getattr(qubit, "flux", 0.0))
+    return phi_abs - bias
+
+
 # ===================================================================
 # TransientReconstruction
 # ===================================================================
@@ -50,14 +120,20 @@ class TransientReconstruction(Reconstruction):
     method : str
         - ``"wiener"``: linear Wiener deconvolution.
         - ``"hammerstein"``: Hammerstein-Wiener nonlinear block model.
+        - ``"hammerstein_volterra"``: iterative Hammerstein-Volterra
+          inversion using higher-order kernels (requires order >= 2).
         - ``"lm"``: Levenberg-Marquardt full-density-matrix inversion.
 
-    wiener / hammerstein params
-    ---------------------------
+    wiener / hammerstein / hammerstein_volterra params
+    --------------------------------------------------
     lambda_reg : float
         Regularisation parameter.  Default from CONFIG.
     qubit : QubitSpec or TransmonQubit, optional
-        Required for hammerstein; unused by wiener.
+        Required for hammerstein / hammerstein_volterra; unused by wiener.
+    max_volterra_iter : int
+        Maximum fixed-point iterations (hammerstein_volterra only).
+    volterra_tol : float
+        Convergence tolerance for relative change (hammerstein_volterra only).
 
     lm params
     ---------
@@ -77,13 +153,15 @@ class TransientReconstruction(Reconstruction):
         Use adjoint Jacobian (True) or finite-difference (False).
     """
 
-    method: Literal["wiener", "hammerstein", "lm"] = "wiener"
+    method: Literal["wiener", "hammerstein", "hammerstein_volterra", "lm"] = "wiener"
 
-    # -- wiener / hammerstein --
+    # -- wiener / hammerstein / hammerstein_volterra --
     lambda_reg: float = field(
         default_factory=lambda: CONFIG.reconstruction.lambda_reg
     )
     qubit: object | None = None
+    max_volterra_iter: int = 5       # max fixed-point iterations
+    volterra_tol: float = 1e-4       # convergence tolerance
 
     # -- lm --
     control_pulse: CompositePulse | None = None
@@ -107,11 +185,32 @@ class TransientReconstruction(Reconstruction):
 
     # ------------------------------------------------------------------
     def reconstruct(self, measurement, kernel=None, **kwargs):
+        # Normalize kernel input
+        if isinstance(kernel, np.ndarray):
+            k1 = kernel
+            kn_list = None
+        elif kernel is not None:
+            # KernelResult object
+            k1 = kernel.k1
+            kn_list = kernel.kernels if kernel.order >= 2 else None
+        else:
+            k1 = None
+            kn_list = None
+
         match self.method:
             case "wiener":
-                return self._reconstruct_wiener(measurement, kernel, **kwargs)
+                return self._reconstruct_wiener(measurement, k1, **kwargs)
             case "hammerstein":
-                return self._reconstruct_hammerstein(measurement, kernel, **kwargs)
+                return self._reconstruct_hammerstein(measurement, k1, **kwargs)
+            case "hammerstein_volterra":
+                if kn_list is None:
+                    raise ValueError(
+                        "hammerstein_volterra requires order>=2 kernel; "
+                        "got order=1 ndarray or KernelResult with order=1"
+                    )
+                return self._reconstruct_hammerstein_volterra(
+                    measurement, kn_list, **kwargs
+                )
             case "lm":
                 return self._reconstruct_lm(measurement, **kwargs)
             case _:
@@ -136,19 +235,11 @@ class TransientReconstruction(Reconstruction):
             else:
                 dt = 1.0
 
-        N_del = len(delta_p)
         N_ker = len(kernel)
-        N = N_del - N_ker + 1
-        N_fft = N_del
+        N = len(delta_p) - N_ker + 1
 
-        p_pad = np.zeros(N_fft); p_pad[:N_del] = delta_p
-        k_pad = np.zeros(N_fft); k_pad[:N_ker] = kernel
-
-        Y = np.fft.fft(p_pad)
-        H = np.fft.fft(k_pad)
-        G = np.conj(H) / (np.abs(H) ** 2 + self.lambda_reg ** 2)
-        X_w = Y * G / dt
-        x_rec = np.real(np.fft.ifft(X_w))[:N]
+        x_full = _wiener_deconvolution(delta_p, kernel, dt, self.lambda_reg)
+        x_rec = x_full[:N]
 
         return FluxSignal(
             type=8,
@@ -168,17 +259,106 @@ class TransientReconstruction(Reconstruction):
         omega = np.asarray(omega_signal.signal, dtype=float)
 
         # Step 2: inverse Transmon dispersion
-        EC, EJ, freq = _get_qubit_params(self.qubit)
-        ratio = np.clip((omega + freq + EC) ** 2 / (8 * EC * EJ), 0.0, 1.0)
-        B = (1.0 / np.pi) * np.arccos(ratio)
-
-        # Subtract working-point flux bias to recover h = Φ - Φ_bias
-        bias = getattr(self.qubit, "flux_bias",
-                       getattr(self.qubit, "flux", 0.0))
-        B = B - bias
+        B = _omega_to_flux(omega, self.qubit)
 
         return FluxSignal(
             type=8, t_list=omega_signal.t_list.copy(), signal=B,
+        )
+
+    # ==================================================================
+    # hammerstein_volterra
+    # ==================================================================
+
+    def _reconstruct_hammerstein_volterra(
+        self, measurement, kernels: list, dt: float | None = None, **__
+    ) -> FluxSignal:
+        """Iterative Hammerstein-Volterra inversion using higher-order kernels.
+
+        Solves the nonlinear deconvolution problem via fixed-point iteration:
+
+            δω⁽⁰⁾ = Wiener₁(Δp_e)
+            δω⁽ᵏ⁺¹⁾ = Wiener₁(Δp_e − Σ_{n=2..N} k_n ∗ [δω⁽ᵏ⁾]ⁿ)
+
+        where Wiener₁ is the linear Wiener deconvolution using k₁.
+
+        Parameters
+        ----------
+        measurement : ExperimentResult or np.ndarray
+            Measurement data with ``data['delta_p']`` or raw array.
+        kernels : list of np.ndarray
+            Kernel list [k₁, k₂, ..., k_N] where N >= 2.
+        dt : float or None
+            Time step.  Extracted from ``measurement.axes['scan']`` if None.
+
+        Returns
+        -------
+        FluxSignal
+            Reconstructed flux signal.
+
+        Raises
+        ------
+        ValueError
+            If ``kernels`` has fewer than 2 entries.
+        """
+        if len(kernels) < 2:
+            raise ValueError(
+                "hammerstein_volterra requires at least 2 kernels; "
+                f"got {len(kernels)}"
+            )
+
+        if hasattr(measurement, "data") and isinstance(measurement.data, dict):
+            Y = np.asarray(measurement.data["delta_p"], dtype=float)
+        else:
+            Y = np.asarray(measurement, dtype=float)
+
+        if dt is None:
+            if hasattr(measurement, "axes") and "scan" in measurement.axes:
+                scan = np.asarray(measurement.axes["scan"])
+                dt = scan[1] - scan[0]
+            else:
+                dt = 1.0
+
+        K = kernels          # [k1, k2, ..., kN]
+        N_order = len(K)
+        N_ker = len(K[0])
+        N_out = len(Y) - N_ker + 1
+
+        # Initial guess: linear Wiener using only k1
+        X_omega = _wiener_deconvolution(Y, K[0], dt, self.lambda_reg)
+
+        for _it in range(self.max_volterra_iter):
+            # Build nonlinear correction
+            correction = np.zeros_like(Y)
+            for n in range(2, N_order + 1):
+                X_pow_n = X_omega ** n
+                # Volterra expansion: (1/n!) * ∫ k_n * (δω)^n dt
+                conv = np.convolve(K[n - 1], X_pow_n, mode='same') * dt
+                correction += conv / math.factorial(n)
+
+            # Wiener-deconvolve residual
+            residual = Y - correction
+            X_new = _wiener_deconvolution(residual, K[0], dt, self.lambda_reg)
+
+            # Convergence check
+            norm_old = np.linalg.norm(X_omega)
+            if norm_old < 1e-30:
+                X_omega = X_new
+                break
+            rel_change = np.linalg.norm(X_new - X_omega) / norm_old
+            X_omega = X_new
+            if rel_change < self.volterra_tol:
+                break
+
+        # Convert omega → flux if qubit available
+        if self.qubit is not None:
+            X_flux = _omega_to_flux(X_omega[:N_out], self.qubit)
+        else:
+            X_flux = X_omega[:N_out]
+
+        return FluxSignal(
+            type=8,
+            t_list=np.arange(0, N_out * dt, dt),
+            signal=X_flux,
         )
 
     # ==================================================================
