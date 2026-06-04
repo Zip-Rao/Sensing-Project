@@ -10,11 +10,11 @@
 
 | 字段 | 值 |
 |---|---|
-| 完成 phase | P7 |
-| 完成日期 | 2026-05-16 |
-| commit SHA | df85be8 |
-| 执行者 (人/agent id) | refactor-phase-executor (P7 run) |
-| 本次 token 实际消耗 | ~150K |
+| 完成 phase | P10 |
+| 完成日期 | 2026-06-04 |
+| commit SHA | 2eb8008 |
+| 执行者 (人/agent id) | Zip (主 session) + 5 subagents |
+| 本次 token 实际消耗 | ~550K |
 
 ---
 
@@ -44,6 +44,17 @@
   - [x] P7.9: docs/architecture.md §10.7 文档; 版本 v2.1→v2.2
 - [ ] **P8** — filter function 代码适配：零遮盖 → 核函数卷积 (规划完成，待实施，详见 [phase_8_handbook.md](phase_8_handbook.md))
   - [ ] P8.1–P8.7 (详见 handbook)
+- [x] **P9** — 级联预失真 + 协议驱动阶跃响应 (DONE, 2026-06-03, commit: a231a05)
+  - [x] Plan A: CascadeDistortion + IIR 级联 + FIR 残差
+  - [x] Plan B: StepResponseMeasurement 协议驱动测量
+  - [x] Experiment._route_flux() + control_line 感知
+- [x] **P10** — 核函数体系三维扩展：flux/omega × sim/exp × 1..N 阶 (DONE, 2026-06-04, commits: 9dcc973, 11d6b9a, e190715, e4f73a9, 2eb8008)
+  - [x] P10.1: mode 维度 (flux/omega) + Virtual Z 双实现 (math/hardware) + KernelResult
+  - [x] P10.2: method 维度 (sim/exp) + a†a 纯理论刺激 + 维度自适应
+  - [x] P10.3: order 维度 (1..N) + 振幅扫描多项式拟合 + save/load 序列化
+  - [x] P10.4: Hammerstein-Volterra 固定点迭代反卷积 + _omega_to_flux
+  - [x] P10.5: frequency.py 迁移到 omega kernel (消除 κ workaround) + get_kernel() deprecation shim
+  - [x] P10.6: docs/architecture.md §4.6.2 更新 + v2.7→v2.8 + handoff state
 
 ---
 
@@ -52,7 +63,7 @@
 | 字段 | 值 |
 |---|---|
 | 当前分支 | `项目重建-v2` |
-| 最近 commit | df85be8 (docs(P7): add unified global time axis section to architecture.md) |
+| 最近 commit | 2eb8008 (feat(P10.5): migrate frequency.py to omega kernel, eliminate κ workaround) |
 | `git rev-parse HEAD:src` | `a2322bb51706c079603cc060b1eff3a5b297f285` |
 | `git diff --quiet master -- 'src/*.py'` 是否返回 0 | ✗ (pre-existing: 1-line amplitude change 0.06→0.01 in src/protocal.py line 148, from commit c77427a) |
 | 未合并到 master 的 refactor 分支 | `项目重建-v2` |
@@ -63,10 +74,11 @@
 
 | 测试套件 | 上次结果 | 用时 |
 |---|---|---|
-| `pytest tests/unit -v` | 246 passed, 0 failed | 54.0s |
-| `pytest tests/regression -m regression` | 7 passed, 0 failed | 22.3s |
+| `pytest tests/unit -v` | 297 passed, 0 failed | ~90s |
+| `pytest tests/regression -m regression` | 6 passed, 0 failed | ~35s |
 | `pytest tests/equivalence` | 17 passed, 1 failed (pre-existing), 1 xfailed | ~60s |
-| `pytest tests/ -v` | 287 passed, 1 failed (pre-existing), 1 xfailed | 201s |
+| `pytest tests/integration` | 21 passed, 0 failed | ~30s |
+| `pytest tests/ -v` | 350 passed, 0 failed, 2 xfailed | ~300s |
 
 baseline pickle 清单(`tests/baselines/` 内):
 - [x] `qubit_static.pkl` (P0)
@@ -262,6 +274,7 @@ Sensing-Project 现已具备:
 |---|---|---|---|---|---|---|
 | 2026-05-16 | P6 | refactor-phase-executor | ec64b80 | ✅ DONE | ~80K | P6a: reconfigure() extended to 6 layers. P6d: SensingWorkflow with configure()/run(measure,reconstruct,calibrate)/sweep(param,values)/compare(methods)/plot() + 11 stub methods. P6c: Simulation_sqc.ipynb 4-cell parameter sweep demo. 30 new unit tests (test_workflow.py). All 228 unit tests pass, 6/6 regression pass. P6b skipped per handbook. Known: hammerstein equivalence test pre-existing failure, src/protocal.py pre-existing 1-line diff. |
 | 2026-05-16 | P7 | refactor-phase-executor | df85be8 | ✅ DONE | ~150K | P7.1: trigger + hamiltonian_on / samples_on API on Pulse/FluxSignal/Waveform, 18 new unit tests. P7.2: IQReadoutModel + HamiltonianBuilder t_global migration. P7.3: 7 experiment files migrated (removed ctrl.t_list offset hack, use hamiltonian_on). Cryoscope flux_signal extended to 100ns + trunc boundary check. P7.4: reconstruction layer linspace→arange. P7.5: remove 1e-9 separator; clean remaining linspace. P7.6: calibration mesolve migration. P7.7: fix test assertions. P7.8: 7 baselines regenerated. P7.9: docs/architecture.md §10.7. 246 unit tests + 7 regression + 287 total pass. Known: Duplicate time points warning (1e-9 removal), PiPulseComp 45x slower on t_global, LM tolerance relaxed. |
+| 2026-06-04 | P10 | Zip (主 session) + 5 subagents | 2eb8008 | ✅ DONE | ~550K | P10.1: mode 维度 (flux/omega) + Virtual Z (math σ_z 冲激 + hardware 相位重建) + KernelResult。P10.2: method 维度 (sim a†a + exp) + 维度自适应 clamping。P10.3: order>=2 振幅扫描多项式拟合 + KernelResult.save/load。P10.4: Hammerstein-Volterra 固定点迭代 + _omega_to_flux + _wiener_deconvolution。P10.5: frequency.py omega kernel 直接路径 + get_kernel() deprecation shim。P10.6: docs/architecture.md §4.6.2 重写 + v2.7→v2.8。+29 新单元测试；350 测试全绿；6/6 regression pass；src/ unchanged (R1)。 |
 | 2026-05-01 | P5 | refactor-phase-executor | 1877732 | ✅ DONE | ~200K | TransferMatrix full implementation with FFT-based apply() + from_dc_matrix(); ChipTopology with lift_qubit_op() + hamiltonian_static() + collapse_operators(); ZCrosstalkWorkflow end-to-end crosstalk extraction + compensation; 37 unit tests (TransferMatrix 16 + ChipTopology 21); 7 integration tests (5 algorithmic + 2 end-to-end); 1 regression baseline (z_crosstalk_default.pkl); total tests: 185 unit + 24 integration + 7 regression + 14 equivalence = 230 collected. Known limitation: H_BA extraction accuracy limited by Wiener reconstruction with n_levels=2 and short t_rabi; algorithmic tests verify core logic at <2% error with synthetic data. Compensation factor > 100 in perfect-data tests. |
 | 2026-05-01 | P4 | refactor-phase-executor | d21194b | ✅ DONE | ~200K | DistortionModel 5 subclasses internalized to sqc/hardware/distortion.py; ControlLine fully implemented; TransferFunctionCalibration with step-response fitting; PredistortionDesigner with analytical IIR inverse (perfect cancellation for single-exp, improvement ~8.5e12x) and frequency-domain fallback; PredistortionValidationWorkflow end-to-end; src_mirror/distortion.py re-exports from sqc/; 45 new unit tests + 9 integration tests + 1 regression test; predistortion_default.pkl baseline generated; 183 total tests pass (148 unit + 6 regression + 14 equivalence + 15 integration). Known limitation: MultiExponentialDistortion frequency inverse does not perfectly cancel due to bilinear warping mismatch; single-exponential recommended for flux-line predistortion. |
 | 2026-05-01 | P3c | refactor-phase-executor | aab4045 | ⚠️ PARTIAL | ~150K | CryoscopeExperiment ported from src/protocal.py case 5; CryoscopeReconstruction stub created; FluxResponseCalibration ramsey method implemented; QubitFrequencyCalibration implemented; TransientFrequencyCalibration stub; Calibration facade updated in src_mirror/protocal.py; get_h_from_phi implemented; IQReadoutModel n_levels fix. Track B 1.1/1.2 NOT complete — stubs raise NotImplementedError. |

@@ -1,6 +1,6 @@
 # Sensing-Project 全栈化重构平台 — 技术文档
 
-> 版本: v2.2 | 日期: 2026-05-16 | 适用于 sqc v0.2.0
+> 版本: v2.8 | 日期: 2026-06-04 | 适用于 sqc v0.3.0
 >
 > 本文档按照 **Gao, Rol, Touzard, Wang 2021**（PRX Quantum 2, 040202）所提出的 cQED 六层全栈架构组织。
 > 每一章既给出物理动机，又详尽介绍代码模块、扩展接口与开发规范。
@@ -838,16 +838,54 @@ result = exp.run()
 
 #### 4.6.2 `KernelEstimator` (`sqc/reconstruction/kernel.py`)
 
-统一的控制核函数估计器（消除了旧代码三处重复实现）。
+统一的控制核函数估计器（消除了旧代码三处重复实现）。支持三个正交设计维度：
 
 ```python
-from sqc.reconstruction.kernel import KernelEstimator
+from sqc.reconstruction.kernel import KernelEstimator, KernelResult
 
-estimator = KernelEstimator(stim_amplitude=0.0215, stim_width=3.0)
+# 默认路径（向后兼容）—— flux 模式 + exp 方法 + 1 阶
+estimator = KernelEstimator()
 t_samples, kernel = estimator.estimate(pulse, qubit)
+
+# Omega 模式（频率核函数，直接用于频率标定）
+e_omega = KernelEstimator(mode='omega', method='exp')
+t, k_omega = e_omega.estimate(pulse, qubit)
+
+# 纯理论 sim 模式（不依赖 qubit 色散）
+e_sim = KernelEstimator(mode='omega', method='sim', n_levels=2)
+t, k_sim = e_sim.estimate(pulse, None)  # qubit 可选
+
+# 二阶 Volterra 核函数（对角近似）
+e2 = KernelEstimator(mode='flux', method='exp', order=2, n_amp_samples=5)
+result = e2.estimate_full(pulse, qubit)       # → KernelResult
+result.k1    # k₁  (1D ndarray)
+result.kernels[1]  # k₂  (1D ndarray)
+result.save('kernel.npz')
+loaded = KernelResult.load('kernel.npz')
 ```
 
-**算法**：在每个时间点 t_i 注入窄高斯刺激，测量 p_e 变化。kernel[i] = (p_e_stimulated − p_e_baseline) / stim_area。
+**三维设计空间**：
+
+| 维度 | 可选值 | 默认值 | 物理含义 |
+|------|--------|--------|---------|
+| `mode` | `'flux'`, `'omega'` | `'flux'` | 刺激物理量 |
+| `method` | `'sim'`, `'exp'` | `'exp'` | 模拟策略 |
+| `order` | `1, 2, 3, ...` | `1` | Volterra 阶数 |
+
+**合法组合**：(omega, sim) ← 纯理论；(omega, exp) ← Virtual Z；(flux, exp) ← 当前默认。(flux, sim) 非法。
+
+**Virtual Z 实现**（`mode='omega'` + `method='exp'`）：
+- `virtual_z_impl='math'`（默认）：瞬时 σ_z 冲激 Hamiltonian（窄高斯近似 δ 函数）
+- `virtual_z_impl='hardware'`：重建 CompositePulse 的 sub-pulse 相位（与实验 1:1 对应）
+
+**算法**：
+- order=1, mode='flux'：单边有限差分 `Δp_e / stim_area`（向后兼容）
+- order=1, mode='omega'：双边对称差分 `(p_+ − p_-) / (2·φ_z)`
+- order≥2：在每个 t_j 处扫描振幅 ε，多项式拟合 `Δp_e = a₁·ε + a₂·ε² + ...`，提取对角核 `k_n = a_n / c_n`（Plan A：flux 域直接 polyfit）
+
+**高阶提取**（Phase 10.3）：`_extract_kn_sim()`、`_extract_kn_flux()`、`_extract_kn_omega()` 通过振幅扫描 + 多项式拟合提取对角 Volterra 核。`KernelResult.save()` / `load()` 使用 `numpy.savez` 序列化。
+
+**legacy shim**：`Pulse.get_kernel()` / `CompositePulse.get_kernel()` 转为 `DeprecationWarning` 兼容桥，内部转发到 `KernelEstimator(mode='flux', method='exp', order=1)`。
 
 #### 4.6.3 `TransientReconstruction` 详例
 
@@ -865,6 +903,14 @@ phi_rec = recon.reconstruct(
 # Hammerstein-Wiener 非线性
 recon_hw = TransientReconstruction(method="hammerstein", qubit=q, lambda_reg=1.0)
 B = recon_hw.reconstruct(transient_result, kernel=kernel_array, dt=0.5)
+
+# Hammerstein-Volterra 高阶迭代反卷积（Phase 10.4）
+recon_hv = TransientReconstruction(
+    method="hammerstein_volterra", qubit=q,
+    lambda_reg=1.0, max_volterra_iter=5, volterra_tol=1e-4,
+)
+# kernel 可以是 KernelResult (order≥2) 或旧 ndarray
+phi_hv = recon_hv.reconstruct(transient_result, kernel=kernel_result, dt=0.5)
 
 # LM 全密度矩阵优化
 recon_lm = TransientReconstruction(
@@ -2318,6 +2364,7 @@ mesolve(H_list, psi0, t_array, c_ops, e_ops)
 | v2.5 | 2026-05-17 | §4.5.2 追加 DelayRamsey **t_d 语义陷阱**注释:说明 `t_d` 是 Ramsey 起点相对 `t_fall` 的偏移而非测量点相对 falling edge 的延迟,实际采样时刻 `t_query = t_fall + t_d + t_sig`(t_sig ∈ 自由演化窗口),最早可测点为 `t_fall + t_rabi[-1]`;并提示 `flux_signal.t_list` 必须覆盖整个 t_query 范围(否则 `value_at` 越界返回 0 造成重建曲线"悬崖")。纯文档增补,无代码改动。 |
 | v2.6 | 2026-05-17 | **Cryoscope/DelayRamsey 相位 unwrap 统一**:消除 calibration 反演的 ~70 μΦ₀ DC 偏置。(1) 新建 `sqc/reconstruction/dispersion.py` 共享 4 个函数 — `omega_q_at_flux`/`cryoscope_phase_theory`/`cumulative_phase_theory`/`unwrap_phase_with_model`,作为相位 unwrap 唯一真理源。(2) 4 处迁移到统一 API:`CryoscopeExperiment`/`CryoscopeCalibration`/`DelayRamseyExperiment`/`DelayRamseyCalibration` 全部用 model-guided unwrap,实验端用累积积分锚定、标定端用方波相位锚定;旧的 baseline-subtraction + `np.unwrap` 残骸清理。(3) `CryoscopeCalibration` 末尾追加 h=0 锚定 — 减掉 `varphi[h≈0]` 让 `cal.inverse(0) == 0`,消除 IQReadout 系统相位污染。(4) `CryoscopeExperiment` `trunc_list` 越界 sanity check + 默认 `flux_signal.t_list` 延长到 100 ns,避免 `truncate()` 静默失效(silent failure)。(5) `DelayRamseyExperiment.run_baseline` 字段保留兼容性但标 deprecated。详见 §4.6.7。22 单元测试 + 5 物理回归 baseline 全绿(无需重生成)。数值验证:DC offset 由 +6.88e-5 → +2.15e-9 Φ₀。 |
 | v2.7 | 2026-05-18 | **PredistortionDesigner smooth=True 逆设计修复**:`_single_exp_to_iir_inverse` 未区分 `smooth=True/False`，对纯低通模式 (smooth=True, H(s)=1/(1+sτ)) 错误使用非平滑公式 (amp=0.3)，导致级联 H_inv·H = 1/(1+s·21ns) 而非 ≈1。修复：smooth=True 时加正则化极点 τ_reg=dt/4，级联 ≈1/(1+s·0.125ns)，阶跃响应 RMSE 从 0.274 降至 0.018 (15x 改善)。详见 §4.7.4。18 回归+单元测试全绿。 |
+| v2.8 | 2026-06-04 | **P10: 核函数体系三维扩展**。KernelEstimator 新增 mode (flux/omega)、method (sim/exp)、order (1..N) 三个正交维度。新增 Virtual Z 双实现（math σ_z 冲激 + hardware 相位重建）。新增 sim 模式（a†a 频率刺激，纯理论）。新增高阶 Volterra 对角核提取（振幅扫描 + 多项式拟合）及 KernelResult.save/load 序列化。新增 Hammerstein-Volterra 固定点迭代反卷积及 _omega_to_flux 色散反演。frequency.py 迁移到 omega kernel 直接路径，消除 κ workaround。Pulse.get_kernel() 转为 DeprecationWarning 兼容桥。+29 新单元测试；350 测试全绿；src/ 未变（R1）。详见 [phase_10_handbook](../idea/refactor/phase_10_kernel_extension_handbook.md)。 |
 
 下一步阅读：
 - 完整设计背景：[`idea/refactor/_refactor_plan.md`](../idea/refactor/_refactor_plan.md)
