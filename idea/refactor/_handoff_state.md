@@ -10,11 +10,11 @@
 
 | 字段 | 值 |
 |---|---|
-| 完成 phase | P10 |
-| 完成日期 | 2026-06-04 |
-| commit SHA | 2eb8008 |
-| 执行者 (人/agent id) | Zip (主 session) + 5 subagents |
-| 本次 token 实际消耗 | ~550K |
+| 完成 phase | P11 |
+| 完成日期 | 2026-06-06 |
+| commit SHA | (pending) |
+| 执行者 (人/agent id) | Zip (主 session) |
+| 本次 token 实际消耗 | ~300K |
 
 ---
 
@@ -55,6 +55,11 @@
   - [x] P10.4: Hammerstein-Volterra 固定点迭代反卷积 + _omega_to_flux
   - [x] P10.5: frequency.py 迁移到 omega kernel (消除 κ workaround) + get_kernel() deprecation shim
   - [x] P10.6: docs/architecture.md §4.6.2 更新 + v2.7→v2.8 + handoff state
+- [x] **P11** — 瞬态测频 order≥3 的 G₃ 修复 (Route A: fit; DONE, 2026-06-06)
+  - [x] Route A (fit): _calibrate_g3_taylor() sigma_z 恒定失谐扫描 + 奇次多项式拟合 + 模块级缓存
+  - [x] g3_source 参数: FrequencyMeasurement / _measure_frequency_transient 全线贯通
+  - [x] Route B (kernel triple integral): 未实现 (待后续)
+  - [x] docs/architecture.md v2.9 更新
 
 ---
 
@@ -274,6 +279,7 @@ Sensing-Project 现已具备:
 |---|---|---|---|---|---|---|
 | 2026-05-16 | P6 | refactor-phase-executor | ec64b80 | ✅ DONE | ~80K | P6a: reconfigure() extended to 6 layers. P6d: SensingWorkflow with configure()/run(measure,reconstruct,calibrate)/sweep(param,values)/compare(methods)/plot() + 11 stub methods. P6c: Simulation_sqc.ipynb 4-cell parameter sweep demo. 30 new unit tests (test_workflow.py). All 228 unit tests pass, 6/6 regression pass. P6b skipped per handbook. Known: hammerstein equivalence test pre-existing failure, src/protocal.py pre-existing 1-line diff. |
 | 2026-05-16 | P7 | refactor-phase-executor | df85be8 | ✅ DONE | ~150K | P7.1: trigger + hamiltonian_on / samples_on API on Pulse/FluxSignal/Waveform, 18 new unit tests. P7.2: IQReadoutModel + HamiltonianBuilder t_global migration. P7.3: 7 experiment files migrated (removed ctrl.t_list offset hack, use hamiltonian_on). Cryoscope flux_signal extended to 100ns + trunc boundary check. P7.4: reconstruction layer linspace→arange. P7.5: remove 1e-9 separator; clean remaining linspace. P7.6: calibration mesolve migration. P7.7: fix test assertions. P7.8: 7 baselines regenerated. P7.9: docs/architecture.md §10.7. 246 unit tests + 7 regression + 287 total pass. Known: Duplicate time points warning (1e-9 removal), PiPulseComp 45x slower on t_global, LM tolerance relaxed. |
+| 2026-06-06 | P11 | Zip (主 session) | (pending) | ✅ DONE | ~300K | Route A: _calibrate_g3_taylor() via sigma_z constant detuning scan + odd-polynomial fit + module-level _g3_cache. g3_source="fit"/"diag_legacy" parameter wired through FrequencyMeasurement -> _measure_frequency_transient. Route B (triple integral) not implemented. docs/architecture.md v2.9. 350 tests pass; 6/6 regression pass. Known: G1_fit ~ 0.6x G1_kernel (calibration scale factor under investigation). |
 | 2026-06-04 | P10 | Zip (主 session) + 5 subagents | 2eb8008 | ✅ DONE | ~550K | P10.1: mode 维度 (flux/omega) + Virtual Z (math σ_z 冲激 + hardware 相位重建) + KernelResult。P10.2: method 维度 (sim a†a + exp) + 维度自适应 clamping。P10.3: order>=2 振幅扫描多项式拟合 + KernelResult.save/load。P10.4: Hammerstein-Volterra 固定点迭代 + _omega_to_flux + _wiener_deconvolution。P10.5: frequency.py omega kernel 直接路径 + get_kernel() deprecation shim。P10.6: docs/architecture.md §4.6.2 重写 + v2.7→v2.8。+29 新单元测试；350 测试全绿；6/6 regression pass；src/ unchanged (R1)。 |
 | 2026-05-01 | P5 | refactor-phase-executor | 1877732 | ✅ DONE | ~200K | TransferMatrix full implementation with FFT-based apply() + from_dc_matrix(); ChipTopology with lift_qubit_op() + hamiltonian_static() + collapse_operators(); ZCrosstalkWorkflow end-to-end crosstalk extraction + compensation; 37 unit tests (TransferMatrix 16 + ChipTopology 21); 7 integration tests (5 algorithmic + 2 end-to-end); 1 regression baseline (z_crosstalk_default.pkl); total tests: 185 unit + 24 integration + 7 regression + 14 equivalence = 230 collected. Known limitation: H_BA extraction accuracy limited by Wiener reconstruction with n_levels=2 and short t_rabi; algorithmic tests verify core logic at <2% error with synthetic data. Compensation factor > 100 in perfect-data tests. |
 | 2026-05-01 | P4 | refactor-phase-executor | d21194b | ✅ DONE | ~200K | DistortionModel 5 subclasses internalized to sqc/hardware/distortion.py; ControlLine fully implemented; TransferFunctionCalibration with step-response fitting; PredistortionDesigner with analytical IIR inverse (perfect cancellation for single-exp, improvement ~8.5e12x) and frequency-domain fallback; PredistortionValidationWorkflow end-to-end; src_mirror/distortion.py re-exports from sqc/; 45 new unit tests + 9 integration tests + 1 regression test; predistortion_default.pkl baseline generated; 183 total tests pass (148 unit + 6 regression + 14 equivalence + 15 integration). Known limitation: MultiExponentialDistortion frequency inverse does not perfectly cancel due to bilinear warping mismatch; single-exponential recommended for flux-line predistortion. |

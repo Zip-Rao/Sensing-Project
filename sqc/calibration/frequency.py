@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from typing import Literal
 
 import numpy as np
-from qutip import QobjEvo, basis, mesolve
+from qutip import Qobj, QobjEvo, basis, mesolve
 
 from sqc.config import CONFIG
 from sqc.calibration.base import Calibration, CalibrationTable
@@ -197,6 +197,142 @@ def _fit_ramsey_frequency(
 
 
 # ---------------------------------------------------------------------------
+# Module-level G₃ Taylor coefficient cache
+# ---------------------------------------------------------------------------
+# Key: (hash of t_rabi.tobytes(), round(omega_d, 6))
+# Value: (G1_fit, G3_taylor)
+# The G₁, G₃ coefficients depend only on the pulse sequence shape (t_rabi
+# duration + dt) and drive frequency — not on the qubit state.  Caching
+# avoids re-running the ~42-mesolve calibration scan on every measurement.
+_g3_cache: dict[tuple, tuple[float, float]] = {}
+
+
+def _make_cache_key(t_rabi: np.ndarray, omega_d: float) -> tuple:
+    """Return a hashable cache key from the pulse time axis and drive frequency."""
+    return (hash(t_rabi.tobytes()), round(float(omega_d), 6))
+
+
+# ---------------------------------------------------------------------------
+# Internal helper: G₃ Taylor calibration via p_diff(Δ) polynomial fit
+# ---------------------------------------------------------------------------
+
+def _calibrate_g3_taylor(
+    qubit: object,
+    omega_d: float,
+    t_rabi: np.ndarray,
+    t_global: np.ndarray,
+    n_scan: int = 21,
+    delta_max_ghz: float = 0.08,
+) -> tuple[float, float]:
+    """Fit odd-polynomial Taylor expansion of p_diff(Delta).
+
+    Directly adds a constant detuning term (Delta/2)*sigma_z to the
+    qubit Hamiltonian at the sweet spot, creating **known** Delta values
+    of both signs without changing omega_d or the qubit flux.  Measures
+    p_diff via orthogonal Ramsey readout, and fits::
+
+        p_diff = c1*Delta + c3*Delta^3 + c5*Delta^5
+
+    Returns ``(G1_fit, G3_taylor)`` where ``G1_fit = c1`` and
+    ``G3_taylor = 6*c3``.
+
+    Results are cached in the module-level ``_g3_cache`` keyed by
+    ``(t_rabi_hash, omega_d)``.
+
+    Cost: ~2 * n_scan mesolve calls (~42 for default 21 points).
+    """
+    import time
+
+    cache_key = _make_cache_key(t_rabi, omega_d)
+    if cache_key in _g3_cache:
+        return _g3_cache[cache_key]
+
+    t_start = time.time()
+    n_levels = qubit.n_levels
+    psi_e = basis(n_levels, 1)
+    t_sig = CONFIG.pulse.make_time(0, 300)
+
+    # Build sigma_z operator in n_levels Fock basis
+    sigma_z = Qobj(np.diag([1.0, -1.0] + [0.0] * (n_levels - 2)))
+
+    # Set qubit to sweet spot (Phi=0) in frame rotating at omega_d
+    Phi_zero = FluxSignal(type=0, t_list=t_sig)
+    qubit.qubit_in_mag(Phi_zero, frame=1, omega_d=omega_d)
+
+    # -- scan symmetric known detunings (both signs) -----------------------
+    # Use a stretched grid: finer spacing near Delta=0 for derivative accuracy
+    x = np.linspace(-1.0, 1.0, n_scan)
+    delta_scan_ghz = delta_max_ghz * np.sign(x) * (np.abs(x) ** 1.5)
+    delta_scan_ghz = delta_scan_ghz[delta_scan_ghz != 0.0]  # exclude Delta=0
+
+    delta_vals: list[float] = []
+    p_diff_vals: list[float] = []
+
+    for delta_ghz in delta_scan_ghz:
+        delta_rad = 2.0 * np.pi * float(delta_ghz)
+        delta_vals.append(delta_rad)
+
+        # Add -(Delta/2)*sigma_z to H_base to simulate constant detuning Delta
+        # (RWA: H_q = (omega_q - omega_d) a†a = Delta*(I - sigma_z)/2 = -(Delta/2)*sigma_z + const)
+        detuning_coeff = -0.5 * delta_rad * np.ones_like(t_global)
+        H_detuning = QobjEvo(
+            [[sigma_z, detuning_coeff]],
+            tlist=t_global, order=1,
+        )
+
+        # Build orthogonal Ramsey pulses at omega_d (FIXED)
+        tau = 0.0
+        ctrl_x = create_ramsey_pulse(
+            t_rabi, tau, omega_d=omega_d,
+            phase1=np.pi / 2, phase2=0.0, qubit=qubit,
+        )
+        ctrl_mx = create_ramsey_pulse(
+            t_rabi, tau, omega_d=omega_d,
+            phase1=np.pi / 2, phase2=np.pi, qubit=qubit,
+        )
+
+        H_base = QobjEvo(qubit.H_list, tlist=qubit.mag_signal.t_list, order=1)
+        H_pulse_x = QobjEvo(ctrl_x.hamiltonian_on(t_global), tlist=t_global, order=1)
+        H_pulse_mx = QobjEvo(ctrl_mx.hamiltonian_on(t_global), tlist=t_global, order=1)
+
+        H_x = H_base + H_detuning + H_pulse_x
+        H_mx = H_base + H_detuning + H_pulse_mx
+
+        res_x = mesolve(
+            H_x, qubit.state, t_global, [],
+            e_ops=[psi_e * psi_e.dag()],
+            options={"max_step": float(CONFIG.awg.dt)},
+        )
+        res_mx = mesolve(
+            H_mx, qubit.state, t_global, [],
+            e_ops=[psi_e * psi_e.dag()],
+            options={"max_step": float(CONFIG.awg.dt)},
+        )
+        p_x = float(res_x.expect[0][-1])
+        p_mx = float(res_mx.expect[0][-1])
+        p_diff_vals.append((p_x - p_mx) / 2.0)
+
+    # -- polynomial fit: p_diff = c1*Delta + c3*Delta^3 + c5*Delta^5 ------
+    delta_arr = np.asarray(delta_vals, dtype=float)
+    p_diff_arr = np.asarray(p_diff_vals, dtype=float)
+    A = np.column_stack([delta_arr, delta_arr ** 3, delta_arr ** 5])
+    coeffs, *_ = np.linalg.lstsq(A, p_diff_arr, rcond=None)
+    c1, c3 = coeffs[0], coeffs[1]
+
+    G1_fit = float(c1)
+    G3_taylor = float(6.0 * c3)
+
+    _g3_cache[cache_key] = (G1_fit, G3_taylor)
+
+    elapsed = time.time() - t_start
+    print(
+        f"G3 Taylor calibration: {len(delta_vals)} points in {elapsed:.1f}s, "
+        f"G1={G1_fit:.4f}, G3={G3_taylor:.1f}, G3/G1={G3_taylor/G1_fit:.1f} ns^2"
+    )
+    return G1_fit, G3_taylor
+
+
+# ---------------------------------------------------------------------------
 # Internal helper: transient single-point frequency measurement
 # ---------------------------------------------------------------------------
 
@@ -207,6 +343,7 @@ def _measure_frequency_transient(
     t_global: np.ndarray,
     flux: float = 0.0,
     order: int = 1,
+    g3_source: Literal["fit", "diag_legacy"] = "fit",
 ) -> float:
     """Transient-based single-point frequency measurement.
 
@@ -316,25 +453,38 @@ def _measure_frequency_transient(
     delta_omega = p_diff / G_freq
 
     # -- cubic Newton correction (order >= 3) -----------------------------
-    # Solves:  p_diff = G_freq·Δω + (1/6)·G₃·(Δω)³
+    # Solves:  p_diff = G_cubic·Δω + (1/6)·G₃·(Δω)³
     # using fixed-point Newton iteration starting from the linear estimate.
     # k₂ is analytically zero for the orthogonal Ramsey sequence (Y-X
     # symmetry), so only the cubic term enters.
-    if order >= 3 and len(result_x.kernels) >= 3:
-        k3_x = np.asarray(result_x.kernels[2], dtype=float)
-        k3_mx = np.asarray(result_mx.kernels[2], dtype=float)
-        k3_diff = (k3_x - k3_mx) / 2.0
-        G3 = float(np.trapezoid(k3_diff, t_kernel))
+    if order >= 3:
+        if g3_source == "fit":
+            # Route A: fit p_diff(Delta) -> G1_fit, G3_Taylor (cached)
+            G1_cubic, G3 = _calibrate_g3_taylor(
+                qubit, omega_d, t_rabi, t_global,
+            )
+            # Use the fitted G1 for consistency with fitted G3
+            # (kernel G_freq is conceptually the same quantity but may
+            # differ numerically due to different perturbation methods)
+            G_cubic = G1_cubic
+        else:  # "diag_legacy"
+            G_cubic = G_freq
+            G3 = 0.0
+            if len(result_x.kernels) >= 3:
+                k3_x = np.asarray(result_x.kernels[2], dtype=float)
+                k3_mx = np.asarray(result_mx.kernels[2], dtype=float)
+                k3_diff = (k3_x - k3_mx) / 2.0
+                G3 = float(np.trapezoid(k3_diff, t_kernel))
 
         # Newton: dw_{n+1} = dw_n - f(dw_n) / f'(dw_n)
-        #   f(dw)  = G₁·dw + G₃/6·dw³ - p_diff
-        #   f'(dw) = G₁ + G₃/2·dw²
+        #   f(dw)  = G_cubic·dw + G₃/6·dw³ - p_diff
+        #   f'(dw) = G_cubic + G₃/2·dw²
         if abs(G3) > 1e-10:
             dw = delta_omega
             for _ in range(20):
                 dw2 = dw * dw
-                f_val = G_freq * dw + (G3 / 6.0) * dw * dw2 - p_diff
-                f_prime = G_freq + (G3 / 2.0) * dw2
+                f_val = G_cubic * dw + (G3 / 6.0) * dw * dw2 - p_diff
+                f_prime = G_cubic + (G3 / 2.0) * dw2
                 if abs(f_prime) < 1e-15:
                     break
                 dw_new = dw - f_val / f_prime
@@ -473,15 +623,27 @@ class FrequencyMeasurement(Calibration):
         should pass None.  Ignored when method="transient".
     order : int
         Kernel order for transient method.  Default 1 (linear).  Set to
-        3 for cubic Newton correction using G₃ = ∫k₃(t)dt.  Values > 3
-        are accepted but use the same 5-point FD stencil.  Ignored when
-        method="ramsey".
+        3 for cubic Newton correction.  Values > 3 are accepted but use
+        the same 5-point FD stencil.  Ignored when method="ramsey".
+    g3_source : str
+        Source of the cubic Taylor coefficient G₃ used in the Newton
+        correction when ``order >= 3``:
+
+        - ``"fit"`` (default): scan known detunings Δ, fit
+          p_diff(Δ) to an odd polynomial, extract G₃ᵀᵃʸˡᵒʳ = 6·c₃.
+          Physically correct for constant-Δ inversion.  Cached per
+          pulse sequence (~2·21 mesolve calls on first use).
+        - ``"diag_legacy"``: use the diagonal kernel integral
+          G₃ᵈⁱᵃᵍ = ∫k₃(t,t,t)dt from KernelEstimator.  Retained
+          for backward compatibility and diagnostic comparison;
+          **not physically correct** for constant-Δ response.
     """
 
     qubit: object
     method: Literal["ramsey", "transient"] = "ramsey"
     flux: float = 0.0
     order: int = 1
+    g3_source: Literal["fit", "diag_legacy"] = "fit"
 
     tau_list: np.ndarray | None = None
     t_rabi: np.ndarray = field(
@@ -524,6 +686,7 @@ class FrequencyMeasurement(Calibration):
                     self.qubit, omega_d,
                     self.t_rabi, self.t_global,
                     flux=flux_val, order=self.order,
+                    g3_source=self.g3_source,
                 )
 
     # ------------------------------------------------------------------

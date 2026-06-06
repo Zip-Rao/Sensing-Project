@@ -1179,6 +1179,36 @@ table = cal.calibrate()
 
 闭环内部的 `FrequencyMeasurement` 在 `__post_init__` 中一次性构造,强制 `f_artificial=None`(双扫),以保证搜索过程中即使探到远离 sweet spot 的 flux 也能正确测频。
 
+##### 4.7.3.1 Transient 测频的 G₃ 源（Phase 11）
+
+`FrequencyMeasurement(method="transient", order=3)` 使用三次 Newton 修正来扩展线性安全区。
+三阶修正需要立方 Taylor 系数 $G_3^{\text{Taylor}} = d^3p_{\text{diff}}/d\Delta^3|_0$，该系数通过
+``g3_source`` 参数控制来源：
+
+- ``"fit"``（默认，推荐）：扫描一组已知失谐 Δ（通过向甜点处的 qubit Hamiltonian 添加
+  恒定 $-\Delta\sigma_z/2$ 项产生），测量 $p_{\text{diff}}$，拟合奇次多项式
+  $p_{\text{diff}} = G_1\Delta + \frac{1}{6}G_3\Delta^3 + \cdots$。
+  一次性标定成本约 2×21 次 mesolve（~0.5s），结果缓存于模块级 ``_g3_cache``，
+  按 ``(t_rabi_hash, omega_d)`` 键控。
+
+- ``"diag_legacy"``（向后兼容/诊断）：使用 `KernelEstimator` 的对角核积分
+  $G_3^{\text{diag}} = \int k_3(t,t,t)\,dt$。**物理上不正确**——对角核对恒定失谐的
+  三阶响应（涉及三重时间积分 $\iiint k_3(t_1,t_2,t_3)$）存在量级 ~200× 的系统偏差
+  （参考 `result/transient_error/diag_vs_taylor_G3.py`）。
+
+```python
+# 默认行为：fit 路径
+m = FrequencyMeasurement(qubit=q, method="transient", order=3)
+# 等效于 m = FrequencyMeasurement(..., order=3, g3_source="fit")
+
+# 诊断模式：legacy 对角核
+m_legacy = FrequencyMeasurement(qubit=q, method="transient",
+                                order=3, g3_source="diag_legacy")
+```
+
+> **v2.9 新增**（2026-06-06）：Phase 11 添加 ``g3_source`` 参数和 ``_calibrate_g3_taylor()``
+> 标定函数。Route A（fit）是推荐默认值；Route B（多时刻核三重积分）尚未实现。
+
 #### 4.7.4 `WaveformCalibration` + `PredistortionDesigner` 详例
 
 ```python
