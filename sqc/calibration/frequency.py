@@ -206,6 +206,7 @@ def _measure_frequency_transient(
     t_rabi: np.ndarray,
     t_global: np.ndarray,
     flux: float = 0.0,
+    order: int = 1,
 ) -> float:
     """Transient-based single-point frequency measurement.
 
@@ -213,7 +214,16 @@ def _measure_frequency_transient(
     to measure detuning via differential p_e and the control-pulse
     kernel sensitivity G_α = ∫ k(t) dt.
 
-    Theory ref: _sensing theory.md §瞬态磁场协议与核函数策略
+    When ``order >= 3``, applies cubic Newton correction using the
+    third-order kernel integral G₃ to solve the nonlinear equation::
+
+        p_diff = G₁·Δω + (1/6)·G₃·(Δω)³
+
+    This extends the linear safe zone from |Δω| < 0.05 GHz to
+    |Δω| < 0.12 GHz (~20 % improvement near the crossover).
+
+    Theory ref: _sensing theory.md §瞬态磁场协议与核函数策略,
+                idea/refactor/transient_frequency_theory.md §6
     """
     n_levels = qubit.n_levels
 
@@ -270,23 +280,28 @@ def _measure_frequency_transient(
 
     p_diff = (p_x - p_mx) / 2.0
 
-    # -- omega kernel via KernelEstimator (Phase 10.5) -------------------
+    # -- omega kernel via KernelEstimator (Phase 10.5 + 10-fix) ----------
     # Uses the Virtual Z omega kernel to obtain G_freq = dp_diff/d(δω)
     # directly, eliminating the κ-based unit conversion that was the
-    # legacy workaround.
+    # legacy workaround.  When order >= 3, also extracts G₃ = ∫k₃(t)dt
+    # for cubic Newton correction.
     from sqc.reconstruction.kernel import KernelEstimator
 
     estimator = KernelEstimator(
-        mode='omega', method='exp', order=1,
+        mode='omega', method='exp',
+        order=max(order, 1),
         virtual_z_impl='math',
+        # Use a slightly larger amp_scan_factor for order>=3 to improve
+        # FD stencil SNR on the cubic term.
+        amp_scan_factor=1.5 if order >= 3 else 1.0,
     )
 
     result_x = estimator.estimate_full(ctrl_x, qubit)
-    k_omega_x = np.asarray(result_x.k1, dtype=float)
+    k_omega_x = np.asarray(result_x.kernels[0], dtype=float)
     t_kernel = np.asarray(result_x.t_samples, dtype=float)
 
     result_mx = estimator.estimate_full(ctrl_mx, qubit)
-    k_omega_mx = np.asarray(result_mx.k1, dtype=float)
+    k_omega_mx = np.asarray(result_mx.kernels[0], dtype=float)
 
     # restore qubit state after kernel estimation side effects
     qubit.qubit_in_mag(Phi, frame=1, omega_d=omega_d)
@@ -297,9 +312,38 @@ def _measure_frequency_transient(
     if abs(G_freq) < 1e-5:
         return float(omega_d)
 
-    # Direct ω-domain conversion — no κ multiplication needed.
-    # G_freq = dp_diff/dω  ⇒  Δω = p_diff / G_freq
+    # -- linear estimate (always computed) ---------------------------------
     delta_omega = p_diff / G_freq
+
+    # -- cubic Newton correction (order >= 3) -----------------------------
+    # Solves:  p_diff = G_freq·Δω + (1/6)·G₃·(Δω)³
+    # using fixed-point Newton iteration starting from the linear estimate.
+    # k₂ is analytically zero for the orthogonal Ramsey sequence (Y-X
+    # symmetry), so only the cubic term enters.
+    if order >= 3 and len(result_x.kernels) >= 3:
+        k3_x = np.asarray(result_x.kernels[2], dtype=float)
+        k3_mx = np.asarray(result_mx.kernels[2], dtype=float)
+        k3_diff = (k3_x - k3_mx) / 2.0
+        G3 = float(np.trapezoid(k3_diff, t_kernel))
+
+        # Newton: dw_{n+1} = dw_n - f(dw_n) / f'(dw_n)
+        #   f(dw)  = G₁·dw + G₃/6·dw³ - p_diff
+        #   f'(dw) = G₁ + G₃/2·dw²
+        if abs(G3) > 1e-10:
+            dw = delta_omega
+            for _ in range(20):
+                dw2 = dw * dw
+                f_val = G_freq * dw + (G3 / 6.0) * dw * dw2 - p_diff
+                f_prime = G_freq + (G3 / 2.0) * dw2
+                if abs(f_prime) < 1e-15:
+                    break
+                dw_new = dw - f_val / f_prime
+                if abs(dw_new - dw) < 1e-12 * max(abs(dw), 1e-12):
+                    dw = dw_new
+                    break
+                dw = dw_new
+            delta_omega = dw
+
     return float(omega_d - delta_omega)
 
 
@@ -427,11 +471,17 @@ class FrequencyMeasurement(Calibration):
         Single-sweep artificial detuning (GHz) for the Ramsey method.
         None selects double-sweep.  Default 0.1 GHz; closed-loop callers
         should pass None.  Ignored when method="transient".
+    order : int
+        Kernel order for transient method.  Default 1 (linear).  Set to
+        3 for cubic Newton correction using G₃ = ∫k₃(t)dt.  Values > 3
+        are accepted but use the same 5-point FD stencil.  Ignored when
+        method="ramsey".
     """
 
     qubit: object
     method: Literal["ramsey", "transient"] = "ramsey"
     flux: float = 0.0
+    order: int = 1
 
     tau_list: np.ndarray | None = None
     t_rabi: np.ndarray = field(
@@ -470,11 +520,10 @@ class FrequencyMeasurement(Calibration):
                     flux=flux_val, f_artificial=self.f_artificial,
                 )
             case "transient":
-                print("test")
                 return _measure_frequency_transient(
                     self.qubit, omega_d,
                     self.t_rabi, self.t_global,
-                    flux=flux_val,
+                    flux=flux_val, order=self.order,
                 )
 
     # ------------------------------------------------------------------
