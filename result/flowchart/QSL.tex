@@ -31,7 +31,7 @@
 
 % Measurement bracket
 \draw[line width=1pt]
-  (4.75,1.80) -- (4.58,1.80) -- (4.58,-1.42) -- (4.75,-1.42);
+  (4.75,1.80) -- (4.65,1.80) -- (4.65,-1.42) -- (4.75,-1.42);
 \draw[line width=1pt]
   (10.45,1.80) -- (10.62,1.80) -- (10.62,-1.42) -- (10.45,-1.42);
 \node[anchor=south west,font=\large] at (10.66,1.72) {$2N_{\mathrm{shot}}$};
@@ -39,15 +39,15 @@
 % Entry and initialization
 \node[smallblock,minimum width=1.45cm,font=\normalsize] (init) at (3.15,0.20) {Initialization};
 \draw[arrow] (set.east) -- (init.west);
-\draw[arrow] (init.east) -- (4.35,0.20);
-\draw[line] (4.35,0.20) -- (4.58,0.20);
+\draw[arrow] (init.east) -- (4.7,0.20);
+\draw[line] (4.7,0.20) -- (5.0,0.20);
 
 % Pulse sequence: Ry - R_{+-x}
 \node[font=\normalsize] at (5.55,0.88) {$R_y(\alpha)$};
 \begin{scope}[shift={(5.55,0.20)}]
-  \draw[pulse,domain=-0.45:0.45,samples=100,smooth]
+  \draw[pulse,domain=-0.5:0.45,samples=100,smooth]
     plot (\x,{0.34*exp(-5*\x*\x)*sin(deg(28*\x))});
-  \draw[envelope,domain=-0.48:0.48,samples=60,smooth]
+  \draw[envelope,domain=-0.5:0.48,samples=60,smooth]
     plot (\x,{0.38*exp(-4.2*\x*\x)});
   \draw[envelope,domain=-0.48:0.48,samples=60,smooth]
     plot (\x,{-0.38*exp(-4.2*\x*\x)});

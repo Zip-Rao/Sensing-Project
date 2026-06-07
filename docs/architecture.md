@@ -1,6 +1,6 @@
 # Sensing-Project 全栈化重构平台 — 技术文档
 
-> 版本: v2.10 | 日期: 2026-06-07 | 适用于 sqc v0.3.0
+> 版本: v2.11 | 日期: 2026-06-07 | 适用于 sqc v0.3.0
 >
 > 本文档按照 **Gao, Rol, Touzard, Wang 2021**（PRX Quantum 2, 040202）所提出的 cQED 六层全栈架构组织。
 > 每一章既给出物理动机，又详尽介绍代码模块、扩展接口与开发规范。
@@ -1185,6 +1185,12 @@ f_q = m.measure(flux=0.025)             # 直接调子例程,不打包成 Calibr
 m = FrequencyMeasurement(qubit=q, method="transient", flux=0.0)
 table = m.calibrate()
 
+# 方法 3b: 瞬态测频 order=3 三次修正(扩展小失谐精度,仅 |Δ| < ~0.5·Δ_fold)
+m3 = FrequencyMeasurement(qubit=q, method="transient", order=3,
+                          g3_source="fit")          # 默认:奇多项式拟合(自适应区间)
+m3b = FrequencyMeasurement(qubit=q, method="transient", order=3,
+                           g3_source="kernel_full")  # 交叉验证:完整非对角核 ∭k₃
+
 # === 调谐(closed-loop): SinglePointFrequencyCalibration ===
 
 # 方法 A: 割线法(默认),内层 Ramsey FFT 双扫
@@ -1247,6 +1253,23 @@ m_legacy = FrequencyMeasurement(qubit=q, method="transient",
 
 > **v2.9 新增**（2026-06-06）：Phase 11 添加 ``g3_source`` 参数和 ``_calibrate_g3_taylor()``
 > 标定函数。Route A（fit）是推荐默认值；Route B（多时刻核三重积分）尚未实现。
+
+> **v2.11 修正/扩展**（2026-06-07，Phase 12）：瞬态测频 order≥3 的三处问题修复 + Route B 落地。
+> **(1) 符号 bug 修复**:order≥3 三次 Newton 此前用 `G_cubic=G1_fit`(失谐 Δ 约定)与线性
+> `G_freq`(δω=−Δ 约定)符号相反,导致返回 ω_d−Δ 而非 ω_d+Δ,误差 ≈ −2Δ(比线性更差)。现统一在
+> δω=−Δ 约定下求解(Route A 取 `−G1_fit, −G3_taylor`;Route B 用原始核积分),实测 ±Δ 均符号正确。
+> **(2) 自适应 delta_max**:`_calibrate_g3_taylor` 的 `delta_max_ghz` 默认改为 `None`=自适应
+> (收缩扫描区间直到 G1 收敛),解决旧默认 0.08 GHz 远超线性区导致 G1 偏低 ~0.6×、G3 全错的问题;
+> 可手动覆盖。新增 `FrequencyMeasurement.g3_delta_max` 暴露该参数。
+> **(3) Route B `g3_source="kernel_full"`**:用完整非对角 Heisenberg 核三重积分 ∭k₃ dt³
+> (`_calibrate_g3_kernel_full`,依赖 P12 的 `extract_off_diagonal`)直接给 G₁,G₃,免 Δ 扫描,
+> 与拟合法互为交叉验证(实测 |G₃| 吻合 ~10%)。
+> **(4) 移除 `diag_legacy`**:对角核积分 ∫k₃_diag dt 是错误物理对象(小 ~170×,cubic 几乎不生效),
+> 从 `g3_source` 中删除;未知值早抛 `ValueError`。诊断/对比保留在
+> `kernel/verify_transient_highorder.py`。
+> 效果(有效区 |Δ|<0.5·Δ_fold):order3-fit 比线性精度提升 ~10×,kernel_full 同量级。
+> **局限**:仅在 Taylor 收敛子区间(约半个翻折区)有效;临近翻折(|Δ|→Δ_fold)三次截断失效。
+> +5 单元测试(`tests/unit/test_transient_frequency.py`)。
 
 #### 4.7.4 `WaveformCalibration` + `PredistortionDesigner` 详例
 
@@ -2434,6 +2457,7 @@ mesolve(H_list, psi0, t_array, c_ops, e_ops)
 | v2.6 | 2026-05-17 | **Cryoscope/DelayRamsey 相位 unwrap 统一**:消除 calibration 反演的 ~70 μΦ₀ DC 偏置。(1) 新建 `sqc/reconstruction/dispersion.py` 共享 4 个函数 — `omega_q_at_flux`/`cryoscope_phase_theory`/`cumulative_phase_theory`/`unwrap_phase_with_model`,作为相位 unwrap 唯一真理源。(2) 4 处迁移到统一 API:`CryoscopeExperiment`/`CryoscopeCalibration`/`DelayRamseyExperiment`/`DelayRamseyCalibration` 全部用 model-guided unwrap,实验端用累积积分锚定、标定端用方波相位锚定;旧的 baseline-subtraction + `np.unwrap` 残骸清理。(3) `CryoscopeCalibration` 末尾追加 h=0 锚定 — 减掉 `varphi[h≈0]` 让 `cal.inverse(0) == 0`,消除 IQReadout 系统相位污染。(4) `CryoscopeExperiment` `trunc_list` 越界 sanity check + 默认 `flux_signal.t_list` 延长到 100 ns,避免 `truncate()` 静默失效(silent failure)。(5) `DelayRamseyExperiment.run_baseline` 字段保留兼容性但标 deprecated。详见 §4.6.7。22 单元测试 + 5 物理回归 baseline 全绿(无需重生成)。数值验证:DC offset 由 +6.88e-5 → +2.15e-9 Φ₀。 |
 | v2.7 | 2026-05-18 | **PredistortionDesigner smooth=True 逆设计修复**:`_single_exp_to_iir_inverse` 未区分 `smooth=True/False`，对纯低通模式 (smooth=True, H(s)=1/(1+sτ)) 错误使用非平滑公式 (amp=0.3)，导致级联 H_inv·H = 1/(1+s·21ns) 而非 ≈1。修复：smooth=True 时加正则化极点 τ_reg=dt/4，级联 ≈1/(1+s·0.125ns)，阶跃响应 RMSE 从 0.274 降至 0.018 (15x 改善)。详见 §4.7.4。18 回归+单元测试全绿。 |
 | v2.8 | 2026-06-04 | **P10: 核函数体系三维扩展**。KernelEstimator 新增 mode (flux/omega)、method (sim/exp)、order (1..N) 三个正交维度。新增 Virtual Z 双实现（math σ_z 冲激 + hardware 相位重建）。新增 sim 模式（a†a 频率刺激，纯理论）。新增高阶 Volterra 对角核提取（振幅扫描 + 多项式拟合）及 KernelResult.save/load 序列化。新增 Hammerstein-Volterra 固定点迭代反卷积及 _omega_to_flux 色散反演。frequency.py 迁移到 omega kernel 直接路径，消除 κ workaround。Pulse.get_kernel() 转为 DeprecationWarning 兼容桥。+29 新单元测试；350 测试全绿；src/ 未变（R1）。详见 [phase_10_handbook](../idea/refactor/phase_10_kernel_extension_handbook.md)。 |
+| v2.11 | 2026-06-07 | **瞬态测频 order≥3 修复 + Route B 落地**(§4.7.3 v2.11 注)。(1) 修复 order≥3 三次 Newton 的**符号 bug**(此前返回 ω_d−Δ,误差≈−2Δ,比线性更差)——统一到 δω=−Δ 约定。(2) `_calibrate_g3_taylor` 的 `delta_max_ghz` 默认改 `None`=**自适应**(旧默认 0.08 使 G1 偏低~0.6×、G3 全错);新增 `FrequencyMeasurement.g3_delta_max`。(3) **Route B** `g3_source="kernel_full"`:完整非对角核三重积分 ∭k₃ dt³(`_calibrate_g3_kernel_full`),免 Δ 扫描,与拟合互校。(4) **移除** `diag_legacy`(错误对象,小~170×),未知值抛 ValueError。效果:有效区 order3-fit 比线性精度↑~10×。+5 单元测试。src/ 未变(R1)。 |
 | v2.10 | 2026-06-07 | **核函数 σ_t 旋钮 + Richardson 外推 + 非对角(sim)提取**(§4.6.2 Phase 12 增补)。诊断并修复 exp 高阶对角偏差:(1) `_extract_kn_omega` 的 FD mesolve 改用 `atol=1e-12, rtol=1e-10`,消除 noise/h³ 主导(高阶"不太对"主因);(2) 新增 `probe_sigma_t` 旋钮(默认 `None`→2·dt,零回归)+ `richardson`/`richardson_sigmas` σ_t→0 外推,G₃/G₃_sim 从 0.84→0.96;(3) `extract_off_diagonal=True`(仅 method='sim') 经 `_heisenberg_kernels_offdiag` 产出完整 n 维核 k₂(M,M)/k₃(M,M,M),order≤3;(4) `KernelResult.off_diagonal` 字段 + n 维 save/load;(5) exp+offdiag 抛 NotImplementedError,`estimate_full` order≥2 补回 `_validate_inputs`;(6) `TransientReconstruction` Wiener/Hammerstein 路径对 ndim>1 核抛 ValueError(指向 LM)。+8 新单元测试。src/ 未变(R1)。 |
 
 下一步阅读：

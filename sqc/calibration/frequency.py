@@ -207,63 +207,51 @@ def _fit_ramsey_frequency(
 _g3_cache: dict[tuple, tuple[float, float]] = {}
 
 
-def _make_cache_key(t_rabi: np.ndarray, omega_d: float) -> tuple:
-    """Return a hashable cache key from the pulse time axis and drive frequency."""
-    return (hash(t_rabi.tobytes()), round(float(omega_d), 6))
+def _make_cache_key(
+    t_rabi: np.ndarray, omega_d: float, tag: object = "adaptive",
+) -> tuple:
+    """Return a hashable cache key from the pulse time axis and drive frequency.
+
+    ``tag`` distinguishes calibration variants (e.g. a manual ``delta_max``
+    override vs the adaptive default) so they do not collide in the cache.
+    """
+    return (hash(t_rabi.tobytes()), round(float(omega_d), 6), tag)
 
 
 # ---------------------------------------------------------------------------
 # Internal helper: G₃ Taylor calibration via p_diff(Δ) polynomial fit
 # ---------------------------------------------------------------------------
 
-def _calibrate_g3_taylor(
+def _fit_g3_at_delta_max(
     qubit: object,
     omega_d: float,
     t_rabi: np.ndarray,
     t_global: np.ndarray,
-    n_scan: int = 21,
-    delta_max_ghz: float = 0.08,
+    n_scan: int,
+    delta_max_ghz: float,
 ) -> tuple[float, float]:
-    """Fit odd-polynomial Taylor expansion of p_diff(Delta).
+    """Single odd-polynomial fit of ``p_diff(Δ)`` over ``±delta_max_ghz``.
 
-    Directly adds a constant detuning term (Delta/2)*sigma_z to the
-    qubit Hamiltonian at the sweet spot, creating **known** Delta values
-    of both signs without changing omega_d or the qubit flux.  Measures
-    p_diff via orthogonal Ramsey readout, and fits::
+    Adds a constant ``-(Δ/2)·σ_z`` detuning at the sweet spot (known Δ of
+    both signs), measures ``p_diff`` via orthogonal Ramsey readout, and
+    fits ``p_diff = c1·Δ + c3·Δ³ + c5·Δ⁵`` (in the **detuning** convention,
+    Δ = ω_q − ω_d).  Returns ``(G1_fit, G3_taylor) = (c1, 6·c3)``.
 
-        p_diff = c1*Delta + c3*Delta^3 + c5*Delta^5
-
-    Returns ``(G1_fit, G3_taylor)`` where ``G1_fit = c1`` and
-    ``G3_taylor = 6*c3``.
-
-    Results are cached in the module-level ``_g3_cache`` keyed by
-    ``(t_rabi_hash, omega_d)``.
-
-    Cost: ~2 * n_scan mesolve calls (~42 for default 21 points).
+    No caching — the caller (:func:`_calibrate_g3_taylor`) handles that.
+    Cost: ``2·(n_scan−1)`` mesolve calls.
     """
-    import time
-
-    cache_key = _make_cache_key(t_rabi, omega_d)
-    if cache_key in _g3_cache:
-        return _g3_cache[cache_key]
-
-    t_start = time.time()
     n_levels = qubit.n_levels
     psi_e = basis(n_levels, 1)
     t_sig = CONFIG.pulse.make_time(0, 300)
-
-    # Build sigma_z operator in n_levels Fock basis
     sigma_z = Qobj(np.diag([1.0, -1.0] + [0.0] * (n_levels - 2)))
 
-    # Set qubit to sweet spot (Phi=0) in frame rotating at omega_d
     Phi_zero = FluxSignal(type=0, t_list=t_sig)
     qubit.qubit_in_mag(Phi_zero, frame=1, omega_d=omega_d)
 
-    # -- scan symmetric known detunings (both signs) -----------------------
-    # Use a stretched grid: finer spacing near Delta=0 for derivative accuracy
+    # Stretched grid: finer spacing near Δ=0 for derivative accuracy.
     x = np.linspace(-1.0, 1.0, n_scan)
     delta_scan_ghz = delta_max_ghz * np.sign(x) * (np.abs(x) ** 1.5)
-    delta_scan_ghz = delta_scan_ghz[delta_scan_ghz != 0.0]  # exclude Delta=0
+    delta_scan_ghz = delta_scan_ghz[delta_scan_ghz != 0.0]
 
     delta_vals: list[float] = []
     p_diff_vals: list[float] = []
@@ -272,15 +260,9 @@ def _calibrate_g3_taylor(
         delta_rad = 2.0 * np.pi * float(delta_ghz)
         delta_vals.append(delta_rad)
 
-        # Add -(Delta/2)*sigma_z to H_base to simulate constant detuning Delta
-        # (RWA: H_q = (omega_q - omega_d) a†a = Delta*(I - sigma_z)/2 = -(Delta/2)*sigma_z + const)
         detuning_coeff = -0.5 * delta_rad * np.ones_like(t_global)
-        H_detuning = QobjEvo(
-            [[sigma_z, detuning_coeff]],
-            tlist=t_global, order=1,
-        )
+        H_detuning = QobjEvo([[sigma_z, detuning_coeff]], tlist=t_global, order=1)
 
-        # Build orthogonal Ramsey pulses at omega_d (FIXED)
         tau = 0.0
         ctrl_x = create_ramsey_pulse(
             t_rabi, tau, omega_d=omega_d,
@@ -295,41 +277,143 @@ def _calibrate_g3_taylor(
         H_pulse_x = QobjEvo(ctrl_x.hamiltonian_on(t_global), tlist=t_global, order=1)
         H_pulse_mx = QobjEvo(ctrl_mx.hamiltonian_on(t_global), tlist=t_global, order=1)
 
-        H_x = H_base + H_detuning + H_pulse_x
-        H_mx = H_base + H_detuning + H_pulse_mx
-
         res_x = mesolve(
-            H_x, qubit.state, t_global, [],
+            H_base + H_detuning + H_pulse_x, qubit.state, t_global, [],
             e_ops=[psi_e * psi_e.dag()],
             options={"max_step": float(CONFIG.awg.dt)},
         )
         res_mx = mesolve(
-            H_mx, qubit.state, t_global, [],
+            H_base + H_detuning + H_pulse_mx, qubit.state, t_global, [],
             e_ops=[psi_e * psi_e.dag()],
             options={"max_step": float(CONFIG.awg.dt)},
         )
-        p_x = float(res_x.expect[0][-1])
-        p_mx = float(res_mx.expect[0][-1])
-        p_diff_vals.append((p_x - p_mx) / 2.0)
+        p_diff_vals.append((float(res_x.expect[0][-1]) - float(res_mx.expect[0][-1])) / 2.0)
 
-    # -- polynomial fit: p_diff = c1*Delta + c3*Delta^3 + c5*Delta^5 ------
     delta_arr = np.asarray(delta_vals, dtype=float)
     p_diff_arr = np.asarray(p_diff_vals, dtype=float)
     A = np.column_stack([delta_arr, delta_arr ** 3, delta_arr ** 5])
     coeffs, *_ = np.linalg.lstsq(A, p_diff_arr, rcond=None)
-    c1, c3 = coeffs[0], coeffs[1]
+    return float(coeffs[0]), float(6.0 * coeffs[1])
 
-    G1_fit = float(c1)
-    G3_taylor = float(6.0 * c3)
 
-    _g3_cache[cache_key] = (G1_fit, G3_taylor)
+def _calibrate_g3_taylor(
+    qubit: object,
+    omega_d: float,
+    t_rabi: np.ndarray,
+    t_global: np.ndarray,
+    n_scan: int = 21,
+    delta_max_ghz: float | None = None,
+) -> tuple[float, float]:
+    """Fit the odd-polynomial Taylor coefficients of ``p_diff(Δ)``.
+
+    Returns ``(G1_fit, G3_taylor)`` in the **detuning** convention
+    (``p_diff = G1_fit·Δ + (G3_taylor/6)·Δ³ + …``, Δ = ω_q − ω_d).
+
+    ``delta_max_ghz``
+        Scan half-range (GHz).  **The fit is only valid when this stays
+        inside the cubic regime** (well below the p_diff turnover
+        Δ_fold ≈ π/(2·T_eff)); a too-wide range lets fringe saturation
+        corrupt the fit (e.g. G1 biased low by ~0.6× at 0.08 GHz for a
+        10 ns π/2 pulse).
+
+        - ``None`` (default): **adaptive** — shrink the range until G1
+          converges, so the result auto-fits the qubit's linear regime.
+        - ``float``: manual override (skips the adaptive search).
+
+    Results are cached in ``_g3_cache`` keyed by
+    ``(t_rabi_hash, omega_d, delta_max_tag)``.
+    """
+    import time
+
+    tag = "adaptive" if delta_max_ghz is None else round(float(delta_max_ghz), 6)
+    cache_key = _make_cache_key(t_rabi, omega_d, tag)
+    if cache_key in _g3_cache:
+        return _g3_cache[cache_key]
+
+    t_start = time.time()
+
+    if delta_max_ghz is not None:
+        result = _fit_g3_at_delta_max(
+            qubit, omega_d, t_rabi, t_global, n_scan, float(delta_max_ghz),
+        )
+    else:
+        # Adaptive: shrink the scan range until G1 stabilizes (i.e. the
+        # range has entered the cubic regime).  Descending candidates;
+        # accept once consecutive G1 agree within 1.5%.
+        candidates = (0.03, 0.02, 0.013, 0.008)
+        G1_prev: float | None = None
+        result = None
+        for dmax in candidates:
+            G1, G3 = _fit_g3_at_delta_max(
+                qubit, omega_d, t_rabi, t_global, n_scan, dmax,
+            )
+            result = (G1, G3)
+            if G1_prev is not None and abs(G1 - G1_prev) <= 0.015 * abs(G1):
+                break
+            G1_prev = G1
+
+    _g3_cache[cache_key] = result
 
     elapsed = time.time() - t_start
     print(
-        f"G3 Taylor calibration: {len(delta_vals)} points in {elapsed:.1f}s, "
-        f"G1={G1_fit:.4f}, G3={G3_taylor:.1f}, G3/G1={G3_taylor/G1_fit:.1f} ns^2"
+        f"G3 Taylor calibration ({tag}): {elapsed:.1f}s, "
+        f"G1={result[0]:.4f}, G3={result[1]:.1f}, "
+        f"G3/G1={result[1] / result[0]:.1f} ns^2"
     )
-    return G1_fit, G3_taylor
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Internal helper: Route B — G1/G3 from the full off-diagonal sim kernel
+# ---------------------------------------------------------------------------
+
+def _calibrate_g3_kernel_full(
+    qubit: object,
+    omega_d: float,
+    t_rabi: np.ndarray,
+) -> tuple[float, float]:
+    """Compute ``(G1, G3)`` from the full off-diagonal Heisenberg kernel.
+
+    The constant-Δ cubic response needs the **triple** integral of the
+    off-diagonal kernel, not the diagonal slice::
+
+        G1      = ∫ k1(t) dt
+        G3_full = ∭ k3(t1, t2, t3) dt1 dt2 dt3
+
+    Both are taken on the orthogonal-Ramsey difference kernel
+    ``(k_x − k_{-x})/2`` via ``KernelEstimator(method='sim',
+    extract_off_diagonal=True)`` — one sesolve per pulse, exact.
+
+    **Sign convention.**  The sim VZ kernel models the probe as
+    ``+(φ/2)·σ_z`` while a physical detuning enters as ``−(Δ/2)·σ_z``;
+    hence the raw kernel integrals are already in the ``δω = +φ = −Δ``
+    convention used by the linear estimate ``G_freq`` (so they pair
+    directly with ``delta_omega = −Δ`` in the Newton solve — no flip).
+
+    Returns ``(G1, G3)`` ready to use as ``p_diff = G1·δω + (G3/6)·δω³``
+    with ``δω = −Δ`` (the same convention as ``G_freq``).
+    """
+    from sqc.reconstruction.kernel import KernelEstimator
+
+    ctrl_x = create_ramsey_pulse(
+        t_rabi, 0.0, omega_d=omega_d, phase1=np.pi / 2, phase2=0.0, qubit=qubit,
+    )
+    ctrl_mx = create_ramsey_pulse(
+        t_rabi, 0.0, omega_d=omega_d, phase1=np.pi / 2, phase2=np.pi, qubit=qubit,
+    )
+    est = KernelEstimator(
+        mode='omega', method='sim', order=3, extract_off_diagonal=True,
+    )
+    rx = est.estimate_full(ctrl_x, qubit)
+    rmx = est.estimate_full(ctrl_mx, qubit)
+    tk = np.asarray(rx.t_samples, dtype=float)
+
+    k1_diff = (np.asarray(rx.kernels[0]) - np.asarray(rmx.kernels[0])) / 2.0
+    k3_diff = (np.asarray(rx.kernels[2]) - np.asarray(rmx.kernels[2])) / 2.0
+
+    G1 = float(np.trapezoid(k1_diff, tk))
+    G3 = float(np.trapezoid(np.trapezoid(np.trapezoid(k3_diff, tk, axis=0), tk, axis=0), tk, axis=0))
+    return G1, G3
 
 
 # ---------------------------------------------------------------------------
@@ -343,25 +427,46 @@ def _measure_frequency_transient(
     t_global: np.ndarray,
     flux: float = 0.0,
     order: int = 1,
-    g3_source: Literal["fit", "diag_legacy"] = "fit",
+    g3_source: Literal["fit", "kernel_full"] = "fit",
+    g3_delta_max: float | None = None,
 ) -> float:
     """Transient-based single-point frequency measurement.
 
     Uses orthogonal Ramsey readout (R_y–R_x and R_y–R_{-x}) with tau=0
     to measure detuning via differential p_e and the control-pulse
-    kernel sensitivity G_α = ∫ k(t) dt.
+    kernel sensitivity ``G_freq = ∫ k₁(t) dt``.
 
-    When ``order >= 3``, applies cubic Newton correction using the
-    third-order kernel integral G₃ to solve the nonlinear equation::
+    Linear estimate: ``Δω = p_diff / G_freq`` → ``f = ω_d + Δ``.
 
-        p_diff = G₁·Δω + (1/6)·G₃·(Δω)³
+    When ``order >= 3``, applies a cubic Newton correction solving::
 
-    This extends the linear safe zone from |Δω| < 0.05 GHz to
-    |Δω| < 0.12 GHz (~20 % improvement near the crossover).
+        p_diff = G_freq·δω + (1/6)·G₃·δω³      (δω = −Δ convention)
 
-    Theory ref: _sensing theory.md §瞬态磁场协议与核函数策略,
-                idea/refactor/transient_frequency_theory.md §6
+    The cubic coefficient G₃ comes from one of two **equivalent** sources
+    (both the constant-Δ triple-integral object, NOT the diagonal slice):
+
+    - ``g3_source="fit"`` (default): odd-polynomial fit of ``p_diff(Δ)``
+      (:func:`_calibrate_g3_taylor`), with adaptive scan range.
+    - ``g3_source="kernel_full"``: full off-diagonal Heisenberg kernel
+      ``∭k₃ dt³`` (:func:`_calibrate_g3_kernel_full`); no Δ scan needed.
+
+    Both are converted into the δω = −Δ convention so the Newton result
+    pairs consistently with the linear ``G_freq`` (``f = ω_d − δω``).
+
+    ``g3_delta_max``
+        Manual scan half-range (GHz) for ``g3_source="fit"``; ``None``
+        uses the adaptive search.  Ignored for ``"kernel_full"``.
+
+    Theory ref: idea/refactor/transient_frequency_theory.md §6;
+                kernel/verify_transient_highorder.py (validated reference).
     """
+    if order >= 3 and g3_source not in ("fit", "kernel_full"):
+        raise ValueError(
+            f"unknown g3_source={g3_source!r}; expected 'fit' or "
+            f"'kernel_full' (the diagonal-kernel option was removed — "
+            f"it is physically incorrect for constant-Δ inversion)."
+        )
+
     n_levels = qubit.n_levels
 
     # -- set qubit to target flux ----------------------------------------
@@ -417,26 +522,18 @@ def _measure_frequency_transient(
 
     p_diff = (p_x - p_mx) / 2.0
 
-    # -- omega kernel via KernelEstimator (Phase 10.5 + 10-fix) ----------
-    # Uses the Virtual Z omega kernel to obtain G_freq = dp_diff/d(δω)
-    # directly, eliminating the κ-based unit conversion that was the
-    # legacy workaround.  When order >= 3, also extracts G₃ = ∫k₃(t)dt
-    # for cubic Newton correction.
+    # -- linear sensitivity G_freq via order-1 omega kernel --------------
+    # G_freq = dp_diff/d(δω) in the δω = +φ = −Δ convention (Virtual Z
+    # probe +φ/2·σ_z vs detuning −Δ/2·σ_z).  Then δω = p_diff/G_freq = −Δ
+    # and f = ω_d − δω = ω_d + Δ.  No κ unit conversion needed.
     from sqc.reconstruction.kernel import KernelEstimator
 
     estimator = KernelEstimator(
-        mode='omega', method='exp',
-        order=max(order, 1),
-        virtual_z_impl='math',
-        # Use a slightly larger amp_scan_factor for order>=3 to improve
-        # FD stencil SNR on the cubic term.
-        amp_scan_factor=1.5 if order >= 3 else 1.0,
+        mode='omega', method='exp', order=1, virtual_z_impl='math',
     )
-
     result_x = estimator.estimate_full(ctrl_x, qubit)
     k_omega_x = np.asarray(result_x.kernels[0], dtype=float)
     t_kernel = np.asarray(result_x.t_samples, dtype=float)
-
     result_mx = estimator.estimate_full(ctrl_mx, qubit)
     k_omega_mx = np.asarray(result_mx.kernels[0], dtype=float)
 
@@ -453,38 +550,40 @@ def _measure_frequency_transient(
     delta_omega = p_diff / G_freq
 
     # -- cubic Newton correction (order >= 3) -----------------------------
-    # Solves:  p_diff = G_cubic·Δω + (1/6)·G₃·(Δω)³
-    # using fixed-point Newton iteration starting from the linear estimate.
-    # k₂ is analytically zero for the orthogonal Ramsey sequence (Y-X
-    # symmetry), so only the cubic term enters.
+    # Solves  p_diff = G_lin·δω + (1/6)·G₃·δω³  in the **δω = −Δ** convention
+    # (same as the linear estimate), so the final f = ω_d − δω is sign-
+    # consistent.  k₂ ≈ 0 for the orthogonal Y-X sequence, so only the
+    # cubic term enters.
     if order >= 3:
         if g3_source == "fit":
-            # Route A: fit p_diff(Delta) -> G1_fit, G3_Taylor (cached)
-            G1_cubic, G3 = _calibrate_g3_taylor(
-                qubit, omega_d, t_rabi, t_global,
+            # Route A: odd-poly fit gives (G1_fit, G3_taylor) in the
+            # DETUNING (Δ) convention.  Convert to δω = −Δ by negating both.
+            G1_fit, G3_taylor = _calibrate_g3_taylor(
+                qubit, omega_d, t_rabi, t_global, delta_max_ghz=g3_delta_max,
             )
-            # Use the fitted G1 for consistency with fitted G3
-            # (kernel G_freq is conceptually the same quantity but may
-            # differ numerically due to different perturbation methods)
-            G_cubic = G1_cubic
-        else:  # "diag_legacy"
-            G_cubic = G_freq
-            G3 = 0.0
-            if len(result_x.kernels) >= 3:
-                k3_x = np.asarray(result_x.kernels[2], dtype=float)
-                k3_mx = np.asarray(result_mx.kernels[2], dtype=float)
-                k3_diff = (k3_x - k3_mx) / 2.0
-                G3 = float(np.trapezoid(k3_diff, t_kernel))
+            G_lin = -G1_fit
+            G3 = -G3_taylor
+        elif g3_source == "kernel_full":
+            # Route B: full off-diagonal triple integral, already in the
+            # δω convention (raw sim-kernel integrals) — no flip.
+            G_lin, G3 = _calibrate_g3_kernel_full(qubit, omega_d, t_rabi)
+            # re-seat qubit after kernel side effects
+            qubit.qubit_in_mag(Phi, frame=1, omega_d=omega_d)
+        else:
+            raise ValueError(
+                f"unknown g3_source={g3_source!r}; expected 'fit' or "
+                f"'kernel_full' (the diagonal-kernel option was removed — "
+                f"it is physically incorrect for constant-Δ inversion)."
+            )
 
-        # Newton: dw_{n+1} = dw_n - f(dw_n) / f'(dw_n)
-        #   f(dw)  = G_cubic·dw + G₃/6·dw³ - p_diff
-        #   f'(dw) = G_cubic + G₃/2·dw²
-        if abs(G3) > 1e-10:
-            dw = delta_omega
-            for _ in range(20):
+        # Newton: f(δω)  = G_lin·δω + G₃/6·δω³ − p_diff
+        #         f'(δω) = G_lin + G₃/2·δω²
+        if abs(G3) > 1e-10 and abs(G_lin) > 1e-12:
+            dw = p_diff / G_lin   # linear seed in the same (G_lin) convention
+            for _ in range(40):
                 dw2 = dw * dw
-                f_val = G_cubic * dw + (G3 / 6.0) * dw * dw2 - p_diff
-                f_prime = G_cubic + (G3 / 2.0) * dw2
+                f_val = G_lin * dw + (G3 / 6.0) * dw * dw2 - p_diff
+                f_prime = G_lin + (G3 / 2.0) * dw2
                 if abs(f_prime) < 1e-15:
                     break
                 dw_new = dw - f_val / f_prime
@@ -626,24 +725,28 @@ class FrequencyMeasurement(Calibration):
         3 for cubic Newton correction.  Values > 3 are accepted but use
         the same 5-point FD stencil.  Ignored when method="ramsey".
     g3_source : str
-        Source of the cubic Taylor coefficient G₃ used in the Newton
-        correction when ``order >= 3``:
+        Source of the cubic coefficient G₃ for the Newton correction when
+        ``order >= 3``.  Both options are the **constant-Δ triple-integral**
+        object (the correct one); the old diagonal-kernel shortcut was
+        removed (physically wrong — ~170× too small):
 
-        - ``"fit"`` (default): scan known detunings Δ, fit
-          p_diff(Δ) to an odd polynomial, extract G₃ᵀᵃʸˡᵒʳ = 6·c₃.
-          Physically correct for constant-Δ inversion.  Cached per
-          pulse sequence (~2·21 mesolve calls on first use).
-        - ``"diag_legacy"``: use the diagonal kernel integral
-          G₃ᵈⁱᵃᵍ = ∫k₃(t,t,t)dt from KernelEstimator.  Retained
-          for backward compatibility and diagnostic comparison;
-          **not physically correct** for constant-Δ response.
+        - ``"fit"`` (default): odd-polynomial fit of p_diff(Δ) with an
+          adaptive scan range (:func:`_calibrate_g3_taylor`).
+        - ``"kernel_full"``: full off-diagonal Heisenberg kernel
+          ``∭k₃ dt³`` (:func:`_calibrate_g3_kernel_full`); no Δ scan,
+          exact, useful as a cross-check of the fit.
+    g3_delta_max : float or None
+        Manual scan half-range (GHz) for ``g3_source="fit"``.  ``None``
+        (default) uses the adaptive search that auto-fits the qubit's
+        linear regime.  Ignored for ``"kernel_full"`` and ``order < 3``.
     """
 
     qubit: object
     method: Literal["ramsey", "transient"] = "ramsey"
     flux: float = 0.0
     order: int = 1
-    g3_source: Literal["fit", "diag_legacy"] = "fit"
+    g3_source: Literal["fit", "kernel_full"] = "fit"
+    g3_delta_max: float | None = None
 
     tau_list: np.ndarray | None = None
     t_rabi: np.ndarray = field(
@@ -687,6 +790,7 @@ class FrequencyMeasurement(Calibration):
                     self.t_rabi, self.t_global,
                     flux=flux_val, order=self.order,
                     g3_source=self.g3_source,
+                    g3_delta_max=self.g3_delta_max,
                 )
 
     # ------------------------------------------------------------------
