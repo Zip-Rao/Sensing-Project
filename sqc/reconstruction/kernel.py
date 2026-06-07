@@ -65,6 +65,9 @@ class KernelResult:
     order: int             # kernel order (1 for now)
     stim_amplitude: float
     units: str
+    off_diagonal: bool = False  # True -> kernels[n-1] is an n-D array
+    #  (shape (M,)*n) holding the full k_n(t_i, t_j, ...); only diagonal
+    #  kernels (all 1-D) are accepted by Wiener/Hammerstein reconstruction.
 
     @property
     def k1(self) -> np.ndarray:
@@ -90,6 +93,7 @@ class KernelResult:
             order=np.array(self.order),
             stim_amplitude=np.array(self.stim_amplitude),
             units=np.array(self.units, dtype=object),
+            off_diagonal=np.array(self.off_diagonal),
         )
         # Store each kernel individually to avoid numpy stacking issues
         for i, k in enumerate(self.kernels):
@@ -114,6 +118,7 @@ class KernelResult:
         data = np.load(path, allow_pickle=True)
         order = int(data['order'].item())
         kernels_list = [data[f'kernels_{i}'] for i in range(order)]
+        off_diag = bool(data['off_diagonal'].item()) if 'off_diagonal' in data else False
         return cls(
             t_samples=data['t_samples'],
             kernels=kernels_list,
@@ -122,6 +127,7 @@ class KernelResult:
             order=order,
             stim_amplitude=float(data['stim_amplitude'].item()),
             units=str(data['units'].item()),
+            off_diagonal=off_diag,
         )
 
 
@@ -304,6 +310,17 @@ class KernelEstimator:
     amp_scan_factor: float = 1.0  #: Scan range = [-factor, +factor] * stim_amplitude
     extract_off_diagonal: bool = False  #: Full k_n(t_i, t_j, ...) instead of diagonal
 
+    # -- probe-width / Richardson parameters (Phase 12) --------------------
+    probe_sigma_t: float | None = None  #: VZ Gaussian width (ns) for omega exp;
+    #  None -> 2.0 * CONFIG.awg.dt (legacy default, numerically unchanged).
+    #  Smaller sigma_t reduces the off-diagonal smearing bias of the exp
+    #  high-order diagonal (k₃ is ~15% low at 2·dt) but sigma_t < dt is
+    #  under-resolved on the time grid and blows up — keep sigma_t >= dt.
+    richardson: bool = False    #: order>=2 exp: sample several sigma_t and
+    #  extrapolate sigma_t -> 0 per (order, time-point) to remove the smear bias.
+    richardson_sigmas: tuple[float, ...] | None = None  #: sigma_t values as
+    #  multiples of dt; None -> (2.0, 1.5, 1.0) (all >= dt to avoid grid blow-up).
+
     # -- backward-compat shim (Phase 10.5) ---------------------------------
     deprecation_warn_legacy: bool = True  #: Reserved; suppresses recursion guard
     #  When False, internal create of KernelEstimator from the legacy
@@ -378,6 +395,7 @@ class KernelEstimator:
         KernelResult
             Result with ``kernels`` list of length ``self.order``.
         """
+        self._validate_inputs(qubit)
         if self.order == 1:
             t_samples_out, kernel = self.estimate(pulse, qubit, t_samples)
             kernels_list = [kernel]
@@ -397,6 +415,7 @@ class KernelEstimator:
             order=self.order,
             stim_amplitude=self.stim_amplitude,
             units=units,
+            off_diagonal=bool(self.extract_off_diagonal and self.order >= 2),
         )
 
     # ------------------------------------------------------------------
@@ -439,6 +458,16 @@ class KernelEstimator:
             )
 
         # sim method with omega mode and no qubit — OK, pure theory
+
+        # off-diagonal extraction is sim-only (exact Heisenberg n-D kernels).
+        # The exp/measurement mixed-partial FD route is not implemented.
+        if self.extract_off_diagonal and self.method == 'exp':
+            raise NotImplementedError(
+                "extract_off_diagonal is only supported with method='sim' "
+                "(exact Heisenberg n-D kernels). The exp/measurement "
+                "mixed-partial FD route is not implemented — use "
+                "method='sim' to obtain off-diagonal kernels."
+            )
 
     # ------------------------------------------------------------------
     # Sim-mode estimation (pure frequency stimulus, no qubit dispersion)
@@ -638,8 +667,7 @@ class KernelEstimator:
         phi_z: float,
     ) -> np.ndarray:
         """Virtual Z via σ_z impulse (narrow Gaussian)."""
-        _DT = CONFIG.awg.dt
-        sigma_t = 2.0 * _DT
+        sigma_t = self._sigma_t()
 
         # σ_z in n-level Fock basis: diag(1, -1, 0, …, 0)
         diag_vals = np.array([1.0, -1.0] + [0.0] * (n_levels - 2))
@@ -915,8 +943,169 @@ class KernelEstimator:
         """Higher-order sim kernels via Heisenberg propagator.
 
         Thin wrapper around :meth:`_heisenberg_kernels` for order ≥ 2.
+        When ``self.extract_off_diagonal`` is set, dispatches to
+        :meth:`_heisenberg_kernels_offdiag` which returns full n-D kernels
+        instead of diagonal-only.
         """
+        if self.extract_off_diagonal:
+            return self._heisenberg_kernels_offdiag(
+                pulse, qubit, t_samples, order=self.order,
+            )
         return self._heisenberg_kernels(pulse, qubit, t_samples, order=self.order)
+
+    # -- sim: full off-diagonal kernels via Heisenberg propagator -----------
+
+    def _heisenberg_kernels_offdiag(
+        self,
+        pulse,
+        qubit,
+        t_samples: np.ndarray | None = None,
+        order: int = 2,
+    ) -> tuple[np.ndarray, list]:
+        """Full off-diagonal Volterra kernels k₁…k_N via Heisenberg sim.
+
+        Unlike :meth:`_heisenberg_kernels` (diagonal only), this returns
+        ``kernels[n-1]`` as an **n-D** ndarray of shape ``(M,)*n`` holding
+        the fully-symmetric Volterra kernel evaluated on every combination
+        of probe times (``M = len(t_samples)``).
+
+        **Algorithm** (theory §2.3–2.4; verified in
+        ``kernel/verify_full_kernel.py``).  With ``W(t) = U†(t) σ_z U(t)/2``
+        and ``Q = U†(T) M U(T)``:
+
+        - k₁(t)            = i ⟨0|[W(t), Q]|0⟩
+        - k₂(t_>, t_<)     = −⟨0|[W(t_<), [W(t_>), Q]]|0⟩
+        - k₃(t₁≥t₂≥t₃)     = −i ⟨0|[W(t₃), [W(t₂), [W(t₁), Q]]]|0⟩
+
+        time-ordered, then symmetrized over all permutations.  One
+        ``sesolve`` total; the n-D fill is pure numpy matrix algebra.
+
+        Cost scales as ``Mⁿ`` commutator evaluations — only ``order ≤ 3``
+        is supported (order ≥ 4 raises).  ``mode='omega'`` only; ``exp``
+        is rejected upstream in :meth:`_validate_inputs`.
+
+        Returns ``(t_samples, [k1, k2, ..., kN])`` with k1 1-D and
+        k_n (n≥2) n-D.
+        """
+        import time
+
+        if order < 2:
+            # Off-diagonal is meaningless for order 1; fall back to diagonal.
+            return self._heisenberg_kernels(pulse, qubit, t_samples, order=1)
+        if order > 3:
+            raise ValueError(
+                f"extract_off_diagonal supports order <= 3 (got {order}); "
+                f"k_n for n>=4 is an M^n tensor (combinatorial blow-up)."
+            )
+
+        t_start = time.time()
+
+        # -- resolve Hilbert space (mirror _heisenberg_kernels) ------------
+        pulse_ops = pulse.hamiltonian
+        if isinstance(pulse_ops, list) and len(pulse_ops) > 0:
+            first_op = pulse_ops[0][0] if isinstance(pulse_ops[0], list) else pulse_ops[0]
+            pulse_dim = first_op.shape[0] if hasattr(first_op, 'shape') else 2
+        else:
+            pulse_dim = 2
+        n = getattr(qubit, 'n_levels', self.n_levels) if qubit is not None else self.n_levels
+        n = min(n, pulse_dim)
+
+        # -- Hamiltonian on deduplicated grid + single sesolve -------------
+        raw_tlist = np.asarray(pulse.t_list, dtype=float)
+        t_grid, _ = np.unique(raw_tlist, return_index=True)
+
+        if qubit is not None and hasattr(pulse, 'frame') and pulse.frame == 0:
+            H0 = QobjEvo(qubit.get_hamiltonian())
+        elif n == 2:
+            H0 = QobjEvo(0 * qutip.qeye(2))
+        else:
+            alpha = getattr(qubit, 'anharmonicity', self.anharmonicity) if qubit is not None else self.anharmonicity
+            a = qutip.destroy(n)
+            H0 = QobjEvo((alpha / 2.0) * (a.dag() * a.dag() * a * a))
+
+        H_pulse = QobjEvo(pulse.hamiltonian_on(t_grid), tlist=t_grid, order=1)
+        H_full = H0 + H_pulse
+
+        res = qutip.sesolve(
+            H_full, qutip.qeye(n), t_grid,
+            options={'max_step': float(CONFIG.awg.dt), 'store_states': True},
+        )
+        U_list = res.states
+
+        sigma_z = np.diag([1.0, -1.0] + [0.0] * (n - 2)).astype(complex)
+        M_proj = np.zeros((n, n), dtype=complex)
+        M_proj[1, 1] = 1.0
+        U_T = np.asarray(U_list[-1].full())
+        Q = U_T.conj().T @ M_proj @ U_T
+        state0 = np.zeros(n, dtype=complex); state0[0] = 1.0
+
+        # -- output time points + W(t) at each (numpy, for speed) ----------
+        if t_samples is None:
+            t_out = t_grid.copy()
+        else:
+            t_out = np.asarray(t_samples, dtype=float)
+        M = len(t_out)
+
+        W_out = np.empty((M, n, n), dtype=complex)
+        for i, t_j in enumerate(t_out):
+            idx = int(np.argmin(np.abs(t_grid - t_j)))
+            U_t = np.asarray(U_list[idx].full())
+            W_out[i] = (U_t.conj().T @ sigma_z @ U_t) / 2.0
+
+        def comm(A, B):
+            return A @ B - B @ A
+
+        def expect0(op):
+            return complex(state0.conj() @ op @ state0)
+
+        if M ** order > 2_000_000:
+            warnings.warn(
+                f"_heisenberg_kernels_offdiag: M^order = {M}^{order} = "
+                f"{M**order} commutator evals — this may be slow. "
+                f"Reduce t_samples for order={order}."
+            )
+
+        kernels: list = []
+
+        # -- k1 (1-D) ------------------------------------------------------
+        k1 = np.zeros(M)
+        for i in range(M):
+            k1[i] = float(np.real(1j * expect0(comm(W_out[i], Q))))
+        kernels.append(k1)
+
+        # -- k2 (M, M) -----------------------------------------------------
+        if order >= 2:
+            k2 = np.zeros((M, M))
+            for i in range(M):
+                for j in range(M):
+                    # t_> = later time, t_< = earlier time
+                    if t_out[i] >= t_out[j]:
+                        Wg, Wl = W_out[i], W_out[j]
+                    else:
+                        Wg, Wl = W_out[j], W_out[i]
+                    c2 = comm(Wl, comm(Wg, Q))
+                    k2[i, j] = float(np.real(-expect0(c2)))
+            kernels.append(k2)
+
+        # -- k3 (M, M, M) --------------------------------------------------
+        if order >= 3:
+            k3 = np.zeros((M, M, M))
+            for i in range(M):
+                for j in range(M):
+                    for l in range(M):
+                        # time-order descending: W(t_(1)>=t_(2)>=t_(3))
+                        order_idx = sorted((i, j, l), key=lambda x: -t_out[x])
+                        a, b, c = order_idx
+                        cc = comm(W_out[a], Q)        # innermost: largest time
+                        cc = comm(W_out[b], cc)
+                        cc = comm(W_out[c], cc)        # outermost: smallest time
+                        k3[i, j, l] = float(np.real(-1j * expect0(cc)))
+            kernels.append(k3)
+
+        elapsed = time.time() - t_start
+        print(f"Heisenberg off-diagonal kernel (sim, order={order}, M={M}) "
+              f"took {elapsed:.2f} seconds")
+        return t_out, kernels
 
     # -- flux exp: higher-order via FluxSignal scan -------------------------
 
@@ -1018,6 +1207,14 @@ class KernelEstimator:
         exactly 5 VZ amplitudes ``{-2h, -h, 0, +h, +2h}`` (radians)
         and applies fixed-coefficient stencils.
 
+        The VZ Gaussian probe width σ_t is resolved by :meth:`_sigma_t`
+        (default ``2·dt``).  A finite σ_t convolves the off-diagonal
+        kernel and biases the high-order diagonal (k₃ ~15% low at 2·dt).
+        When ``self.richardson`` is set and ``order >= 2``, the stencil is
+        run at several σ_t (``richardson_sigmas`` × dt) and extrapolated
+        to σ_t → 0 per (order, time-point) to remove that bias; ``k₁`` is
+        taken from the smallest σ_t (it is already accurate to O(σ_t²)).
+
         Returns ``(t_samples, [k1, ..., kN])``.
         """
         import time
@@ -1041,50 +1238,128 @@ class KernelEstimator:
         if t_samples is None:
             t_samples = pulse_tlist.copy()
 
-        _DT = CONFIG.awg.dt
-        sigma_t = 2.0 * _DT
         diag_vals = np.array([1.0, -1.0] + [0.0] * (n_levels - 2))
         sigma_z_op = qutip.Qobj(np.diag(diag_vals))
-        norm_f = 1.0 / (sigma_t * np.sqrt(2 * np.pi))
-
         h = self.stim_amplitude * self.amp_scan_factor
 
-        kernels = [np.zeros(len(t_samples)) for _ in range(N)]
+        # High-order stencils divide by h^n (n up to 3); the default
+        # mesolve tolerance (~1e-8) then dominates k₃ as noise/h³.  Use a
+        # tight tolerance so the FD truncation error — not integrator
+        # noise — sets the accuracy (see phase_10_kernel_theory_and_fix §5.3).
+        _fd_opts = {
+            "atol": 1e-12, "rtol": 1e-10, "max_step": float(CONFIG.awg.dt),
+        }
 
-        for i, t_j in enumerate(t_samples):
-            gauss = np.exp(-0.5 * ((pulse_tlist - t_j) / sigma_t) ** 2)
+        def _fd_kernels_at(sigma_t: float) -> list:
+            """5-point FD stencil for k₁…k_N at a fixed probe width σ_t."""
+            norm_f = 1.0 / (sigma_t * np.sqrt(2 * np.pi))
+            ks = [np.zeros(len(t_samples)) for _ in range(N)]
+            for i, t_j in enumerate(t_samples):
+                gauss = np.exp(-0.5 * ((pulse_tlist - t_j) / sigma_t) ** 2)
+                p_vals = np.zeros(5)
+                for j, mult in enumerate([-2, -1, 0, 1, 2]):
+                    coeff = (mult * h) * norm_f * gauss
+                    H_vz = QobjEvo(
+                        [[0.5 * sigma_z_op, coeff]],
+                        tlist=pulse_tlist, order=1,
+                    )
+                    result = mesolve(
+                        H_base + H_vz, qubit.state, pulse_tlist, [],
+                        e_ops=[psi_e * psi_e.dag()],
+                        options=_fd_opts,
+                    )
+                    p_vals[j] = result.expect[0][-1]
+                fm2, fm1, f0, fp1, fp2 = p_vals
+                if N >= 1:
+                    ks[0][i] = (fm2 - 8*fm1 + 8*fp1 - fp2) / (12 * h)
+                if N >= 2:
+                    ks[1][i] = (-fm2 + 16*fm1 - 30*f0 + 16*fp1 - fp2) / (12 * h**2)
+                if N >= 3:
+                    ks[2][i] = (-fm2 + 2*fm1 - 2*fp1 + fp2) / (2 * h**3)
+            return ks
 
-            p_vals = np.zeros(5)
-            for j, mult in enumerate([-2, -1, 0, 1, 2]):
-                phi_z = mult * h
-                coeff = phi_z * norm_f * gauss
-                H_vz = QobjEvo(
-                    [[0.5 * sigma_z_op, coeff]],
-                    tlist=pulse_tlist, order=1,
-                )
-                result = mesolve(
-                    H_base + H_vz, qubit.state, pulse_tlist, [],
-                    e_ops=[psi_e * psi_e.dag()],
-                )
-                p_vals[j] = result.expect[0][-1]
-
-            fm2, fm1, f0, fp1, fp2 = p_vals
-
-            # 5-point FD stencils (derivatives w.r.t. phi_z)
-            if N >= 1:
-                kernels[0][i] = (fm2 - 8*fm1 + 8*fp1 - fp2) / (12 * h)
-            if N >= 2:
-                kernels[1][i] = (-fm2 + 16*fm1 - 30*f0 + 16*fp1 - fp2) / (12 * h**2)
-            if N >= 3:
-                kernels[2][i] = (-fm2 + 2*fm1 - 2*fp1 + fp2) / (2 * h**3)
+        if not (self.richardson and N >= 2):
+            # Single probe width (legacy / parameterized).
+            kernels = _fd_kernels_at(self._sigma_t())
+        else:
+            # Multi-σ_t Richardson extrapolation toward σ_t -> 0.
+            sigmas = self._richardson_sigma_values()
+            per_sigma = [_fd_kernels_at(st) for st in sigmas]   # list over σ_t
+            kernels = self._richardson_extrapolate(sigmas, per_sigma)
+            # k₁ kept from the smallest σ_t (already O(σ_t²) accurate).
+            i_min = int(np.argmin(sigmas))
+            kernels[0] = per_sigma[i_min][0]
 
         elapsed = time.time() - t_start
-        print(f"FD kernel (omega exp, order={N}) took {elapsed:.2f} seconds")
+        print(f"FD kernel (omega exp, order={N}, "
+              f"richardson={self.richardson and N >= 2}) "
+              f"took {elapsed:.2f} seconds")
         return t_samples, kernels
 
     # ------------------------------------------------------------------
     # Stimulus amplitude helpers
     # ------------------------------------------------------------------
+
+    def _sigma_t(self) -> float:
+        """Resolve the VZ Gaussian probe width σ_t (ns) for omega exp paths.
+
+        Returns ``self.probe_sigma_t`` when set, else the legacy default
+        ``2.0 * CONFIG.awg.dt``.  Smaller σ_t reduces the off-diagonal
+        smearing bias of the high-order diagonal kernel, but σ_t < dt is
+        under-resolved on the time grid; callers should keep σ_t >= dt.
+        """
+        if self.probe_sigma_t is not None:
+            return float(self.probe_sigma_t)
+        return 2.0 * CONFIG.awg.dt
+
+    def _richardson_sigma_values(self) -> np.ndarray:
+        """Resolve the σ_t sample points (ns) for Richardson extrapolation.
+
+        ``richardson_sigmas`` is interpreted as multiples of ``dt``;
+        ``None`` -> ``(2.0, 1.5, 1.0) × dt``.  All values are kept
+        ``>= dt`` (a Gaussian narrower than the grid step is under-
+        resolved and the stencil blows up).
+        """
+        dt = CONFIG.awg.dt
+        mults = self.richardson_sigmas or (2.0, 1.5, 1.0)
+        sig = np.array([float(m) * dt for m in mults], dtype=float)
+        return np.maximum(sig, dt)
+
+    @staticmethod
+    def _richardson_extrapolate(sigmas: np.ndarray, per_sigma: list) -> list:
+        """Extrapolate kernels to σ_t -> 0 per (order, time-point).
+
+        Parameters
+        ----------
+        sigmas : np.ndarray
+            σ_t sample points (ns), length ``S``.
+        per_sigma : list
+            ``per_sigma[s]`` is ``[k1, ..., kN]`` (each ``(M,)``) at σ_t
+            ``sigmas[s]``.
+
+        Returns
+        -------
+        list
+            ``[k1, ..., kN]`` extrapolated to σ_t = 0.  Each kernel is fit
+            with ``np.polyfit(sigmas, vals, deg=S-1)`` and evaluated at 0
+            (the constant term).  With a single σ_t the input is returned
+            unchanged.
+        """
+        sigmas = np.asarray(sigmas, dtype=float)
+        S = len(sigmas)
+        N = len(per_sigma[0])
+        if S == 1:
+            return list(per_sigma[0])
+        deg = S - 1
+        out = []
+        for n in range(N):
+            stack = np.stack([per_sigma[s][n] for s in range(S)], axis=0)  # (S, M)
+            ext = np.zeros(stack.shape[1])
+            for i in range(stack.shape[1]):
+                coeffs = np.polyfit(sigmas, stack[:, i], deg=deg)
+                ext[i] = coeffs[-1]   # value at σ_t = 0 (constant term)
+            out.append(ext)
+        return out
 
     def _amplitude_for(self, qubit) -> float:
         """Determine stimulus amplitude for the given qubit.

@@ -791,3 +791,197 @@ def test_order2_kernel_nonlinearity_increases_with_amplitude():
     assert r_small < 0.5, (
         f"|k2/k1| = {r_small:.4f} unexpectedly large for Ramsey pulse"
     )
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# Phase 12 — σ_t parameterization, Richardson extrapolation, off-diagonal (sim)
+# ═════════════════════════════════════════════════════════════════════════════
+
+
+def _yx_ramsey(qubit):
+    """Zero-detuning Y-X Ramsey pulse on a clean dt grid (k₃_diag = -k₁)."""
+    from sqc.control.sequence import create_ramsey_pulse
+
+    t_rabi = np.arange(0, 10, 0.5)
+    return create_ramsey_pulse(
+        t_rabi, tau=0.0, omega_d=qubit.frequency,
+        phase1=np.pi / 2, phase2=0.0,
+    )
+
+
+def test_probe_sigma_t_default_matches_legacy(qubit):
+    """probe_sigma_t=None reproduces the hardcoded 2·dt behaviour exactly."""
+    from sqc.reconstruction.kernel import KernelEstimator
+    from sqc.config import CONFIG
+
+    pulse = _yx_ramsey(qubit)
+
+    ke_none = KernelEstimator(
+        mode='omega', method='exp', order=3, stim_amplitude=0.01,
+    )
+    ke_explicit = KernelEstimator(
+        mode='omega', method='exp', order=3, stim_amplitude=0.01,
+        probe_sigma_t=2.0 * CONFIG.awg.dt,
+    )
+    r_none = ke_none.estimate_full(pulse, qubit)
+    r_exp = ke_explicit.estimate_full(pulse, qubit)
+    for n in range(3):
+        assert_array_close(
+            r_none.kernels[n], r_exp.kernels[n], name=f"sigma_t_default_k{n+1}",
+        )
+
+
+def test_smaller_sigma_t_improves_k3_diagonal(qubit):
+    """A smaller VZ probe width moves exp k₃ closer to the sim ground truth.
+
+    The sim (Heisenberg) k₃ diagonal is the ideal-δ truth; exp at finite
+    σ_t is biased low by off-diagonal smearing.  Reducing σ_t reduces the
+    bias monotonically (verified: ratio 0.84 -> 0.92 from 2·dt -> 1·dt).
+    """
+    from sqc.reconstruction.kernel import KernelEstimator
+
+    pulse = _yx_ramsey(qubit)
+
+    sim = KernelEstimator(mode='omega', method='sim', order=3).estimate_full(pulse, qubit)
+    G3_sim = np.trapezoid(sim.kernels[2], sim.t_samples)
+
+    def g3_ratio(sigma_t):
+        r = KernelEstimator(
+            mode='omega', method='exp', order=3, stim_amplitude=0.01,
+            probe_sigma_t=sigma_t,
+        ).estimate_full(pulse, qubit)
+        return abs(np.trapezoid(r.kernels[2], r.t_samples) / G3_sim)
+
+    from sqc.config import CONFIG
+    r_wide = g3_ratio(2.0 * CONFIG.awg.dt)
+    r_narrow = g3_ratio(1.0 * CONFIG.awg.dt)
+    # narrower probe -> closer to 1.0 (less biased)
+    assert abs(r_narrow - 1.0) < abs(r_wide - 1.0), (
+        f"narrow σ_t ratio {r_narrow:.3f} should beat wide {r_wide:.3f}"
+    )
+
+
+def test_richardson_improves_k3_diagonal(qubit):
+    """Richardson σ_t→0 extrapolation beats any single σ_t for k₃."""
+    from sqc.reconstruction.kernel import KernelEstimator
+
+    pulse = _yx_ramsey(qubit)
+    sim = KernelEstimator(mode='omega', method='sim', order=3).estimate_full(pulse, qubit)
+    G3_sim = np.trapezoid(sim.kernels[2], sim.t_samples)
+
+    r_default = KernelEstimator(
+        mode='omega', method='exp', order=3, stim_amplitude=0.01,
+    ).estimate_full(pulse, qubit)
+    r_rich = KernelEstimator(
+        mode='omega', method='exp', order=3, stim_amplitude=0.01, richardson=True,
+    ).estimate_full(pulse, qubit)
+
+    G3_default = np.trapezoid(r_default.kernels[2], r_default.t_samples)
+    G3_rich = np.trapezoid(r_rich.kernels[2], r_rich.t_samples)
+    assert abs(G3_rich - G3_sim) < abs(G3_default - G3_sim), (
+        f"Richardson G3={G3_rich:.3f} should be closer to sim {G3_sim:.3f} "
+        f"than default {G3_default:.3f}"
+    )
+    # k1 must remain unchanged in shape/finiteness
+    assert r_rich.kernels[0].shape == r_default.kernels[0].shape
+    assert np.all(np.isfinite(r_rich.kernels[2]))
+
+
+def test_offdiag_sim_shapes_and_diagonal(qubit):
+    """method='sim' + extract_off_diagonal yields n-D kernels; k₃ diagonal
+    equals -k₁ and k₂ is symmetric with a small integral (Y-X)."""
+    from sqc.reconstruction.kernel import KernelEstimator
+
+    pulse = _yx_ramsey(qubit)
+    res = KernelEstimator(
+        mode='omega', method='sim', order=3, extract_off_diagonal=True,
+    ).estimate_full(pulse, qubit)
+
+    k1, k2, k3 = res.kernels
+    M = len(res.t_samples)
+    assert res.off_diagonal is True
+    assert k1.shape == (M,)
+    assert k2.shape == (M, M)
+    assert k3.shape == (M, M, M)
+
+    # k2 symmetric
+    assert np.allclose(k2, k2.T)
+
+    # k3 diagonal == -k1 (exact 2-level commutator identity)
+    k3_diag = np.array([k3[i, i, i] for i in range(M)])
+    rmse = np.sqrt(np.mean((k3_diag + k1) ** 2))
+    assert rmse < 1e-5, f"k3(t,t,t) != -k1(t): RMSE={rmse:.2e}"
+
+    # k2 integral is suppressed (Y-X orthogonality; Gaussian residual only)
+    G1 = np.trapezoid(k1, res.t_samples)
+    G2 = np.trapezoid(np.trapezoid(k2, res.t_samples, axis=0), res.t_samples)
+    assert abs(G2 / G1) < 0.15, f"|G2/G1|={abs(G2/G1):.3f} too large"
+
+
+def test_offdiag_exp_raises():
+    """extract_off_diagonal with method='exp' raises NotImplementedError."""
+    from sqc.reconstruction.kernel import KernelEstimator
+    from src.qubit import TransmonQubit
+
+    q = TransmonQubit(
+        EC=0.2 * 2 * np.pi, EJ=15 * 2 * np.pi,
+        T1=10000, T2=5000, n_levels=2, flux=0.0,
+    )
+    pulse = _yx_ramsey(q)
+    ke = KernelEstimator(
+        mode='omega', method='exp', order=2, extract_off_diagonal=True,
+    )
+    with pytest.raises(NotImplementedError, match="method='sim'"):
+        ke.estimate_full(pulse, q)
+
+
+def test_offdiag_order4_raises(qubit):
+    """Off-diagonal extraction rejects order >= 4 (M^n blow-up)."""
+    from sqc.reconstruction.kernel import KernelEstimator
+
+    pulse = _yx_ramsey(qubit)
+    ke = KernelEstimator(
+        mode='omega', method='sim', order=4, extract_off_diagonal=True,
+    )
+    with pytest.raises(ValueError, match="order <= 3"):
+        ke.estimate_full(pulse, qubit)
+
+
+def test_offdiag_save_load_roundtrip(qubit):
+    """KernelResult with n-D kernels survives save/load."""
+    from sqc.reconstruction.kernel import KernelEstimator, KernelResult
+    import tempfile
+    import os
+
+    pulse = _yx_ramsey(qubit)
+    res = KernelEstimator(
+        mode='omega', method='sim', order=3, extract_off_diagonal=True,
+    ).estimate_full(pulse, qubit)
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        path = os.path.join(tmpdir, 'offdiag.npz')
+        res.save(path)
+        loaded = KernelResult.load(path)
+        assert loaded.off_diagonal is True
+        assert loaded.kernels[1].shape == res.kernels[1].shape
+        assert loaded.kernels[2].shape == res.kernels[2].shape
+        for n in range(3):
+            assert_array_close(loaded.kernels[n], res.kernels[n], name=f"od_k{n+1}")
+
+
+def test_offdiag_kernel_rejected_by_wiener(qubit):
+    """n-D kernels into a Wiener/Hammerstein reconstruction raise ValueError."""
+    from sqc.reconstruction.kernel import KernelEstimator
+    from sqc.reconstruction.transient import TransientReconstruction
+
+    pulse = _yx_ramsey(qubit)
+    res = KernelEstimator(
+        mode='omega', method='sim', order=2, extract_off_diagonal=True,
+    ).estimate_full(pulse, qubit)
+
+    class _Meas:
+        data = {"delta_p": np.zeros(40)}
+
+    rec = TransientReconstruction(method='hammerstein_volterra')
+    with pytest.raises(ValueError, match="non-diagonal"):
+        rec.reconstruct(_Meas(), kernel=res)

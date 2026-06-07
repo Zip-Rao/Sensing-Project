@@ -197,6 +197,18 @@ class TransientReconstruction(Reconstruction):
             k1 = None
             kn_list = None
 
+        # Off-diagonal (n-D) kernels are only consumable by the LM optimizer,
+        # which natively accepts the full k_n(t_i, t_j, ...) tensor.  The
+        # Wiener / Hammerstein paths assume diagonal (1-D) kernels.
+        if self.method != "lm" and kn_list is not None:
+            if any(np.ndim(kn) > 1 for kn in kn_list):
+                raise ValueError(
+                    "non-diagonal (n-D) kernels require method='lm'; "
+                    "Wiener/Hammerstein paths accept diagonal (1-D) kernels "
+                    "only. Re-estimate with extract_off_diagonal=False, or "
+                    "switch the reconstruction method to 'lm'."
+                )
+
         match self.method:
             case "wiener":
                 return self._reconstruct_wiener(measurement, k1, **kwargs)

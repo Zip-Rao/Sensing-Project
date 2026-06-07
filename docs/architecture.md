@@ -1,6 +1,6 @@
 # Sensing-Project 全栈化重构平台 — 技术文档
 
-> 版本: v2.8 | 日期: 2026-06-04 | 适用于 sqc v0.3.0
+> 版本: v2.10 | 日期: 2026-06-07 | 适用于 sqc v0.3.0
 >
 > 本文档按照 **Gao, Rol, Touzard, Wang 2021**（PRX Quantum 2, 040202）所提出的 cQED 六层全栈架构组织。
 > 每一章既给出物理动机，又详尽介绍代码模块、扩展接口与开发规范。
@@ -886,6 +886,45 @@ loaded = KernelResult.load('kernel.npz')
 **高阶提取**（Phase 10.3）：`_extract_kn_sim()`、`_extract_kn_flux()`、`_extract_kn_omega()` 通过振幅扫描 + 多项式拟合提取对角 Volterra 核。`KernelResult.save()` / `load()` 使用 `numpy.savez` 序列化。
 
 **legacy shim**：`Pulse.get_kernel()` / `CompositePulse.get_kernel()` 转为 `DeprecationWarning` 兼容桥，内部转发到 `KernelEstimator(mode='flux', method='exp', order=1)`。
+
+##### Phase 12 增补：σ_t 旋钮、Richardson 外推、非对角(sim)提取
+
+> 背景：exp(测量式)高阶**对角**核存在系统性偏差。数值验证(零失谐 Y-X Ramsey,2 能级)显示 k₃ 在默认 σ_t=2·dt 下偏低约 15%(k₁ 仅偏 0.7%)。根因有二：(a) VZ 高斯探针宽度 σ_t 太宽,把完整非对角核 k₃(t₁,t₂,t₃) 在 σ_t 球内卷积平均(非对角"体积"巨大,沿时序楔形有陡峭结构);(b) FD stencil 除以 h^n 后,**默认 mesolve 容差(~1e-8)主导噪声**(noise/h³ ~1e-2/点)。
+
+> **注**:order≥2 的高阶提取实际已由**固定系数 5 点 FD stencil**(`_extract_kn_omega` / `_extract_kn_flux`)实现,取代上文(§4.6.2 算法栏)所述的"多项式拟合"(后者 Vandermonde 病态,已废弃)。sim 路径用 Heisenberg 传播子嵌套对易子(`_heisenberg_kernels`),机器精度。
+
+新增 `KernelEstimator` 字段:
+
+| 字段 | 默认 | 作用 |
+|------|------|------|
+| `probe_sigma_t` | `None`→`2·dt` | omega exp 的 VZ 高斯宽度(ns)。调小可降对角偏差,但需 ≥dt(否则网格欠采样崩溃)。`None` 数值零回归。 |
+| `richardson` | `False` | order≥2 + exp:多 σ_t 采样并外推 σ_t→0,逐(阶,时间点)消除涂抹偏差。k₁ 取最小 σ_t 值。 |
+| `richardson_sigmas` | `None`→`(2.0,1.5,1.0)×dt` | Richardson 的 σ_t 采样点(dt 的倍数,全部 ≥dt)。 |
+
+- **FD 容差修复**:`_extract_kn_omega` 的 FD mesolve 现固定用 `atol=1e-12, rtol=1e-10, max_step=dt`,使 FD 截断误差(而非积分器噪声)决定精度。这是 exp 高阶"不太对"的主因之一。
+- **效果**(Y-X Ramsey):G₃/G₃_sim 从 0.844(默认 2·dt)→ 0.922(σ_t=dt)→ **0.961(Richardson)**。
+
+**非对角感知提取**(`extract_off_diagonal=True`,**仅 `method='sim'`**):
+- `_heisenberg_kernels_offdiag()` 一次 `sesolve` 后用纯 numpy 对易子代数填充完整 n 维核:`kernels[n-1]` 为 shape `(M,)*n` 的 ndarray。
+  - k₂(t_>,t_<) = −⟨0|[W(t_<),[W(t_>),Q]]|0⟩(对称)
+  - k₃(t₁≥t₂≥t₃) = −i⟨0|[W(t₃),[W(t₂),[W(t₁),Q]]]|0⟩(6 排列对称化)
+- 仅支持 `order ≤ 3`(order≥4 抛 ValueError,Mⁿ 组合爆炸);M^order>2e6 时告警。
+- `KernelResult.off_diagonal: bool` 标记;`save`/`load` 原生支持 n 维数组。
+- `method='exp' + extract_off_diagonal` 抛 `NotImplementedError`(测量式混合 FD 未实现,指向 sim)。
+- **下游约束**:非对角核仅 LM 可消费;`TransientReconstruction` 的 Wiener / Hammerstein / Hammerstein-Volterra 路径在收到 `ndim>1` 核时抛 `ValueError`(指向 `method='lm'`)。
+
+```python
+# 完整非对角 k₂(t_i,t_j)、k₃(t_i,t_j,t_l)
+e = KernelEstimator(mode='omega', method='sim', order=3, extract_off_diagonal=True)
+res = e.estimate_full(pulse, qubit)
+res.kernels[1].shape   # (M, M)
+res.kernels[2].shape   # (M, M, M)
+
+# 测量式高阶对角,降低 σ_t 涂抹偏差
+e_rich = KernelEstimator(mode='omega', method='exp', order=3, richardson=True)
+```
+
+> **G_α(积分 Taylor 系数)说明**:对**全程恒定**失谐 Δ 的瞬态测频反演,所需的是 G_αᵀᵃʸˡᵒʳ = dᵅp_diff/dΔᵅ|₀(三重时间积分对象),**不是** ∫k_α^diag dt(单重积分);二者差 ~(2T_{π/2})²。直接对 p_diff(Δ) 做奇多项式拟合提取 G_α 是可行且正确的(见 `sqc/calibration/frequency.py:_calibrate_g3_taylor`,P11 Route A),与逐时核解耦。该方法仅适用于恒定场;时变场重建仍需逐时核 + Wiener/LM。
 
 #### 4.6.3 `TransientReconstruction` 详例
 
@@ -2395,6 +2434,7 @@ mesolve(H_list, psi0, t_array, c_ops, e_ops)
 | v2.6 | 2026-05-17 | **Cryoscope/DelayRamsey 相位 unwrap 统一**:消除 calibration 反演的 ~70 μΦ₀ DC 偏置。(1) 新建 `sqc/reconstruction/dispersion.py` 共享 4 个函数 — `omega_q_at_flux`/`cryoscope_phase_theory`/`cumulative_phase_theory`/`unwrap_phase_with_model`,作为相位 unwrap 唯一真理源。(2) 4 处迁移到统一 API:`CryoscopeExperiment`/`CryoscopeCalibration`/`DelayRamseyExperiment`/`DelayRamseyCalibration` 全部用 model-guided unwrap,实验端用累积积分锚定、标定端用方波相位锚定;旧的 baseline-subtraction + `np.unwrap` 残骸清理。(3) `CryoscopeCalibration` 末尾追加 h=0 锚定 — 减掉 `varphi[h≈0]` 让 `cal.inverse(0) == 0`,消除 IQReadout 系统相位污染。(4) `CryoscopeExperiment` `trunc_list` 越界 sanity check + 默认 `flux_signal.t_list` 延长到 100 ns,避免 `truncate()` 静默失效(silent failure)。(5) `DelayRamseyExperiment.run_baseline` 字段保留兼容性但标 deprecated。详见 §4.6.7。22 单元测试 + 5 物理回归 baseline 全绿(无需重生成)。数值验证:DC offset 由 +6.88e-5 → +2.15e-9 Φ₀。 |
 | v2.7 | 2026-05-18 | **PredistortionDesigner smooth=True 逆设计修复**:`_single_exp_to_iir_inverse` 未区分 `smooth=True/False`，对纯低通模式 (smooth=True, H(s)=1/(1+sτ)) 错误使用非平滑公式 (amp=0.3)，导致级联 H_inv·H = 1/(1+s·21ns) 而非 ≈1。修复：smooth=True 时加正则化极点 τ_reg=dt/4，级联 ≈1/(1+s·0.125ns)，阶跃响应 RMSE 从 0.274 降至 0.018 (15x 改善)。详见 §4.7.4。18 回归+单元测试全绿。 |
 | v2.8 | 2026-06-04 | **P10: 核函数体系三维扩展**。KernelEstimator 新增 mode (flux/omega)、method (sim/exp)、order (1..N) 三个正交维度。新增 Virtual Z 双实现（math σ_z 冲激 + hardware 相位重建）。新增 sim 模式（a†a 频率刺激，纯理论）。新增高阶 Volterra 对角核提取（振幅扫描 + 多项式拟合）及 KernelResult.save/load 序列化。新增 Hammerstein-Volterra 固定点迭代反卷积及 _omega_to_flux 色散反演。frequency.py 迁移到 omega kernel 直接路径，消除 κ workaround。Pulse.get_kernel() 转为 DeprecationWarning 兼容桥。+29 新单元测试；350 测试全绿；src/ 未变（R1）。详见 [phase_10_handbook](../idea/refactor/phase_10_kernel_extension_handbook.md)。 |
+| v2.10 | 2026-06-07 | **核函数 σ_t 旋钮 + Richardson 外推 + 非对角(sim)提取**(§4.6.2 Phase 12 增补)。诊断并修复 exp 高阶对角偏差:(1) `_extract_kn_omega` 的 FD mesolve 改用 `atol=1e-12, rtol=1e-10`,消除 noise/h³ 主导(高阶"不太对"主因);(2) 新增 `probe_sigma_t` 旋钮(默认 `None`→2·dt,零回归)+ `richardson`/`richardson_sigmas` σ_t→0 外推,G₃/G₃_sim 从 0.84→0.96;(3) `extract_off_diagonal=True`(仅 method='sim') 经 `_heisenberg_kernels_offdiag` 产出完整 n 维核 k₂(M,M)/k₃(M,M,M),order≤3;(4) `KernelResult.off_diagonal` 字段 + n 维 save/load;(5) exp+offdiag 抛 NotImplementedError,`estimate_full` order≥2 补回 `_validate_inputs`;(6) `TransientReconstruction` Wiener/Hammerstein 路径对 ndim>1 核抛 ValueError(指向 LM)。+8 新单元测试。src/ 未变(R1)。 |
 
 下一步阅读：
 - 完整设计背景：[`idea/refactor/_refactor_plan.md`](../idea/refactor/_refactor_plan.md)
