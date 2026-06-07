@@ -36,27 +36,27 @@
   (8.88,1.62) -- (9.05,1.62) -- (9.05,-1.08) -- (8.88,-1.08);
 \node[anchor=south west,font=\large] at (9.08,1.60) {$4N_tN_{\mathrm{shot}}$};
 
-\draw[arrow] (scan.east) -- (3.05,0.35);
-\draw[line] (3.05,0.35) -- (3.28,0.35);
+\draw[arrow] (scan.east) -- (3.26,0.35);
+\draw[line] (3.26,0.35) -- (3.7,0.35);
 
 % Pulse sequence, with adjacent Gaussian pulses
 \node[font=\normalsize] at (4.28,1.02) {$R_y(\alpha)$};
 \begin{scope}[shift={(4.28,0.35)}]
-  \draw[pulse,domain=-0.55:0.55,samples=100,smooth]
+  \draw[pulse,domain=-0.6:0.55,samples=100,smooth]
     plot (\x,{0.34*exp(-5*\x*\x)*sin(deg(27*\x))});
-  \draw[envelope,domain=-0.56:0.56,samples=60,smooth]
+  \draw[envelope,domain=-0.6:0.56,samples=60,smooth]
     plot (\x,{0.38*exp(-4.2*\x*\x)});
   \draw[envelope,domain=-0.56:0.56,samples=60,smooth]
     plot (\x,{-0.38*exp(-4.2*\x*\x)});
 \end{scope}
 
 \node[font=\normalsize] at (5.40,1.02) {$R_{\eta}(\alpha)$};
-\begin{scope}[shift={(5.40,0.35)}]
-  \draw[pulse,domain=-0.55:0.55,samples=100,smooth]
+\begin{scope}[shift={(5.5,0.35)}]
+  \draw[pulse,domain=-0.6:0.55,samples=100,smooth]
     plot (\x,{0.34*exp(-5*\x*\x)*sin(deg(27*\x))});
-  \draw[envelope,domain=-0.56:0.56,samples=60,smooth]
+  \draw[envelope,domain=-0.6:0.56,samples=60,smooth]
     plot (\x,{0.38*exp(-4.2*\x*\x)});
-  \draw[envelope,domain=-0.56:0.56,samples=60,smooth]
+  \draw[envelope,domain=-0.6:0.56,samples=60,smooth]
     plot (\x,{-0.38*exp(-4.2*\x*\x)});
 \end{scope}
 
