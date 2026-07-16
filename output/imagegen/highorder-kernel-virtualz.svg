@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2400" height="1350" viewBox="0 0 2400 1350">
+  <rect width="2400" height="1350" fill="white"/>
+  <style>
+    text { font-family: Segoe UI, Arial, sans-serif; fill: #1f2937; }
+    .muted { fill: #6b7280; }
+    .panel { fill:white; stroke:#e5e7eb; stroke-width:2; rx:8; }
+    .axis { stroke:#1f2937; stroke-width:3; fill:none; stroke-linecap:round; }
+    .thin { stroke:#d1d5db; stroke-width:2; fill:none; }
+    .blue { stroke:#377eb8; fill:#377eb8; }
+    .orange { stroke:#e6953b; fill:#e6953b; }
+    .green { stroke:#4daf4a; fill:#4daf4a; }
+    .red { stroke:#c44e52; fill:#c44e52; }
+    .purple { stroke:#984ea3; fill:#984ea3; }
+  </style>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L9,3 z" fill="#1f2937"/></marker>
+    <marker id="arrowGrey" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L9,3 z" fill="#9ca3af"/></marker>
+  </defs>
+  <text x="1200" y="72" text-anchor="middle" font-size="46" font-weight="700">Virtual Z high-order kernel extraction</text>
+  <text x="1200" y="116" text-anchor="middle" font-size="25" class="muted">phase-kick perturbation, bilateral readout, and diagonal Volterra kernels</text>
+  <rect class="panel" x="72" y="190" width="530" height="975"/>
+  <rect class="panel" x="644" y="190" width="530" height="975"/>
+  <rect class="panel" x="1216" y="190" width="530" height="975"/>
+  <rect class="panel" x="1788" y="190" width="530" height="975"/>
+  <line x1="610" y1="670" x2="636" y2="670" stroke="#9ca3af" stroke-width="3" marker-end="url(#arrowGrey)"/>
+  <line x1="1182" y1="670" x2="1208" y2="670" stroke="#9ca3af" stroke-width="3" marker-end="url(#arrowGrey)"/>
+  <line x1="1754" y1="670" x2="1780" y2="670" stroke="#9ca3af" stroke-width="3" marker-end="url(#arrowGrey)"/>
+  <text x="96" y="226" font-size="31" font-weight="700">(a)  Virtual Z probe at t_j</text>
+  <text x="668" y="226" font-size="31" font-weight="700">(b)  bilateral readout</text>
+  <text x="1240" y="226" font-size="31" font-weight="700">(c)  5-point stencil</text>
+  <text x="1812" y="226" font-size="31" font-weight="700">(d)  kernel result</text>
+  <text x="1200" y="1220" text-anchor="middle" font-size="20" class="muted">Virtual Z hardware path: shift later sub-pulses by +/- phi_z; estimate derivatives of p_e with respect to the phase kick.</text>
+  <text x="1200" y="1260" text-anchor="middle" font-size="20" class="muted">For order &gt;= 2, repeat the five-point stencil at every probe time t_j to form k_n^diag(t_j).</text>
+  <text x="337" y="958" text-anchor="middle" font-size="24" fill="#984ea3">+/- phi_z at t_j</text>
+  <text x="909" y="1040" text-anchor="middle" font-size="24">p_e(+phi_z), p_e(-phi_z)</text>
+  <text x="1481" y="1040" text-anchor="middle" font-size="24">k1(t_j), k2 diag(t_j), k3 diag(t_j)</text>
+  <text x="2064" y="1065" text-anchor="middle" font-size="24" class="muted">diagonal Volterra kernels</text>
+</svg>

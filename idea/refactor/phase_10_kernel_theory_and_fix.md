@@ -1,5 +1,6 @@
 # 核函数高阶提取：理论、失败分析与修复方案
 
+> 🧭 理论汇总见 **[_kernel_frequency_theory.md](../_kernel_frequency_theory.md)**（核函数 + 测频精度唯一权威笔记）。本文为 **Phase 10 高阶提取的理论/失败分析记录**。
 > 日期: 2026-06-04 | 关联: [phase_10_kernel_extension_handbook.md](phase_10_kernel_extension_handbook.md) §3–§5 | 配套: [`_sensing theory.md`](../_sensing%20theory.md) §6
 
 ---

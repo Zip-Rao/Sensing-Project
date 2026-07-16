@@ -827,10 +827,10 @@ class SinglePointFrequencyCalibration(Calibration):
 
     Methods
     -------
-    - ``"closed_loop"`` (default): secant or bisection root-finding on
-      r(V) = f_q(V) − f_target = 0.  Per-iteration measurement is
-      delegated to an internal :class:`FrequencyMeasurement` instance,
-      which can be Ramsey-based (robust, default) or transient-based.
+    - ``"closed_loop"`` (default): secant, bisection, or gradient-based
+      root-finding on r(V) = f_q(V) − f_target = 0.  Per-iteration
+      measurement is delegated to an internal :class:`FrequencyMeasurement`
+      instance, which can be Ramsey-based (robust, default) or transient-based.
 
     Parameters
     ----------
@@ -870,6 +870,25 @@ class SinglePointFrequencyCalibration(Calibration):
           for visualisation and diagnostics.  Auto-splits the bracket
           when both endpoints share the same residual sign (handles even
           f(Φ) crossing the sweet spot).
+        - ``"gradient"``: damped secant (numerical-gradient Newton step)
+          with clamping and best-point tracking.  Does **not** require
+          pre-bracketing V_a/V_b — starts from V_seed with a probe step,
+          then uses a damping factor to suppress overshoot from noisy
+          gradient estimates.  See gradient-specific parameters below.
+
+    Gradient-method parameters (step_method="gradient")
+    ---------------------------------------------------
+    V_seed : float or None
+        Starting flux bias (Φ₀).  If None, falls back to (V_a+V_b)/2
+        when V_a, V_b are both set.  Required when V_a, V_b are absent.
+    damping : float
+        Damping factor ∈ (0, 1] to suppress overshoot.  Default 0.8.
+    first_bias_step : float
+        Probe step size (Φ₀) used on the first iteration or when the
+        gradient estimate is undefined (Δe=0).  Default 0.01.
+    max_bias_step : float
+        Per-step clamp (Φ₀).  Prevents a near-zero denominator from
+        flinging the bias far away.  Default 0.05.
 
     Inner-measurement parameters (forwarded to FrequencyMeasurement)
     ----------------------------------------------------------------
@@ -890,7 +909,13 @@ class SinglePointFrequencyCalibration(Calibration):
     max_iter: int = 20
     measure_method: Literal["ramsey", "transient"] = "ramsey"
     bracket_tightening: bool = True
-    step_method: Literal["secant", "bisection"] = "secant"
+    step_method: Literal["secant", "bisection", "gradient"] = "secant"
+
+    # Gradient-method parameters (step_method="gradient")
+    V_seed: float | None = None
+    damping: float = 0.8
+    first_bias_step: float = 0.01
+    max_bias_step: float = 0.05
 
     # Inner-measurement parameters (forwarded to FrequencyMeasurement)
     tau_list: np.ndarray | None = None
@@ -930,23 +955,28 @@ class SinglePointFrequencyCalibration(Calibration):
         """Closed-loop frequency tuning.
 
         Iteratively adjusts flux bias voltage to drive qubit frequency
-        to f_target.  Uses the secant method (default) or bisection for
-        root-finding on r(V) = f_Q(V) - f_target = 0.
+        to f_target via root-finding on r(V) = f_Q(V) - f_target = 0.
 
-        Requires f_target, V_a, V_b to be set.  V_a and V_b must bracket
-        the target: r(V_a) · r(V_b) < 0 (bisection auto-splits if not).
+        For ``step_method`` secant/bisection: requires V_a, V_b bracketing
+        the target.  For ``step_method="gradient"``: requires only V_seed
+        (or V_a/V_b as fallback); no bracketing needed.
         """
         if self.f_target is None:
             raise ValueError("f_target is required for closed_loop method.")
+
+        f_target = self.f_target
+        epsilon = self.epsilon_f
+
+        if self.step_method == "gradient":
+            return self._closed_loop_gradient(f_target, epsilon)
+
         if self.V_a is None or self.V_b is None:
             raise ValueError(
                 "V_a and V_b are required for closed_loop method. "
                 "Run FluxResponseCalibration first to bracket the target."
             )
 
-        f_target = self.f_target
         V_lo, V_hi = min(self.V_a, self.V_b), max(self.V_a, self.V_b)
-        epsilon = self.epsilon_f
 
         if self.step_method == "bisection":
             return self._closed_loop_bisection(f_target, V_lo, V_hi, epsilon)
@@ -1061,27 +1091,142 @@ class SinglePointFrequencyCalibration(Calibration):
         return self._build_result(f_target, V_mid, r_mid, n_iter, epsilon, history)
 
     # ------------------------------------------------------------------
+    def _closed_loop_gradient(
+        self, f_target: float, epsilon: float,
+    ) -> CalibrationTable:
+        """Gradient-based (damped-secant) closed-loop iteration.
+
+        Each iteration measures f_n → residual e_n = f_n − f_target,
+        then updates the bias via a damped numerical-gradient Newton step
+        with per-step clamping and best-point tracking.
+
+        Does **not** require pre-bracketing V_a/V_b: starts from V_seed
+        (or the midpoint of V_a/V_b if V_seed is None).  The first step
+        is a fixed probe step in the direction of −sign(e_n); subsequent
+        steps use ΔV/Δe with damping.  When Δe == 0 the gradient is
+        undefined and the probe step is reused.
+        """
+
+        # ---- seed --------------------------------------------------------
+        if self.V_seed is not None:
+            V_n = float(self.V_seed)
+        elif self.V_a is not None and self.V_b is not None:
+            V_n = (self.V_a + self.V_b) / 2.0
+        else:
+            raise ValueError(
+                "V_seed is required for gradient method when V_a/V_b "
+                "are not both set."
+            )
+
+        # Optional clamp bounds from V_a/V_b (if provided)
+        V_lo = (
+            float(min(self.V_a, self.V_b))
+            if (self.V_a is not None and self.V_b is not None)
+            else None
+        )
+        V_hi = (
+            float(max(self.V_a, self.V_b))
+            if (self.V_a is not None and self.V_b is not None)
+            else None
+        )
+
+        f_n = self._meas.measure(V_n)
+        e_n = f_n - f_target
+        n_iter = 0
+
+        # Track best point in case later iterations diverge
+        best_V = V_n
+        best_residual = e_n
+        best_abs_e = abs(e_n)
+
+        history: list[dict] = []
+        history.append({
+            "iter": n_iter, "V": float(V_n),
+            "f": float(f_n), "residual": float(e_n),
+            "is_best": True,
+        })
+
+        # ---- main loop ---------------------------------------------------
+        while abs(e_n) > epsilon and n_iter < self.max_iter:
+            # --- compute step ---
+            if n_iter == 0:
+                # No gradient yet: fixed probe step
+                step = self.first_bias_step * np.sign(e_n)
+            else:
+                de = e_n - e_prev
+                dV = V_n - V_prev
+                if abs(de) > 1e-15:
+                    grad_inv = dV / de                     # dB/de
+                    step = self.damping * e_n * grad_inv   # damped secant
+                else:
+                    # Gradient undefined: reuse probe step
+                    step = self.first_bias_step * np.sign(e_n)
+
+            # Clamp step
+            step = float(np.clip(step, -self.max_bias_step, self.max_bias_step))
+
+            # Apply step
+            V_prev, e_prev = V_n, e_n
+            V_n = V_n - step
+
+            # Clamp V_n into optional bounds
+            if V_lo is not None:
+                V_n = max(V_lo, min(V_hi, V_n))
+
+            # Measure at new point
+            f_n = self._meas.measure(V_n)
+            e_n = f_n - f_target
+            n_iter += 1
+
+            # Track best point
+            is_best = abs(e_n) < best_abs_e
+            if is_best:
+                best_abs_e = abs(e_n)
+                best_residual = e_n
+                best_V = V_n
+
+            history.append({
+                "iter": n_iter, "V": float(V_n),
+                "f": float(f_n), "residual": float(e_n),
+                "is_best": is_best,
+            })
+
+        return self._build_result(
+            f_target, best_V, best_residual,
+            n_iter, epsilon, history,
+            extra={
+                "damping": self.damping,
+                "first_bias_step": self.first_bias_step,
+                "max_bias_step": self.max_bias_step,
+            },
+        )
+
+    # ------------------------------------------------------------------
     def _build_result(
         self, f_target: float, V_opt: float, residual: float,
         n_iter: int, epsilon: float, history: list[dict],
+        extra: dict | None = None,
     ) -> CalibrationTable:
         """Package closed-loop result into a CalibrationTable."""
+        fit_params = {
+            "method": self.method,
+            "step_method": self.step_method,
+            "measure_method": self.measure_method,
+            "f_target": float(f_target),
+            "V_opt": float(V_opt),
+            "n_iter": n_iter,
+            "residual": float(residual),
+            "converged": abs(residual) <= epsilon,
+            "history": history,
+        }
+        if extra is not None:
+            fit_params.update(extra)
         return CalibrationTable(
             name="frequency_closed_loop",
             qubit_name=getattr(self.qubit, "name", "qubit"),
             kind="f01",
             inputs=np.array([V_opt]),
             outputs=np.array([f_target + residual]),
-            fit_params={
-                "method": self.method,
-                "step_method": self.step_method,
-                "measure_method": self.measure_method,
-                "f_target": float(f_target),
-                "V_opt": float(V_opt),
-                "n_iter": n_iter,
-                "residual": float(residual),
-                "converged": abs(residual) <= epsilon,
-                "history": history,
-            },
+            fit_params=fit_params,
             metadata={},
         )

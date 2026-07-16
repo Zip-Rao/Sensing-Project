@@ -1,6 +1,9 @@
 # 瞬态频率标定：完整理论-代码对应
 
-> 日期: 2026-06-06 | 代码: `sqc/calibration/frequency.py:_measure_frequency_transient`
+> 日期: 2026-06-06（初版）· 2026-06-07 更新 | 代码: `sqc/calibration/frequency.py:_measure_frequency_transient`
+>
+> **本文专注 frequency.py 的行级代码对应。** 核函数体系 + 测频精度 + 翻折点的统一理论见
+> **[_kernel_frequency_theory.md](../_kernel_frequency_theory.md)**（唯一权威理论笔记）。
 
 ---
 
@@ -191,49 +194,26 @@ $$\boxed{f_{\text{meas}} = \omega_d - \frac{p_{\text{diff}}}{G_{\text{freq}}}}$$
 
 ---
 
-## 6. 有效范围与误差分析
+## 6. 有效范围与误差分析（摘要）
 
-### 线性区边界
+> 完整推导（翻折点、高阶为何扩展线性区、σ_t 精度、Route B 等）见
+> **[_kernel_frequency_theory.md](../_kernel_frequency_theory.md) §4–§5**。此处仅留代码相关要点。
 
-$p_{\text{diff}}$ 的严格表达式（考虑三阶项）：
+- $p_{\text{diff}}(\Delta)=G_{\text{freq}}\Delta+\tfrac16 G_3\Delta^3+\cdots$ 是奇函数；本质 $\sin(\varphi)$，在 $\varphi=\pi/2$ **翻折**（$\Delta_{\text{fold}}\approx\pi/(2T_{\text{eff}})\approx0.02$ GHz）。实用安全区 $|\Delta|\lesssim0.5\Delta_{\text{fold}}$。
+- ⚠️ **三次修正用的 $G_3$ 是 Taylor 系数 $=\iiint k_3\,d^3t$，不是对角核 $\int k_3^{\text{diag}}$**（后者小 ~170×、符号也错，是历史 bug）。
+- order≥3 在 **$\delta\omega=-\Delta$ 约定**下 Newton 求解（修复了旧版返回 $\omega_d-\Delta$ 的符号 bug）：
 
-$$p_{\text{diff}}(\Delta) = G_{\text{freq}}\,\Delta + \frac{1}{6}G_3\,\Delta^3 + O(\Delta^5)$$
-
-其中 $G_3 = \int k_3^{\text{diag}}(t)\,dt$（由 Heisenberg 传播子验证：$|G_3/G_1| = 1$ 在零 detuning）。
-
-线性近似 $p_{\text{diff}} \approx G_{\text{freq}}\Delta$ 的**相对误差**：
-
-$$\epsilon_{\text{rel}} \approx \frac{|G_3|}{6|G_{\text{freq}}|} \cdot \Delta^2 \approx \frac{1}{6}\Delta^2$$
-
-对于 $\epsilon_{\text{rel}} < 5\%$：$|\Delta| < \sqrt{0.3} \approx 0.055$ GHz。这正是实验中观察到的交叉点（~0.07 GHz）。
-
-### 三阶修正（可选）
-
-当 $|\Delta|$ 超出线性区时，用 Newton 迭代解三阶方程：
-
-$$\Delta^{(0)} = p_{\text{diff}} / G_{\text{freq}}$$
-$$\Delta^{(k+1)} = \Delta^{(k)} - \frac{G_{\text{freq}}\Delta + G_3\Delta^3/6 - p_{\text{diff}}}{G_{\text{freq}} + G_3\Delta^2/2}$$
-
-这在 $|\Delta| \approx 0.12$ GHz 处提供约 7.6% 改善，但无法根本解决大 detuning 下的非线性饱和。
+```
+frequency.py:_measure_frequency_transient (order>=3):
+  g3_source="fit"         -> _calibrate_g3_taylor      (奇多项式拟合, 自适应 delta_max)
+  g3_source="kernel_full" -> _calibrate_g3_kernel_full (∭k₃, Heisenberg sim)
+  Newton: p_diff = G_lin·δω + G3/6·δω³ ;   f = ω_d - δω      (diag_legacy 已移除)
+```
 
 ---
 
 ## 7. 与标准 Ramsey τ-sweep 的关系
 
-标准 Ramsey（$\tau$ 变化）测量的是**相位积累**：
+标准 Ramsey（$\tau$ 变化）测**相位积累** $\phi(\tau)=\Delta\tau$，FFT 提取振荡频率 → $\Delta$（无歧义、全范围）。瞬态（$\tau=0$）测**瞬时灵敏度** $p_{\text{diff}}=G_{\text{freq}}\Delta$（无需扫描、快，但限小 $\Delta$）。两者在 $|\Delta|\approx0.07$ GHz 互补交叉。
 
-$$\phi(\tau) = \Delta \cdot \tau \quad \Rightarrow \quad f_{\text{osc}} = \Delta / 2\pi$$
-
-FTT 提取振荡频率 → $\Delta$。精度 $\sim 1/\tau_{\max} \approx 5$ MHz（$\tau_{\max}=200$ ns）。
-
-瞬态方法（$\tau=0$）测量的是**瞬时灵敏度**：
-
-$$p_{\text{diff}} = \underbrace{\left(\int k_1(t)\,dt\right)}_{G_{\text{freq}}} \cdot \Delta$$
-
-$G_{\text{freq}}$ 由脉冲序列的核函数决定，通常 $G_{\text{freq}} \sim 6$（无量纲）。
-
-**对比**：
-- Ramsey: $p_e$ 的**频率** $\propto \Delta$ → 需要扫描 $\tau$ → 慢，但全范围有效
-- Transient: $p_e$ 的**幅度** $\propto \Delta$ → 无需扫描 → 快，但限于小 $\Delta$
-
-两者在 $|\Delta| \approx 0.07$ GHz 处形成互补交叉。
+> **Ramsey 实现坑**：τ-扫的 `t_global` 必须覆盖完整序列（脉冲 + 最大 τ），否则 `hamiltonian_on` 会把 τ 处第二个 π/2 脉冲截断丢弃，使扫描失效（误差卡 ~1 MHz 且加长 τ 不改善；覆盖后达 ~kHz）。

@@ -1,5 +1,6 @@
 # 核函数体系与频率标定体系 — 架构总结
 
+> 🧭 理论汇总见 **[_kernel_frequency_theory.md](../_kernel_frequency_theory.md)**（核函数 + 测频精度唯一权威笔记）。本文为 **架构/API** 视角。
 > 日期: 2026-06-06 | 关联: [phase_10_kernel_extension_handbook.md](phase_10_kernel_extension_handbook.md), [phase_10_kernel_theory_and_fix.md](phase_10_kernel_theory_and_fix.md), [`_sensing theory.md`](../_sensing%20theory.md)
 
 ---
@@ -253,7 +254,7 @@ Step 2: FrequencyMeasurement(method="ramsey")     5–50 s
 | FD stencil 的 k₃ 精度 O(h²) | 需要合理选择 h (~0.005 rad) |
 | Heisenberg 仅 sim（需知道 H(t)） | 不能用于实验数据 |
 | Exp 高阶仍比 order-1 慢 2.5× | 日常测频建议 order=1 |
-| extract_off_diagonal 未实现 | 完整的 k₂(t_i, t_j) 尚不可用 |
+| extract_off_diagonal（sim）已实现（Phase 12，order≤3） | 完整 k₂(t_i,t_j)/k₃(...) 可用；exp 非对角仍未实现（抛 NotImplementedError） |
 
 ---
 

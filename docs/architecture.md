@@ -1,6 +1,6 @@
 # Sensing-Project 全栈化重构平台 — 技术文档
 
-> 版本: v2.11 | 日期: 2026-06-07 | 适用于 sqc v0.3.0
+> 版本: v2.12 | 日期: 2026-07-16 | 适用于 sqc v0.3.0
 >
 > 本文档按照 **Gao, Rol, Touzard, Wang 2021**（PRX Quantum 2, 040202）所提出的 cQED 六层全栈架构组织。
 > 每一章既给出物理动机，又详尽介绍代码模块、扩展接口与开发规范。
@@ -1134,7 +1134,7 @@ class CalibrationTable:
 | `FluxResponseCalibration(method="transient")` | Δω(Φ) 多项式 | (项目原创) | 已知瞬态信号扫描（依赖 Track B 1.2） |
 | `FrequencyMeasurement(method="ramsey")` | 单点 f₀₁ 测量 | §V.A | Ramsey FFT（单/双扫模式可选） |
 | `FrequencyMeasurement(method="transient")` | 单点 f₀₁ 测量 | (项目原创) | 正交 Ramsey + 核函数灵敏度 G_α |
-| `SinglePointFrequencyCalibration(method="closed_loop")` | 闭环调谐到 f_target | Vepsalainen 2022 | secant/bisection 迭代,内层组合 `FrequencyMeasurement`(双扫 ramsey 或 transient) |
+| `SinglePointFrequencyCalibration(method="closed_loop")` | 闭环调谐到 f_target | Vepsalainen 2022 | secant/bisection/gradient 迭代,内层组合 `FrequencyMeasurement`(双扫 ramsey 或 transient); gradient 免括号,含阻尼+钳位+best-point |
 | `WaveformCalibration(method="transfer_function")` | H(ω) 拟合 | §V.E | 阶跃响应 + 多指数/FIR/IIR 拟合 |
 | `WaveformCalibration(method="predistortion")` | 设计逆滤波器 | §V.E | H_inv(ω) = H*(ω) / (|H|² + λ²) |
 | `PredistortionDesigner` | 独立预失真设计器 | §V.E | 可按需独立使用 |
@@ -1152,7 +1152,7 @@ class CalibrationTable:
 
 **职责分离设计**(v2.4):
 - `FrequencyMeasurement` — 单点 f₀₁ **测量**(read-only),`method ∈ {"ramsey", "transient"}`,提供 `.measure(flux)` 子例程接口和标准 `.calibrate()` CalibrationTable 接口
-- `SinglePointFrequencyCalibration` — 单点 f₀₁ **调谐**(write/feedback),`method ∈ {"closed_loop"}`(为未来调谐策略预留扩展点),内部组合一个 `FrequencyMeasurement` 实例完成每步测频
+- `SinglePointFrequencyCalibration` — 单点 f₀₁ **调谐**(write/feedback),`method ∈ {"closed_loop"}`(为未来调谐策略预留扩展点),内部组合一个 `FrequencyMeasurement` 实例完成每步测频; `step_method ∈ {"secant", "bisection", "gradient"}` 控制更新规则
 
 **Ramsey 测频双模设计**：
 
@@ -1221,6 +1221,7 @@ table = cal.calibrate()
 **闭环算法**（两种 root-finding 方法，每次迭代通过内部 `self._meas.measure(V_n)` 测频）：
 - **割线法** (secant)：维护 V_{n-1}, V_n，割线外推 V_{n+1} = V_n − r_n·(V_n − V_{n-1}) / (r_n − r_{n-1})。若越界 [V_a, V_b] 回退中点。`bracket_tightening=True`（默认）时每次迭代收紧边界（regula falsi），通常 1–3 次收敛。
 - **二分法** (bisection)：每次取中点 V_mid = (V_lo + V_hi)/2，根据 r_mid·r_lo 的符号缩半区间。收敛 O(log₂(范围/ε))，约 10–15 次迭代，适合可视化诊断。自动处理偶对称 f(Φ)（在 Φ=0 处拆分 bracket）。
+- **梯度下降法** (gradient)：阻尼割线法 (damped secant / numerical-gradient Newton step)。**不需要预先括号 V_a/V_b**——仅需 V_seed 起点。首步为固定探测步 first_bias_step·sign(e_n)；后续步用两点数值梯度 ΔV/Δe 估计局部斜率，乘 damping∈(0,1] 抑制噪声过冲，每步钳位到 ±max_bias_step 防止发散。追踪 |残差| 最小的 best-point，最终回写该点而非末次迭代值。
 
 闭环内部的 `FrequencyMeasurement` 在 `__post_init__` 中一次性构造,强制 `f_artificial=None`(双扫),以保证搜索过程中即使探到远离 sweet spot 的 flux 也能正确测频。
 
@@ -2457,6 +2458,7 @@ mesolve(H_list, psi0, t_array, c_ops, e_ops)
 | v2.6 | 2026-05-17 | **Cryoscope/DelayRamsey 相位 unwrap 统一**:消除 calibration 反演的 ~70 μΦ₀ DC 偏置。(1) 新建 `sqc/reconstruction/dispersion.py` 共享 4 个函数 — `omega_q_at_flux`/`cryoscope_phase_theory`/`cumulative_phase_theory`/`unwrap_phase_with_model`,作为相位 unwrap 唯一真理源。(2) 4 处迁移到统一 API:`CryoscopeExperiment`/`CryoscopeCalibration`/`DelayRamseyExperiment`/`DelayRamseyCalibration` 全部用 model-guided unwrap,实验端用累积积分锚定、标定端用方波相位锚定;旧的 baseline-subtraction + `np.unwrap` 残骸清理。(3) `CryoscopeCalibration` 末尾追加 h=0 锚定 — 减掉 `varphi[h≈0]` 让 `cal.inverse(0) == 0`,消除 IQReadout 系统相位污染。(4) `CryoscopeExperiment` `trunc_list` 越界 sanity check + 默认 `flux_signal.t_list` 延长到 100 ns,避免 `truncate()` 静默失效(silent failure)。(5) `DelayRamseyExperiment.run_baseline` 字段保留兼容性但标 deprecated。详见 §4.6.7。22 单元测试 + 5 物理回归 baseline 全绿(无需重生成)。数值验证:DC offset 由 +6.88e-5 → +2.15e-9 Φ₀。 |
 | v2.7 | 2026-05-18 | **PredistortionDesigner smooth=True 逆设计修复**:`_single_exp_to_iir_inverse` 未区分 `smooth=True/False`，对纯低通模式 (smooth=True, H(s)=1/(1+sτ)) 错误使用非平滑公式 (amp=0.3)，导致级联 H_inv·H = 1/(1+s·21ns) 而非 ≈1。修复：smooth=True 时加正则化极点 τ_reg=dt/4，级联 ≈1/(1+s·0.125ns)，阶跃响应 RMSE 从 0.274 降至 0.018 (15x 改善)。详见 §4.7.4。18 回归+单元测试全绿。 |
 | v2.8 | 2026-06-04 | **P10: 核函数体系三维扩展**。KernelEstimator 新增 mode (flux/omega)、method (sim/exp)、order (1..N) 三个正交维度。新增 Virtual Z 双实现（math σ_z 冲激 + hardware 相位重建）。新增 sim 模式（a†a 频率刺激，纯理论）。新增高阶 Volterra 对角核提取（振幅扫描 + 多项式拟合）及 KernelResult.save/load 序列化。新增 Hammerstein-Volterra 固定点迭代反卷积及 _omega_to_flux 色散反演。frequency.py 迁移到 omega kernel 直接路径，消除 κ workaround。Pulse.get_kernel() 转为 DeprecationWarning 兼容桥。+29 新单元测试；350 测试全绿；src/ 未变（R1）。详见 [phase_10_handbook](../idea/refactor/phase_10_kernel_extension_handbook.md)。 |
+| v2.12 | 2026-07-16 | **闭环反馈新增 `step_method="gradient"`**(§4.7.3)。阻尼割线法 (damped secant) 数值梯度 Newton 步,无需 V_a/V_b 预括号,仅需 V_seed 起点。新增 damping/clamp/best-point 三重抗噪: damping∈(0,1] 压过冲, max_bias_step 钳位, 追踪 |residual| 最小点回写。首步/Δe=0 时退化为固定探测步。`SinglePointFrequencyCalibration` 新增 V_seed/damping/first_bias_step/max_bias_step 字段; `_build_result` 新增 `extra` 可选参数。+纯增量分支, src/ 未变(R1)。 |
 | v2.11 | 2026-06-07 | **瞬态测频 order≥3 修复 + Route B 落地**(§4.7.3 v2.11 注)。(1) 修复 order≥3 三次 Newton 的**符号 bug**(此前返回 ω_d−Δ,误差≈−2Δ,比线性更差)——统一到 δω=−Δ 约定。(2) `_calibrate_g3_taylor` 的 `delta_max_ghz` 默认改 `None`=**自适应**(旧默认 0.08 使 G1 偏低~0.6×、G3 全错);新增 `FrequencyMeasurement.g3_delta_max`。(3) **Route B** `g3_source="kernel_full"`:完整非对角核三重积分 ∭k₃ dt³(`_calibrate_g3_kernel_full`),免 Δ 扫描,与拟合互校。(4) **移除** `diag_legacy`(错误对象,小~170×),未知值抛 ValueError。效果:有效区 order3-fit 比线性精度↑~10×。+5 单元测试。src/ 未变(R1)。 |
 | v2.10 | 2026-06-07 | **核函数 σ_t 旋钮 + Richardson 外推 + 非对角(sim)提取**(§4.6.2 Phase 12 增补)。诊断并修复 exp 高阶对角偏差:(1) `_extract_kn_omega` 的 FD mesolve 改用 `atol=1e-12, rtol=1e-10`,消除 noise/h³ 主导(高阶"不太对"主因);(2) 新增 `probe_sigma_t` 旋钮(默认 `None`→2·dt,零回归)+ `richardson`/`richardson_sigmas` σ_t→0 外推,G₃/G₃_sim 从 0.84→0.96;(3) `extract_off_diagonal=True`(仅 method='sim') 经 `_heisenberg_kernels_offdiag` 产出完整 n 维核 k₂(M,M)/k₃(M,M,M),order≤3;(4) `KernelResult.off_diagonal` 字段 + n 维 save/load;(5) exp+offdiag 抛 NotImplementedError,`estimate_full` order≥2 补回 `_validate_inputs`;(6) `TransientReconstruction` Wiener/Hammerstein 路径对 ndim>1 核抛 ValueError(指向 LM)。+8 新单元测试。src/ 未变(R1)。 |
 
