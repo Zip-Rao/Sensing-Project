@@ -55,6 +55,10 @@ class EchoReconstruction(Reconstruction):
             Reconstructed magnetic field B.
         """
         p_e = np.asarray(measurement.data["p_e"], dtype=float)
-        varphi = np.arcsin(2 * p_e - 1)
+        # Clip before arcsin: mesolve integrator noise can push p_e marginally
+        # outside [0, 1], which would send arcsin's argument beyond [-1, 1] and
+        # produce silent NaNs in the reconstructed B. Same guard as ramsey/
+        # transient/dispersion reconstructions.
+        varphi = np.arcsin(np.clip(2 * p_e - 1, -1.0, 1.0))
         kappa = _get_sensitivity(self.qubit)
         return -varphi / (2 * self.k * kappa * self.t_int)

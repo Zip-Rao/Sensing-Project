@@ -93,7 +93,23 @@ def create_pulse(
     current_angle = Omega_pulse.get_angle_simple()
     # Adjust amplitude for target angle
     if angle is not None:
-        Omega_signal.params["amplitude"] *= angle / current_angle
+        if abs(current_angle) < 1e-12:
+            raise ValueError(
+                "create_pulse: base envelope integrates to ~0 "
+                f"(current_angle={current_angle:.3e}); cannot auto-scale "
+                "amplitude to the requested angle. Check Signal type/amplitude."
+            )
+        scale = angle / current_angle
+        Omega_signal.params["amplitude"] *= scale
+        # Preserve the DRAG I/Q ratio: the Q-quadrature envelope must be
+        # scaled by the same factor as the I envelope, otherwise the DRAG
+        # correction is no longer matched to the drive amplitude.
+        if (
+            Omega_Q is not None
+            and hasattr(Omega_Q, "update_signal")
+            and "amplitude" in getattr(Omega_Q, "params", {})
+        ):
+            Omega_Q.update_signal(amplitude=Omega_Q.params["amplitude"] * scale)
     # Re-generate
     kwargs["amplitude"] = Omega_signal.params["amplitude"]
     signal = Signal(type=type, t_list=t_list, **kwargs)
@@ -101,6 +117,10 @@ def create_pulse(
         frame, omega_d, phase, Omega=signal, Omega_Q=Omega_Q,
         is_rwa=True, qubit=qubit, trigger=trigger,
     )
+    # NOTE: the returned QobjEvo is defined on the *local* t_list, so the
+    # ``trigger`` offset is not baked in here — it only takes effect when the
+    # pulse is embedded on a global time axis via Pulse.hamiltonian_on() /
+    # CompositePulse. ``trigger`` is forwarded to the Pulse for that use.
     H_t = pulse.hamiltonian
     return QobjEvo(H_t, tlist=t_list)
 
@@ -118,7 +138,7 @@ def create_ramsey_pulse(
 
     Each sub-pulse is assigned an absolute ``trigger`` (relative to
     global t=0).  The first pi/2 starts at ``trigger``; the second
-    pi/2 starts at ``trigger + t_rabi[-1] + tau``.
+    pi/2 starts at ``trigger + (t_rabi[-1] - t_rabi[0]) + tau``.
 
     Parameters
     ----------
@@ -165,7 +185,11 @@ def create_ramsey_pulse(
             trigger=cur,
         )
     )
-    cur += float(t_rabi[-1])
+    # Advance by the pulse *duration* (t_rabi[-1] - t_rabi[0]), consistent
+    # with create_diff_echo_pulse / create_echo_pulse.  Numerically identical
+    # to t_rabi[-1] when t_rabi starts at 0 (the default), but correct when
+    # t_rabi[0] != 0.
+    cur += float(t_rabi[-1] - t_rabi[0])
     # Gap (free evolution)
     if tau != 0.0 and Omega_0 is not None:
         pulses.append(

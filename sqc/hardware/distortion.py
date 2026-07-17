@@ -269,6 +269,14 @@ class SingleExponentialDistortion(DistortionModel):
         """Bilinear-transform inverse: H_inv(s) = (1+s*tau)/(1+s*tau*(1-A))."""
         tau = self.tau
         amp = self.amplitude
+        # As A -> 1 the forward DC gain -> 0, so a stable inverse does not
+        # exist: a_cont's leading coefficient tau*(1-A) -> 0 collapses the
+        # denominator order and produces an unbounded high-frequency inverse.
+        # Degrade to identity, matching _design_inverse_rol2020's guard.
+        if abs(1.0 - amp) < 1e-15:
+            return IIRDistortion(
+                b_coeffs=np.array([1.0]), a_coeffs=np.array([1.0]),
+            )
         b_cont = [tau, 1.0]
         a_cont = [tau * (1.0 - amp), 1.0]
         b, a = bilinear(b_cont, a_cont, fs=1.0 / dt)

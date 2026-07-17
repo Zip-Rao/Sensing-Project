@@ -57,6 +57,22 @@ class TestSingleExpDesignInverse:
             dist.design_inverse(0.5)
             assert len(w) > 0, "No warning raised for |A| > 0.5"
 
+    @pytest.mark.parametrize("formula", ["bilinear", "rol2020"])
+    def test_amplitude_near_one_returns_stable_inverse(self, formula):
+        """A -> 1 collapses the forward DC gain; the inverse must degrade to
+        a stable (identity) filter rather than an unbounded one."""
+        dt = 0.5
+        dist = SingleExponentialDistortion(amplitude=1.0, tau=50.0)
+        inv = dist.design_inverse(dt, formula=formula)
+
+        # Identity fallback: b == a == [1.0], and a finite frequency response.
+        np.testing.assert_allclose(inv.b_coeffs, [1.0], atol=1e-12)
+        np.testing.assert_allclose(inv.a_coeffs, [1.0], atol=1e-12)
+
+        omega = 2 * np.pi * np.fft.fftfreq(256, d=dt)
+        H = inv.frequency_response(omega)
+        assert np.all(np.isfinite(H)), "inverse frequency response is not finite"
+
     def test_bilinear_matches_existing_wrapper(self):
         """Output matches PredistortionDesigner._single_exp_to_iir_inverse."""
         from sqc.calibration.waveform import PredistortionDesigner
