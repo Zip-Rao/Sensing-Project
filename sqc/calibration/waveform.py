@@ -417,7 +417,6 @@ class PredistortionDesigner:
         raise ValueError(f"Unknown method: {resolved}")
 
     @staticmethod
-    @staticmethod
     def _auto_method(transfer_model: object) -> str:
         """Resolve ``"auto"`` method.
 

@@ -6,6 +6,7 @@ from .distortion import (
     FIRDistortion,
     IIRDistortion,
     CustomTransferDistortion,
+    CascadeDistortion,
 )
 from .control_line import ControlLine
 from .transfer_matrix import TransferMatrix
@@ -17,6 +18,7 @@ __all__ = [
     "FIRDistortion",
     "IIRDistortion",
     "CustomTransferDistortion",
+    "CascadeDistortion",
     "ControlLine",
     "TransferMatrix",
 ]
