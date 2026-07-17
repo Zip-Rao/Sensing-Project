@@ -54,7 +54,7 @@ $k_n$ = n 阶 Volterra 核 = $\delta^n p_e/\delta\omega^n$。一阶 $k_1(t)$ 是
 | 公式 | $k_n=i^n\langle0\|[W(t_n),[\cdots,[W(t_1),Q]]]\|0\rangle$ \| $\partial^n p_e/\partial\phi_z^n$,5 点 FD stencil |
 |  | $W=U^\dagger\sigma_z U/2,\;Q=U^\dagger(T)MU(T)$ | |
 | 精度 | 机器精度 | $O(h^4)/O(h^2)$ + 有限-σ_t 偏差 |
-| 非对角 | ✅ 一次 sesolve 出整个张量(`_heisenberg_kernels_offdiag`, order≤3) | ❌ 未实现(混合 FD 太贵,抛 NotImplementedError) |
+| 非对角 | ✅ 一次 sesolve 出整个张量(`_heisenberg_kernels_offdiag`, order≤3) | ✅ Phase 14: 混合 FD (`_extract_kn_offdiag_exp`, order≤3, omega + flux; 代价 ~O(M³) mesolve, 建议 M≤8) |
 | 适用 | 仅仿真(需知 H(t)) | 任何可测 p_e(含真实硬件) |
 
 代码:`KernelEstimator(mode∈{flux,omega}, method∈{sim,exp}, order, extract_off_diagonal)`。
@@ -79,9 +79,11 @@ $k_n$ = n 阶 Volterra 核 = $\delta^n p_e/\delta\omega^n$。一阶 $k_1(t)$ 是
 - 新增 `probe_sigma_t`(默认 None→2·dt,零回归);`richardson=True` 对多个 σ_t 外推 σ_t→0。
 - 效果(Y-X):$G_3/G_3^{\rm sim}$ 从 **0.844(2·dt)→0.922(dt)→0.961(Richardson)**。σ_t<dt 网格欠采样会崩,故 σ_t≥dt。
 
-### 2.3 非对角(sim)提取
+### 2.3 非对角(sim + exp)提取
 
-`extract_off_diagonal=True`(仅 sim)经 `_heisenberg_kernels_offdiag` 一次 sesolve + numpy 对易子产出 $k_2(M,M)$、$k_3(M,M,M)$(order≤3)。验证:对角切片 $k_3(t,t,t)=-k_1$(RMSE~1e-6),$k_2$ 对称,$G_2^{\rm full}\approx0$。`KernelResult.off_diagonal` 标记 + n 维 save/load;Wiener/Hammerstein 收到 n 维核抛 ValueError(仅 LM 可消费)。
+- **sim**:`extract_off_diagonal=True` 经 `_heisenberg_kernels_offdiag` 一次 sesolve + numpy 对易子产出 $k_2(M,M)$、$k_3(M,M,M)$(order≤3)。验证:对角切片 $k_3(t,t,t)=-k_1$(RMSE~1e-6),$k_2$ 对称,$G_2^{\rm full}\approx0$。
+- **exp**(Phase 14):`_extract_kn_offdiag_exp` 混合偏导数 FD → 同 shape 的 n 维张量,从可测 $p_e$ 恢复,无需知 $H(t)$。支持 omega + flux 双模式;含 memoized 求值缓存、对称楔形填充。代价 ~O(M³) mesolve(M=时间点数),建议 M≤8。
+- `KernelResult.off_diagonal` 标记 + n 维 save/load;Wiener/Hammerstein 收到 n 维核抛 ValueError(仅 LM 可消费)。
 
 ### 2.4 G_freq 路线:为何一阶测频比旧结果更准
 

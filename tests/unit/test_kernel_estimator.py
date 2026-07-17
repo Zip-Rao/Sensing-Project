@@ -918,25 +918,101 @@ def test_offdiag_sim_shapes_and_diagonal(qubit):
     assert abs(G2 / G1) < 0.15, f"|G2/G1|={abs(G2/G1):.3f} too large"
 
 
-def test_offdiag_exp_raises():
-    """extract_off_diagonal with method='exp' raises NotImplementedError."""
+def test_offdiag_exp_omega_shapes_and_symmetry(qubit):
+    """method='exp' + extract_off_diagonal (omega) yields n-D kernels with
+    correct shapes and symmetry; k₃ diagonal ≈ −k₁ (2-level identity)."""
+    from sqc.config import CONFIG
     from sqc.reconstruction.kernel import KernelEstimator
-    from src.qubit import TransmonQubit
 
-    q = TransmonQubit(
-        EC=0.2 * 2 * np.pi, EJ=15 * 2 * np.pi,
-        T1=10000, T2=5000, n_levels=2, flux=0.0,
+    pulse = _yx_ramsey(qubit)
+    coarse_t = np.linspace(
+        0, 2 * CONFIG.pulse.t_rabi_duration, 6,
     )
-    pulse = _yx_ramsey(q)
-    ke = KernelEstimator(
+    res = KernelEstimator(
+        mode='omega', method='exp', order=3, extract_off_diagonal=True,
+        stim_amplitude=0.01,
+    ).estimate_full(pulse, qubit, t_samples=coarse_t)
+
+    k1, k2, k3 = res.kernels
+    M = len(coarse_t)
+    assert res.off_diagonal is True
+    assert k1.shape == (M,)
+    assert k2.shape == (M, M)
+    assert k3.shape == (M, M, M)
+    assert np.allclose(k2, k2.T), "k2 not symmetric"
+    # k3 fully symmetric: check a few index permutations
+    assert np.allclose(k3[0, 1, 2], k3[0, 2, 1]), "k3[0,1,2] != k3[0,2,1]"
+    assert np.allclose(k3[0, 1, 2], k3[2, 0, 1]), "k3[0,1,2] != k3[2,0,1]"
+
+    # k₃(t,t,t) ≈ −k₁(t) (exact 2-level commutator identity; FD tolerance)
+    k3_diag = np.array([k3[i, i, i] for i in range(M)])
+    rmse = np.sqrt(np.mean((k3_diag + k1) ** 2))
+    assert rmse < 0.15, f"k3(t,t,t) != -k1(t): RMSE={rmse:.2e}"
+
+
+def test_offdiag_exp_flux_shapes_and_symmetry(qubit):
+    """method='exp' + extract_off_diagonal (flux) yields n-D kernels."""
+    from sqc.config import CONFIG
+    from sqc.reconstruction.kernel import KernelEstimator
+
+    pulse = _yx_ramsey(qubit)
+    coarse_t = np.linspace(
+        0, 2 * CONFIG.pulse.t_rabi_duration, 5,
+    )
+    res = KernelEstimator(
+        mode='flux', method='exp', order=2, extract_off_diagonal=True,
+    ).estimate_full(pulse, qubit, t_samples=coarse_t)
+
+    k1, k2 = res.kernels
+    M = len(coarse_t)
+    assert k1.shape == (M,)
+    assert k2.shape == (M, M)
+    assert np.allclose(k2, k2.T), "flux k2 not symmetric"
+    # entries are finite (not NaN/Inf)
+    assert np.all(np.isfinite(k2)), "flux k2 has non-finite entries"
+
+
+def test_offdiag_exp_save_load_roundtrip(qubit):
+    """KernelResult from exp offdiag survives save/load."""
+    from sqc.config import CONFIG
+    from sqc.reconstruction.kernel import KernelEstimator, KernelResult
+    import tempfile
+    import os
+
+    pulse = _yx_ramsey(qubit)
+    coarse_t = np.linspace(
+        0, 2 * CONFIG.pulse.t_rabi_duration, 5,
+    )
+    res = KernelEstimator(
         mode='omega', method='exp', order=2, extract_off_diagonal=True,
+        stim_amplitude=0.01,
+    ).estimate_full(pulse, qubit, t_samples=coarse_t)
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        path = os.path.join(tmpdir, 'offdiag_exp.npz')
+        res.save(path)
+        loaded = KernelResult.load(path)
+        assert loaded.off_diagonal is True
+        assert loaded.kernels[1].shape == res.kernels[1].shape
+        for n in range(2):
+            assert_array_close(loaded.kernels[n], res.kernels[n],
+                               name=f"od_exp_k{n+1}")
+
+
+def test_offdiag_order4_raises_exp(qubit):
+    """Off-diagonal extraction (exp) rejects order >= 4."""
+    from sqc.reconstruction.kernel import KernelEstimator
+
+    pulse = _yx_ramsey(qubit)
+    ke = KernelEstimator(
+        mode='omega', method='exp', order=4, extract_off_diagonal=True,
     )
-    with pytest.raises(NotImplementedError, match="method='sim'"):
-        ke.estimate_full(pulse, q)
+    with pytest.raises(ValueError, match="order <= 3"):
+        ke.estimate_full(pulse, qubit)
 
 
 def test_offdiag_order4_raises(qubit):
-    """Off-diagonal extraction rejects order >= 4 (M^n blow-up)."""
+    """Off-diagonal extraction (sim) rejects order >= 4 (M^n blow-up)."""
     from sqc.reconstruction.kernel import KernelEstimator
 
     pulse = _yx_ramsey(qubit)

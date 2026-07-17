@@ -459,14 +459,13 @@ class KernelEstimator:
 
         # sim method with omega mode and no qubit — OK, pure theory
 
-        # off-diagonal extraction is sim-only (exact Heisenberg n-D kernels).
-        # The exp/measurement mixed-partial FD route is not implemented.
-        if self.extract_off_diagonal and self.method == 'exp':
-            raise NotImplementedError(
-                "extract_off_diagonal is only supported with method='sim' "
-                "(exact Heisenberg n-D kernels). The exp/measurement "
-                "mixed-partial FD route is not implemented — use "
-                "method='sim' to obtain off-diagonal kernels."
+        # off-diagonal extraction — sim route is exact (Heisenberg n-D kernels);
+        # exp route uses mixed-partial FD (generalizing the diagonal 5-pt stencil).
+        # order > 3 is rejected regardless of method (M^n blow-up).
+        if self.extract_off_diagonal and self.order > 3:
+            raise ValueError(
+                f"extract_off_diagonal supports order <= 3 (got {self.order}); "
+                f"k_n for n>=4 is an M^n tensor (combinatorial blow-up)."
             )
 
     # ------------------------------------------------------------------
@@ -790,9 +789,12 @@ class KernelEstimator:
         """
         if self.method == 'sim':
             return self._extract_kn_sim(pulse, qubit, t_samples)
+        elif self.extract_off_diagonal:
+            # exp mixed-partial FD → full n-D tensors
+            return self._extract_kn_offdiag_exp(pulse, qubit, t_samples)
         elif self.mode == 'flux':
             return self._extract_kn_flux(pulse, qubit, t_samples)
-        else:  # omega, exp
+        else:  # omega, exp, diagonal
             return self._extract_kn_omega(pulse, qubit, t_samples)
 
     # -- sim: higher-order via a†a operator ---------------------------------
@@ -1296,6 +1298,291 @@ class KernelEstimator:
               f"took {elapsed:.2f} seconds")
         return t_samples, kernels
 
+    # -- exp: full off-diagonal kernels via mixed-partial FD --------------
+
+    def _extract_kn_offdiag_exp(
+        self,
+        pulse,
+        qubit,
+        t_samples: np.ndarray | None = None,
+    ) -> tuple[np.ndarray, list]:
+        """Full off-diagonal Volterra kernels k₁…k_N via mixed-partial FD.
+
+        Generalises the diagonal 5-point FD stencil to n simultaneous kicks
+        at distinct probe times, recovering the full n-D symmetric tensor
+        from measurable ``p_e`` alone — the hardware-measurable analog of
+        :meth:`_heisenberg_kernels_offdiag`.
+
+        **Method** (order 2, omega mode):
+
+        - k₁(i): 5-point single-axis stencil (existing diagonal).
+        - k₂(i,i): 5-point 2nd derivative on the diagonal.
+        - k₂(i,j), i≠j: 4-corner mixed central difference
+          ``[p(+,+) − p(+,−) − p(−,+) + p(−,−)] / 4h²``.
+        - Mirror to ``(j,i)`` for full symmetry.
+
+        For order 3 the tensor is computed over the sorted-index wedge
+        ``i ≤ j ≤ l`` with three cases per the degeneracy of the index
+        triple, then mirrored to all 6 permutations.
+
+        A per-session ``p_e`` cache keyed by ``((idx, mult), …)`` reuses
+        shared corners (base ``p(0)``, single-kick, multi-kick) across
+        many tensor entries, keeping the cost at ~O(M²···M³) mesolve calls
+        rather than a naive O(Mⁿ).
+
+        ``mode='flux'`` builds summed Gaussian ``FluxSignal`` objects and
+        passes them through ``qubit_under_mag``, correctly folding the
+        pointwise κ-nonlinearity into the kernel (genuine flux kernel,
+        distinct from the sim omega kernel).
+
+        Parameters
+        ----------
+        pulse : Pulse or CompositePulse
+        qubit : TransmonQubit
+        t_samples : np.ndarray or None
+
+        Returns
+        -------
+        (t_samples, [k1, (k2), (k3)]) : tuple
+            k1 is 1-D shape (M,); k2 is (M,M); k3 is (M,M,M).
+        """
+        import time
+        t_start_full = time.time()
+
+        pulse_tlist = np.asarray(pulse.t_list)
+        n_levels = qubit.n_levels
+        psi_e = basis(n_levels, 1)
+        N = min(self.order, 3)  # order > 3 already rejected in _validate_inputs
+
+        # -- build H_base once ---------------------------------------------
+        if hasattr(pulse, "frame") and pulse.frame == 0:
+            H_0 = QobjEvo(qubit.get_hamiltonian())
+        else:
+            H_0 = QobjEvo(qubit.get_hamiltonian_rwa(
+                qubit.frequency if hasattr(qubit, "frequency") else 0.0,
+            ))
+        H_pulse = QobjEvo(pulse.hamiltonian, tlist=pulse_tlist, order=1)
+        H_base = H_0 + H_pulse
+
+        if t_samples is None:
+            t_samples = pulse_tlist.copy()
+        M = len(t_samples)
+
+        # -- cost warning (mirror sim offdiag) -----------------------------
+        _cost_thresh = 2_000_000
+        if M ** N > _cost_thresh:
+            warnings.warn(
+                f"_extract_kn_offdiag_exp: M^order = {M}^{N} = "
+                f"{M**N} combinations — this will be slow. "
+                f"Reduce t_samples for order={N}."
+            )
+
+        # -- stencil engine (pure function of h, pe) ------------------------
+        def _offdiag_stencils(M_val, h_val, _pe):
+            """Return ``[k1, (k2), (k3)]`` using the given FD step and
+            ``p_e`` evaluator.  All index loops and permutation fills live
+            here so the same code serves omega (any σ_t) and flux modes."""
+            p_base = _pe()
+
+            # k₁ (M,)
+            k1 = np.zeros(M_val, dtype=float)
+            for i in range(M_val):
+                fm2 = _pe((i, -2))
+                fm1 = _pe((i, -1))
+                fp1 = _pe((i, +1))
+                fp2 = _pe((i, +2))
+                k1[i] = (fm2 - 8.0 * fm1 + 8.0 * fp1 - fp2) / (12.0 * h_val)
+            ks: list = [k1]
+
+            # k₂ (M, M)
+            if N >= 2:
+                k2 = np.zeros((M_val, M_val), dtype=float)
+                h2 = h_val * h_val
+                for i in range(M_val):
+                    fm2 = _pe((i, -2))
+                    fm1 = _pe((i, -1))
+                    fp1 = _pe((i, +1))
+                    fp2 = _pe((i, +2))
+                    k2[i, i] = (
+                        -fm2 + 16.0 * fm1 - 30.0 * p_base
+                        + 16.0 * fp1 - fp2
+                    ) / (12.0 * h2)
+                    for j in range(i + 1, M_val):
+                        pp = _pe((i, +1), (j, +1))
+                        pm = _pe((i, +1), (j, -1))
+                        mp = _pe((i, -1), (j, +1))
+                        mm = _pe((i, -1), (j, -1))
+                        val = (pp - pm - mp + mm) / (4.0 * h2)
+                        k2[i, j] = val
+                        k2[j, i] = val
+                ks.append(k2)
+
+            # k₃ (M, M, M)
+            if N >= 3:
+                k3 = np.zeros((M_val, M_val, M_val), dtype=float)
+                denom_2h3 = 2.0 * h_val * h_val * h_val
+                denom_8h3 = 8.0 * h_val * h_val * h_val
+
+                def _k3_diag(idx):
+                    fm2 = _pe((idx, -2))
+                    fm1 = _pe((idx, -1))
+                    fp1 = _pe((idx, +1))
+                    fp2 = _pe((idx, +2))
+                    return (-fm2 + 2.0 * fm1 - 2.0 * fp1 + fp2) / denom_2h3
+
+                def _k3_two_equal(idx_double, idx_single):
+                    s = 0.0
+                    s -= _pe((idx_single, -1), (idx_double, -1))
+                    s += _pe((idx_single, -1), (idx_double, 0)) * 2.0
+                    s -= _pe((idx_single, -1), (idx_double, +1))
+                    s += _pe((idx_single, +1), (idx_double, -1))
+                    s -= _pe((idx_single, +1), (idx_double, 0)) * 2.0
+                    s += _pe((idx_single, +1), (idx_double, +1))
+                    return s / denom_2h3
+
+                def _k3_distinct(a, b, c):
+                    s = 0.0
+                    for si in [-1, +1]:
+                        for sj in [-1, +1]:
+                            for sk in [-1, +1]:
+                                s += si * sj * sk * _pe(
+                                    (a, si), (b, sj), (c, sk),
+                                )
+                    return s / denom_8h3
+
+                for i in range(M_val):
+                    k3[i, i, i] = _k3_diag(i)
+                    for j in range(i, M_val):
+                        for l in range(j, M_val):
+                            if i == j == l:
+                                continue
+                            if i == j and j < l:
+                                val = _k3_two_equal(i, l)
+                            elif i < j and j == l:
+                                val = _k3_two_equal(j, i)
+                            elif i < j and j < l:
+                                val = _k3_distinct(i, j, l)
+                            else:
+                                continue
+                            for a, b, c in [
+                                (i, j, l), (i, l, j), (j, i, l),
+                                (j, l, i), (l, i, j), (l, j, i),
+                            ]:
+                                k3[a, b, c] = val
+                ks.append(k3)
+
+            return ks
+
+        # -- FD parameters (shared) ------------------------------------------
+        _fd_opts = {
+            "atol": 1e-12, "rtol": 1e-10,
+            "max_step": float(CONFIG.awg.dt),
+        }
+
+        if self.mode == 'flux':
+            h_flux = self._amplitude_for(qubit) * self.amp_scan_factor
+            h_flux = min(h_flux, 0.05)
+            frame_val = getattr(pulse, "frame", 1)
+            omega_d_val = getattr(pulse, "omega_d", qubit.frequency)
+        else:
+            # omega: h is same across all sigma_t
+            h_omega = self.stim_amplitude * self.amp_scan_factor
+
+        # -- omega inner: build + evaluate at a given sigma_t ---------------
+        def _compute_offdiag_omega(sigma_t: float):
+            """Return ``[k1, (k2), (k3)]`` at a fixed VZ probe width."""
+            norm_f = 1.0 / (sigma_t * np.sqrt(2 * np.pi))
+            diag_vals_z = np.array([1.0, -1.0] + [0.0] * (n_levels - 2))
+            sigma_z_op = qutip.Qobj(np.diag(diag_vals_z))
+            h = h_omega
+            _pe_cache: dict[tuple, float] = {}
+
+            def _pe_kicks(kicks_tuple: tuple) -> float:
+                if kicks_tuple in _pe_cache:
+                    return _pe_cache[kicks_tuple]
+                coeff_sum = np.zeros(len(pulse_tlist), dtype=float)
+                for idx, mult in kicks_tuple:
+                    t_p = t_samples[idx]
+                    gauss = np.exp(
+                        -0.5 * ((pulse_tlist - t_p) / sigma_t) ** 2
+                    )
+                    coeff_sum += (mult * h) * norm_f * gauss
+                H_vz = QobjEvo(
+                    [[0.5 * sigma_z_op, coeff_sum]],
+                    tlist=pulse_tlist, order=1,
+                )
+                result = mesolve(
+                    H_base + H_vz, qubit.state, pulse_tlist, [],
+                    e_ops=[psi_e * psi_e.dag()],
+                    options=_fd_opts,
+                )
+                _pe_cache[kicks_tuple] = float(result.expect[0][-1])
+                return _pe_cache[kicks_tuple]
+
+            def _pe(*specs):
+                return _pe_kicks(tuple(sorted(specs, key=lambda x: x[0])))
+
+            return _offdiag_stencils(M, h, _pe)
+
+        # -- flux inner: build + evaluate (no sigma_t knob) -----------------
+        def _compute_offdiag_flux():
+            """Return ``[k1, (k2), (k3)]`` via summed Gaussian flux kicks."""
+            h = h_flux
+            _pe_cache: dict[tuple, float] = {}
+
+            def _pe_kicks(kicks_tuple: tuple) -> float:
+                if kicks_tuple in _pe_cache:
+                    return _pe_cache[kicks_tuple]
+                stim_signal = np.zeros(len(pulse_tlist), dtype=float)
+                for idx, mult in kicks_tuple:
+                    t_p = t_samples[idx]
+                    gauss = (mult * h) * np.exp(
+                        -0.5 * ((pulse_tlist - t_p) / self.stim_width) ** 2
+                    )
+                    stim_signal += gauss
+                stim = FluxSignal(type=8, t_list=pulse_tlist,
+                                  signal=stim_signal)
+                qubit_t = qubit.qubit_under_mag(stim)
+                H_stim = QobjEvo(
+                    qubit.qubit_under_mag_hamiltonian(
+                        qubit_t, stim.t_list, frame_val, omega_d_val,
+                    ),
+                    tlist=stim.t_list, order=1,
+                )
+                result = mesolve(
+                    H_base + H_stim, qubit.state, pulse_tlist, [],
+                    e_ops=[psi_e * psi_e.dag()],
+                    options=_fd_opts,
+                )
+                _pe_cache[kicks_tuple] = float(result.expect[0][-1])
+                return _pe_cache[kicks_tuple]
+
+            def _pe(*specs):
+                return _pe_kicks(tuple(sorted(specs, key=lambda x: x[0])))
+
+            return _offdiag_stencils(M, h, _pe)
+
+        # -- run -----------------------------------------------------------------
+        if self.mode == 'flux':
+            kernels = _compute_offdiag_flux()
+        elif not (self.richardson and N >= 2):
+            kernels = _compute_offdiag_omega(self._sigma_t())
+        else:
+            # Richardson: compute at multiple sigma_t → extrapolate each element
+            sigmas = self._richardson_sigma_values()
+            per_sigma = [_compute_offdiag_omega(st) for st in sigmas]
+            kernels = self._richardson_extrapolate(sigmas, per_sigma)
+            # k1 kept from smallest sigma_t (already O(σ_t²) accurate)
+            i_min = int(np.argmin(sigmas))
+            kernels[0] = per_sigma[i_min][0]
+
+        elapsed = time.time() - t_start_full
+        print(
+            f"FD off-diagonal kernel (exp {self.mode}, order={N}, M={M}) "
+            f"took {elapsed:.1f}s"
+        )
+        return t_samples, kernels
+
     # ------------------------------------------------------------------
     # Stimulus amplitude helpers
     # ------------------------------------------------------------------
@@ -1327,23 +1614,25 @@ class KernelEstimator:
 
     @staticmethod
     def _richardson_extrapolate(sigmas: np.ndarray, per_sigma: list) -> list:
-        """Extrapolate kernels to σ_t -> 0 per (order, time-point).
+        """Extrapolate kernels to σ_t -> 0 per (order, element).
+
+        Supports both 1-D diagonal kernels ``(M,)`` and n-D off-diagonal
+        kernels ``(M,M)``, ``(M,M,M)`` — each tensor element is independently
+        extrapolated via ``np.polyfit`` to σ_t = 0.
 
         Parameters
         ----------
         sigmas : np.ndarray
             σ_t sample points (ns), length ``S``.
         per_sigma : list
-            ``per_sigma[s]`` is ``[k1, ..., kN]`` (each ``(M,)``) at σ_t
-            ``sigmas[s]``.
+            ``per_sigma[s]`` is ``[k1, ..., kN]`` at σ_t ``sigmas[s]``.
+            Each ``k_n`` may be shape ``(M,)``, ``(M,M)``, or ``(M,M,M)``.
 
         Returns
         -------
         list
-            ``[k1, ..., kN]`` extrapolated to σ_t = 0.  Each kernel is fit
-            with ``np.polyfit(sigmas, vals, deg=S-1)`` and evaluated at 0
-            (the constant term).  With a single σ_t the input is returned
-            unchanged.
+            ``[k1, ..., kN]`` extrapolated to σ_t = 0, same shapes as input.
+            With a single σ_t the input is returned unchanged.
         """
         sigmas = np.asarray(sigmas, dtype=float)
         S = len(sigmas)
@@ -1353,12 +1642,15 @@ class KernelEstimator:
         deg = S - 1
         out = []
         for n in range(N):
-            stack = np.stack([per_sigma[s][n] for s in range(S)], axis=0)  # (S, M)
-            ext = np.zeros(stack.shape[1])
-            for i in range(stack.shape[1]):
-                coeffs = np.polyfit(sigmas, stack[:, i], deg=deg)
-                ext[i] = coeffs[-1]   # value at σ_t = 0 (constant term)
-            out.append(ext)
+            # stack across sigma: (S, *kernel_shape)
+            stack = np.stack([per_sigma[s][n] for s in range(S)], axis=0)
+            kernel_shape = stack.shape[1:]
+            flat = stack.reshape(S, -1)               # (S, K)
+            ext_flat = np.zeros(flat.shape[1], dtype=float)
+            for k in range(flat.shape[1]):
+                coeffs = np.polyfit(sigmas, flat[:, k], deg=deg)
+                ext_flat[k] = coeffs[-1]              # σ_t = 0 (constant term)
+            out.append(ext_flat.reshape(kernel_shape))
         return out
 
     def _amplitude_for(self, qubit) -> float:

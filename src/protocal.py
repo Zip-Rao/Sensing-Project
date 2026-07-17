@@ -145,7 +145,7 @@ class Protocal:
                 # 创建测试信号
                 #Phi = Signal(type = 1, t_list = np.linspace(0, 200, 400), amplitude = 0.01)
                 t_list = np.linspace(0,200, 400)
-                Phi = Signal(type = 4, t_list = t_list, amplitude = 0.01, rise = 10, fall = 10, center = 100, noise_level = 0.0001)
+                Phi = Signal(type = 4, t_list = t_list, amplitude = 0.06, rise = 10, fall = 10, center = 100, noise_level = 0.0001)
                 Phi.plot()
                 Phi_0 = Signal(type = 1, t_list = t_list, amplitude = 0.0)
                 t_rabi = np.linspace(0, 10, 20)

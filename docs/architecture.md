@@ -904,23 +904,31 @@ loaded = KernelResult.load('kernel.npz')
 - **FD 容差修复**:`_extract_kn_omega` 的 FD mesolve 现固定用 `atol=1e-12, rtol=1e-10, max_step=dt`,使 FD 截断误差(而非积分器噪声)决定精度。这是 exp 高阶"不太对"的主因之一。
 - **效果**(Y-X Ramsey):G₃/G₃_sim 从 0.844(默认 2·dt)→ 0.922(σ_t=dt)→ **0.961(Richardson)**。
 
-**非对角感知提取**(`extract_off_diagonal=True`,**仅 `method='sim'`**):
-- `_heisenberg_kernels_offdiag()` 一次 `sesolve` 后用纯 numpy 对易子代数填充完整 n 维核:`kernels[n-1]` 为 shape `(M,)*n` 的 ndarray。
+**非对角感知提取**(`extract_off_diagonal=True`,``method='sim'``(精确) 及 `method='exp'`(Phase 14)):
+
+- **sim 路径**(`_heisenberg_kernels_offdiag()`):一次 `sesolve` 后用纯 numpy 对易子代数填充完整 n 维核:`kernels[n-1]` 为 shape `(M,)*n` 的 ndarray。
   - k₂(t_>,t_<) = −⟨0|[W(t_<),[W(t_>),Q]]|0⟩(对称)
   - k₃(t₁≥t₂≥t₃) = −i⟨0|[W(t₃),[W(t₂),[W(t₁),Q]]]|0⟩(6 排列对称化)
-- 仅支持 `order ≤ 3`(order≥4 抛 ValueError,Mⁿ 组合爆炸);M^order>2e6 时告警。
+- **exp 路径**(`_extract_kn_offdiag_exp()`):混合偏导数有限差分,从可测 ``p_e`` 恢复完整 n 维张量(含 memoized p_e 求值器、对称楔形填充、omega + flux 双模式),是 sim 全分量的硬件可测对应。
+  - k₂(t_i,t_j):对角用 5 点二阶导数,i≠j 用 4 角混合中心差分 `[p(+,+)−p(+,−)−p(−,+)+p(−,−)]/4h²`;对称填充。
+  - k₃(t_i,t_j,t_l):排序楔形 i≤j≤l 上分 3 退化情况计算(对角/两等/全异),6 排列镜像填充。
+  - 代价 ~O(M²···M³) mesolve(M=时间点数);`p_e` 缓存跨张量条目复用共享角点。
+- 仅支持 `order ≤ 3`(order≥4 抛 ValueError,Mⁿ 组合爆炸);M^order>2e6 时告警(exp 亦同)。
 - `KernelResult.off_diagonal: bool` 标记;`save`/`load` 原生支持 n 维数组。
-- `method='exp' + extract_off_diagonal` 抛 `NotImplementedError`(测量式混合 FD 未实现,指向 sim)。
 - **下游约束**:非对角核仅 LM 可消费;`TransientReconstruction` 的 Wiener / Hammerstein / Hammerstein-Volterra 路径在收到 `ndim>1` 核时抛 `ValueError`(指向 `method='lm'`)。
 
 ```python
-# 完整非对角 k₂(t_i,t_j)、k₃(t_i,t_j,t_l)
+# sim: 完整非对角 k₂(t_i,t_j)、k₃(t_i,t_j,t_l) (精确)
 e = KernelEstimator(mode='omega', method='sim', order=3, extract_off_diagonal=True)
 res = e.estimate_full(pulse, qubit)
 res.kernels[1].shape   # (M, M)
 res.kernels[2].shape   # (M, M, M)
 
-# 测量式高阶对角,降低 σ_t 涂抹偏差
+# exp: 完整非对角 (硬件可测,混合 FD)
+e_exp = KernelEstimator(mode='omega', method='exp', order=3, extract_off_diagonal=True)
+res_exp = e_exp.estimate_full(pulse, qubit, t_samples=coarse_t)  # M 建议 ≤ 8
+
+# exp: 测量式高阶对角,降低 σ_t 涂抹偏差
 e_rich = KernelEstimator(mode='omega', method='exp', order=3, richardson=True)
 ```
 
