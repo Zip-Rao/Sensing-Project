@@ -117,10 +117,18 @@ class TransientSensingExperiment(Experiment):
         )
         p_e_base = result_base.data["p_e"]
 
-        # Compute kernel via legacy pulse.get_kernel()
-        self.control_pulse.get_kernel(self.qubit)
-        t_samples = self.control_pulse.t_samples
-        kernel = self.control_pulse.kernel
+        # Compute the control kernel directly via KernelEstimator (flux / exp,
+        # order 1) — the same computation the deprecated CompositePulse.get_kernel
+        # shim delegates to, but on the unified route (matching the frontend and
+        # tests) and without the deprecation warning. (Local import avoids any
+        # experiments<->reconstruction import cycle.)
+        from sqc.reconstruction.kernel import KernelEstimator
+
+        kernel_result = KernelEstimator(
+            mode="flux", method="exp", order=1
+        ).estimate_full(self.control_pulse, self.qubit)
+        t_samples = kernel_result.t_samples
+        kernel = list(kernel_result.k1)
 
         # Compute delta_p
         delta_p = np.array(p_e) - np.array(p_e_base)
