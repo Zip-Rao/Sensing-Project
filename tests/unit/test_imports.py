@@ -12,7 +12,7 @@ class TestSqcImports:
 
     def test_import_sqc(self):
         import sqc
-        assert sqc.__version__ == "0.1.0"
+        assert sqc.__version__ == "1.0.0"
 
     def test_import_devices(self):
         from sqc.devices.base import Device
