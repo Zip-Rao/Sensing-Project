@@ -57,7 +57,14 @@
 - [ ] **`[工程]` 新增 argparse CLI** — 标准库(不违反 R10),用于参数扫描 / 批量 / HPC 批处理运行。
 - [ ] **`[工程]` 清理被跟踪的 `src/__pycache__`** — `.gitignore` 已覆盖 `__pycache__/` 但历史文件仍被跟踪;`git rm -r --cached src/__pycache__` 清一次,解决 handoff known issue #3。
 - [ ] **`[质量]` collapse_operators() 静默丢弃耗散** — chip/resonator 返回 `[]` 时改为 `warnings.warn`,避免使用者无感知地丢掉耗散。
-- [ ] **`[工程]` 新增 CI** — push 时跑 `pytest`;可选 API 参考文档生成(Sphinx / mkdocs）。
+- [ ] **`[工程]` 新增 CI** — push 时跑 `pytest`(文档站的 build/发布 CI 归入下一条)。
+- [ ] **`[文档]` 完整托管文档站(Sphinx + GitHub Pages)** — 对标 [scq-cloud.github.io](https://scq-cloud.github.io/)(PyQuafu)/ scqubits 那种可导航、可搜索的在线文档。**完整层次**,拆为:
+  - [ ] Sphinx 骨架 + 主题(furo 或 sphinx-rtd-theme);`conf.py`、`docs/source/`。
+  - [ ] `autodoc` + `autosummary`:从现有 docstring 自动生成 **API 参考**(逐类逐方法;素材现成、单位标注齐全)。
+  - [ ] `myst-parser` 纳入现有 `README.md` / `docs/architecture.md`;`nbsphinx` 渲染 `Simulation_sqc.ipynb` 为教程页。
+  - [ ] 站点结构:Overview → Install → Quickstart → User Guide → API Reference → Theory(选摘 idea/)→ Roadmap。
+  - [ ] GitHub Actions:build → 发布到 **GitHub Pages**(`<user>.github.io` 风格)。
+  - [ ] **依赖(R10 需批准)**:sphinx 及插件(sphinx / myst-parser / nbsphinx / furo / sphinx-autodoc-typehints)——**仅文档构建工具,非运行时**;放入 `pyproject` 的 `[docs]` extra,不污染 core。引入前需用户确认(已初步同意"完整层次",实施前再确认依赖清单)。
 - [ ] **`[质量]` (post-v1)修复 Z-crosstalk 重建标度 bug** — `compensation_factor≈0.276`(<1)、重建 phi_B 偏大 ~5×;根因是小串扰下 Wiener 瞬态重建核标度误差。修复后收紧集成测试(当前仅断言 `>0`),再考虑纳入正式功能。见 [sqc/workflows/z_crosstalk.py](sqc/workflows/z_crosstalk.py)。
 - [ ] **`[功能]` (post-v1)实现被隐藏的能力** — transient 频率标定、CPMG、TunableCoupler、electronics 层、SensingWorkflow 的 planned 方法,按需逐步引入。
 
@@ -82,6 +89,7 @@
 
 | 日期 | 变更 | 关联 commit |
 |---|---|---|
+| 2026-07-17 | 新增 P2 项「完整托管文档站(Sphinx + GitHub Pages)」,对标 PyQuafu/scqubits;标注 R10 依赖需批准 | (pending) |
 | 2026-07-17 | 定案 D1(1.0.0)/ D2(MIT);LICENSE、版本统一条目具体化 | (pending) |
 | 2026-07-17 | 定案 D3(隐藏 crosstalk/transient 标定)/ D4(11 stub 全隐藏);据此细化 crosstalk/stub/限制条目,数值 bug 移 post-v1 | (pending) |
 | 2026-07-17 | 新增"整顿 TODO 体系"项;给 4 个过时/易混 idea/ 文件头部加时效声明 | (pending) |
