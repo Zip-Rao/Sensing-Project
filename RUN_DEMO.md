@@ -3,6 +3,31 @@
 
 # 量子传感仿真平台Web演示 - 运行说明
 
+> **v1(sqc)当前演示 = [`web_demo_v2.py`](web_demo_v2.py)。** 下方"运行演示"及之后的章节描述的是**旧版 [`web_demo.py`](web_demo.py)(基于 `src/`)**,保留作历史参考。新用户请使用下述 sqc 版。
+
+## 🚀 当前版本:web_demo_v2.py(sqc,推荐)
+
+基于 v1 的 `sqc` 包,涵盖器件配置、传感协议、波形重建、预失真等标签页。
+
+```bash
+# 安装(二选一)
+pip install -e ".[demo]"            # 推荐:随包安装 gradio
+pip install -r requirements_demo.txt
+
+# 运行(项目根目录下)
+python web_demo_v2.py
+```
+
+浏览器打开终端提示的地址(默认 http://localhost:7860)。
+
+- 支持的协议:Rabi / Ramsey / 差分回波 / 瞬态波形重建 / Cryoscope,以及预失真设计与验证。
+- **实验性标签页(如 Z-Crosstalk)在 v1 中默认隐藏**:由 [`web_demo_v2.py`](web_demo_v2.py) 顶部的 `SHOW_EXPERIMENTAL = False` 控制,翻为 `True` 即可恢复。
+- 教程见 [`Simulation_sqc.ipynb`](Simulation_sqc.ipynb);模块参考见 [`docs/architecture.md`](docs/architecture.md)。
+
+---
+
+## (以下为旧版 web_demo.py / `src` 版,历史参考)
+
 ## 概述
 
 本Web演示基于现有的量子传感仿真平台代码，提供了一个交互式界面，允许用户调整Qubit参数、选择传感协议并查看仿真结果。
