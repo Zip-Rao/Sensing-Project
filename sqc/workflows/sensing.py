@@ -220,6 +220,14 @@ class SensingWorkflow(Workflow):
         wf.run(measure=True, reconstruct=False)
         cmp_res = wf.compare(methods=["wiener", "hammerstein", "lm"])
         print(f"Best method: {cmp_res.best}")
+
+    Not yet available (planned — post-v1)
+    -------------------------------------
+    The following methods are placeholders and raise ``NotImplementedError``
+    in v1; they are not part of the public v1 API (decision D4):
+    ``pipeline``, ``multi_qubit``, ``crosstalk``, ``save``, ``load``,
+    ``diff``, ``benchmark``, ``find_optimal_work_point``,
+    ``detectability_limit``, ``noise_characterize``, ``cross_validate``.
     """
 
     def __init__(self) -> None:

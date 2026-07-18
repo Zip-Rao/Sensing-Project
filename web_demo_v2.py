@@ -1008,6 +1008,13 @@ def show_stack_for_task(task):
 # UI Construction
 # ═══════════════════════════════════════════════════════════════════════════
 
+# Feature flag for experimental / post-v1 tabs (e.g. Z-Crosstalk). These are
+# hidden from the v1 public demo (decision D3): the implementation stays in
+# sqc/ and is importable via its deep path, only the interactive tab is gated.
+# Flip to True to restore the experimental tabs.
+SHOW_EXPERIMENTAL = False
+
+
 def build_app():
     theme = gr.themes.Soft(
         primary_hue="blue",
@@ -1255,33 +1262,35 @@ def build_app():
                     dist_plot,
                 )
 
-            # ─────────────────── Tab: Z-Crosstalk ───────────────────
-            with gr.Tab("🌐 Z-Crosstalk (2-qubit)"):
-                gr.HTML(_layer_badges("hardware", "devices"))
-                gr.Markdown("Apply a flux pulse on **QA**'s Z-line; observe the parasitic flux "
-                            "on **QB** through the **TransferMatrix** model.")
-                with gr.Row():
-                    with gr.Column(scale=1):
-                        gr.Markdown("### Transfer Matrix  H[target, source]")
-                        with gr.Row():
-                            h_aa = gr.Number(value=1.00, label="H_AA (self)", precision=3)
-                            h_ab = gr.Number(value=0.00, label="H_AB (B → A)", precision=3)
-                        with gr.Row():
-                            h_ba = gr.Number(value=0.05, label="H_BA  (A → B)  ⚡", precision=3)
-                            h_bb = gr.Number(value=1.00, label="H_BB (self)", precision=3)
-                        gr.Markdown("### Pulse on QA")
-                        zc_amp = gr.Slider(0.0, 2.0, 1.0, step=0.1, label="Pulse amplitude")
-                        zc_width = gr.Slider(1, 30, 8, step=1, label="Pulse width  (ns)")
-                        zc_btn = gr.Button("▶ Run Z-Crosstalk", variant="primary",
-                                            elem_classes="primary-btn")
-                    with gr.Column(scale=2):
-                        zc_plot = gr.Plot(show_label=False)
+            # ─────────── Tab: Z-Crosstalk (experimental — gated, D3) ───────────
+            # Hidden from v1 (SHOW_EXPERIMENTAL=False). Flip the flag to restore.
+            if SHOW_EXPERIMENTAL:
+                with gr.Tab("🌐 Z-Crosstalk (2-qubit)"):
+                    gr.HTML(_layer_badges("hardware", "devices"))
+                    gr.Markdown("Apply a flux pulse on **QA**'s Z-line; observe the parasitic flux "
+                                "on **QB** through the **TransferMatrix** model.")
+                    with gr.Row():
+                        with gr.Column(scale=1):
+                            gr.Markdown("### Transfer Matrix  H[target, source]")
+                            with gr.Row():
+                                h_aa = gr.Number(value=1.00, label="H_AA (self)", precision=3)
+                                h_ab = gr.Number(value=0.00, label="H_AB (B → A)", precision=3)
+                            with gr.Row():
+                                h_ba = gr.Number(value=0.05, label="H_BA  (A → B)  ⚡", precision=3)
+                                h_bb = gr.Number(value=1.00, label="H_BB (self)", precision=3)
+                            gr.Markdown("### Pulse on QA")
+                            zc_amp = gr.Slider(0.0, 2.0, 1.0, step=0.1, label="Pulse amplitude")
+                            zc_width = gr.Slider(1, 30, 8, step=1, label="Pulse width  (ns)")
+                            zc_btn = gr.Button("▶ Run Z-Crosstalk", variant="primary",
+                                                elem_classes="primary-btn")
+                        with gr.Column(scale=2):
+                            zc_plot = gr.Plot(show_label=False)
 
-                zc_btn.click(
-                    run_zcrosstalk_demo,
-                    [h_aa, h_ab, h_ba, h_bb, zc_amp, zc_width],
-                    zc_plot,
-                )
+                    zc_btn.click(
+                        run_zcrosstalk_demo,
+                        [h_aa, h_ab, h_ba, h_bb, zc_amp, zc_width],
+                        zc_plot,
+                    )
 
             # ─────────────────── Tab: Stack Inspector ───────────────────
             with gr.Tab("🔍 Stack Inspector"):
