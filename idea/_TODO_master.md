@@ -1,8 +1,34 @@
 # 量子传感仿真平台 — 总 TODO
 
 > 最后更新：2026-04-18
+>
+> ⚠️ **时效声明(2026-07-17 补注)**：本文件反映 **src/ 时代**的科研任务路线,状态列(○/△/✓)大多**已过时**——阶段零~三的绝大部分工作已在 `sqc/` 重构中完成。**当前真实工程进度以 [`refactor/_handoff_state.md`](refactor/_handoff_state.md) 为准;发布就绪进度以 [`../RELEASE_TODO.md`](../RELEASE_TODO.md) 为准。** 本文件保留作为科研路线参考,状态刷新见 RELEASE_TODO 的"整顿 TODO 体系"一项。
 
-本文件是项目的 **唯一权威 TODO**，按逻辑依赖关系组织。每一步标注当前状态和前置依赖。
+本文件按逻辑依赖关系组织科研任务路线。每一步标注当前状态和前置依赖。
+
+---
+
+## 进度对照(2026-07-17 刷新 · 权威状态见 [`refactor/_handoff_state.md`](refactor/_handoff_state.md))
+
+> 下文分阶段表格的 ○/△/✓ 状态列停留在 src/ 时代、**未逐格更新**;`sqc/` 重构后的真实状态**以本对照表为准**。
+
+| 原任务 | 真实状态 | 落地位置 / 说明 |
+|---|---|---|
+| 0.1 case 1 死代码清理 | ○ | 针对 src/;sqc/ 已重写不含此问题(Track B 未清 src/) |
+| 0.2 kernel 刺激幅度自动校准 | △ | sqc/ 刺激参数已由 `CONFIG.reconstruction` 提供;src/ 仍硬编码 0.0215 |
+| 0.3 LM 收敛修复 | ✓ | 用户确认;`sqc/reconstruction/transient.py` LMReconstruction |
+| 1.1 Cryoscope (case 6/7) | △ | P3c:CryoscopeExperiment + Calibration(ramsey) + Reconstruction 骨架已实现;标定协议(case 6)与完整重建仍部分 stub(handoff #14/#15) |
+| 1.2 瞬态测频标定 (case 8) | △ | FrequencyMeasurement(transient) 测频可用;FluxResponseCalibration(transient) 仍 stub([frequency.py:676](../sqc/calibration/frequency.py#L676)) |
+| 1.3 失真模型 | ✓ | P4:`sqc/hardware/distortion.py` 5 个子类 |
+| 1.4 CPMG (case 3) | ○ | 未实现(仍 stub) |
+| 2.1 频率标定 (A/B/C) | △ | 方法 A(Ramsey)✓;B(Cryoscope)/C(斜坡)部分 stub |
+| 2.2 波形重建 | ✓/△ | Wiener / LM / 差分回波 ✓;Cryoscope 重建为骨架 △ |
+| 2.3 波形预失真 | ✓ | P4:PredistortionDesigner + PredistortionValidationWorkflow;LM 预失真(2.3.4)未做 |
+| 阶段三 对比与输出物 | ○ | 科研 writeup / 对比图表待整理 |
+| 4.1 噪声集成 | △ | `sqc/simulation/noise.py` 1/f + qubit T1/T2;全 Lindblad 集成待做 |
+| 4.2 并行优化 | ○ | 见 `parallel_optimization_plan.md`;未落地 |
+| 4.4 Volterra 高阶核 | ✓ | P10:核函数 order 1..N + 非对角扩展 |
+| 4.6 类名 Protocal→Protocol | △ | sqc/ 已用正确 `Protocol`/`Experiment`;src/ 按 R4 保留 `Protocal` |
 
 ---
 

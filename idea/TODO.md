@@ -1,5 +1,7 @@
 # 量子传感仿真平台 - 代码修改建议 (TODO)
 
+> ⚠️ **时效声明(2026-07-17 补注)**：本文件针对**旧 `src/` 代码**(web_demo v1 时代的改进建议),其中多数问题已被 `sqc/` 重构取代(例如正确拼写 `Protocol`、绝对导入、协议补全等在 `sqc/` 中已解决)。当前进度见 [`refactor/_handoff_state.md`](refactor/_handoff_state.md) 与 [`../RELEASE_TODO.md`](../RELEASE_TODO.md)。本文件保留作为 `src/` 历史参考。
+
 本文件列出了量子传感仿真平台代码中需要修改或完善的部分，以便更好地支持交互式Web演示和扩展功能。
 
 ## 1. 拼写和命名问题

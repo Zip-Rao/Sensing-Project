@@ -1,4 +1,7 @@
 # 波形重建仿真
+
+> ⚠️ **定位声明(2026-07-17 补注)**：本文件是**科研结果 writeup / 记录文档**,非任务追踪器。下文的 `## TODO` 段是研究方向清单,其中**大部分已在 `sqc/` 完成但此处未回填**(统一 t_global/t_rabi、workflow 控制台、核函数扩展、基函数比较、qubit 标定/预失真、Ramsey unwrap IQ、pi 补偿/delay Ramsey 等均已实现)。少数未完成:CPMG(第 3 节)。**注意"差分回波协议 TODO..."是文档欠账**——代码(DiffEchoExperiment/EchoReconstruction)早已实现,仅结果段未补写。任务追踪请以 [`refactor/_handoff_state.md`](refactor/_handoff_state.md) 和 [`../RELEASE_TODO.md`](../RELEASE_TODO.md) 为准。
+
 按照脉冲扫描的方式，可以将时变磁场测量分为三种协议：
 - 基于脉冲延迟时间扫描的瞬态磁场协议
 - 基于演化时间扫描的Ramsey协议和差分回波协议
@@ -62,11 +65,17 @@ LM算法对于lambda的选择相对不敏感，因为这里的lambda主要用于
 磁场信号：幅度：0.001，频率：0.004，噪声幅度：0.0001
 
 ### 差分回波协议
-TODO...
+差分回波协议通过施加 $k$ 对 $\pi$ 脉冲序列,由激发态概率直接反演累积相位 $\varphi = \arcsin(2p_e-1)$,再经 $B = -\varphi/(2k\kappa t_{\text{int}})$ 得到磁场。相比 Ramsey,回波序列对低频噪声与慢漂移有抑制作用。
+
+**实现状态(2026-07-17 补)**:代码已完成 —— [`sqc/experiments/echo.py`](../sqc/experiments/echo.py) `DiffEchoExperiment`(对应旧 `Protocal(type=2)`)+ [`sqc/reconstruction/echo.py`](../sqc/reconstruction/echo.py) `EchoReconstruction`。定量重建效果并入上文"两种重建方法对比";本节独立结果图待补(**文档欠账,非功能欠账**)。
+
 ## 频谱扫描
 
 ### CPMG协议作为带通滤波器
-TODO...
+CPMG 序列(等间隔多 $\pi$ 脉冲)的滤波函数在 $\omega \approx \pi n/\tau$ 处呈窄带通,可用于对特定频率的时变磁场做频谱选择性测量;理论见 [`_sensing theory.md`](./_sensing%20theory.md) §3。
+
+**实现状态(2026-07-17 补)**:**未实现** —— 旧 `Protocal(type=3)` 仅为 `pass` stub;`sqc/experiments/` 中尚无对应 CPMG 实验/重建。列为 post-v1 扩展,见 [`_TODO_master.md`](./_TODO_master.md) 4.3 与 [`../RELEASE_TODO.md`](../RELEASE_TODO.md)。
+
 ## 其他实现
 
 [Transmon qubit能级的数值求解，单比特门，两比特门](../note/Numerical%20calculation.ipynb)
