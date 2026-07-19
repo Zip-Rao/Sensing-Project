@@ -41,4 +41,4 @@ predistortion pipelines + Gradio web demo).
 - Two-qubit Z-crosstalk extraction, transient-based frequency calibration, the
   CPMG protocol, and the tunable-coupler / electronics (AWG/ADC) hardware layers
   are present in the codebase but hidden from the v1 public API. See
-  `RELEASE_TODO.md`.
+  `docs/architecture.md` §A2 for the roadmap.

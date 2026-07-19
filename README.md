@@ -89,11 +89,14 @@ python web_demo_v2.py
 
 - **Tutorial notebook:** [`Simulation_sqc.ipynb`](Simulation_sqc.ipynb) — Rabi → Ramsey →
   echo → transient → cryoscope, worked end to end.
-- **Architecture / module reference:** [`docs/architecture.md`](docs/architecture.md)
-  (中文, six-layer stack, per-module API, extension guide).
-- **Release checklist & roadmap:** [`RELEASE_TODO.md`](RELEASE_TODO.md).
+- **Architecture / module reference & roadmap:** [`docs/architecture.md`](docs/architecture.md)
+  (中文, six-layer stack, per-module API, extension guide, §A2 post-v1 roadmap).
 
-## Testing
+## Testing & development
+
+The test suite, the frozen legacy `src/` reference implementation, and its
+`src_mirror` facade live in the **development tree** (not part of the distributed
+package). In a development checkout:
 
 ```bash
 pip install -e ".[test]"
@@ -101,23 +104,27 @@ pytest tests/ -v
 pytest tests/regression -m regression      # physics regression baselines
 ```
 
-## Project layout
+## Project layout (distributed)
 
 ```
-sqc/            v1 package — the platform (devices, control, hardware,
-                simulation, experiments, reconstruction, calibration, workflows)
-web_demo_v2.py  Gradio web demo (sqc-based)
-docs/           architecture / technical documentation
-tests/          unit / integration / equivalence / regression suites
-src/, src_mirror/   frozen legacy implementation + compatibility facade
+sqc/                  the platform (devices, control, hardware, simulation,
+                      experiments, reconstruction, calibration, workflows)
+web_demo_v2.py        Gradio web demo (sqc-based)
+Simulation_sqc.ipynb  end-to-end tutorial notebook
+docs/                 architecture / technical documentation
 ```
+
+The development tree additionally holds a test suite (`tests/`), the frozen
+legacy implementation (`src/`, `src_mirror/`), and research material — these are
+not part of the distributed package.
 
 ## Not in v1 (planned)
 
 The following are present in the codebase but **hidden from the v1 public API** and
 scheduled for a later release: two-qubit Z-crosstalk extraction, transient-based
 frequency calibration, the CPMG protocol, the tunable coupler and electronics
-(AWG/ADC) hardware layers. See [`RELEASE_TODO.md`](RELEASE_TODO.md) for the roadmap.
+(AWG/ADC) hardware layers. See [`docs/architecture.md`](docs/architecture.md) §A2
+for the roadmap.
 
 ## Citation
 

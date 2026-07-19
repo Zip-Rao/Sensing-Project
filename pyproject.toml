@@ -44,9 +44,9 @@ test = [
 [tool.setuptools.dynamic]
 version = { attr = "sqc.__version__" }
 
-# The v1 product is the `sqc` package. The legacy `src` package and its
-# `src_mirror` facade are kept importable for backward compatibility and the
-# equivalence test-suite (R1: src/ is frozen).
+# The distributed product is the self-contained `sqc` package. The legacy
+# `src` package, its `src_mirror` facade, and the test suite live only in the
+# development tree (not part of the distribution).
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["sqc*", "src", "src_mirror*"]
+include = ["sqc*"]

@@ -87,11 +87,13 @@ python web_demo_v2.py
 
 - **教程 notebook:** [`Simulation_sqc.ipynb`](Simulation_sqc.ipynb) —— Rabi → Ramsey →
   差分回波 → 瞬态 → Cryoscope,端到端演示。
-- **架构 / 模块参考:** [`docs/architecture.md`](docs/architecture.md)
-  (中文,六层栈、逐模块 API、扩展指南)。
-- **发布清单与路线图:** [`RELEASE_TODO.md`](RELEASE_TODO.md)。
+- **架构 / 模块参考与路线图:** [`docs/architecture.md`](docs/architecture.md)
+  (中文,六层栈、逐模块 API、扩展指南、§A2 post-v1 路线图)。
 
-## 测试
+## 测试与开发
+
+测试套件、冻结的旧实现 `src/` 及其 `src_mirror` facade 位于**开发树**中
+(不随发行包分发)。在开发检出中:
 
 ```bash
 pip install -e ".[test]"
@@ -99,22 +101,24 @@ pytest tests/ -v
 pytest tests/regression -m regression      # 物理回归 baseline
 ```
 
-## 目录结构
+## 目录结构(分发)
 
 ```
-sqc/            v1 包 —— 平台本体(devices, control, hardware,
-                simulation, experiments, reconstruction, calibration, workflows)
-web_demo_v2.py  Gradio Web 演示(基于 sqc)
-docs/           架构 / 技术文档
-tests/          单元 / 集成 / 等价 / 回归 测试套件
-src/, src_mirror/   冻结的旧实现 + 兼容 facade
+sqc/                  平台本体(devices, control, hardware, simulation,
+                      experiments, reconstruction, calibration, workflows)
+web_demo_v2.py        Gradio Web 演示(基于 sqc)
+Simulation_sqc.ipynb  端到端教程 notebook
+docs/                 架构 / 技术文档
 ```
+
+开发树另含测试套件(`tests/`)、冻结的旧实现(`src/`、`src_mirror/`)及科研
+资料 —— 这些不随发行包分发。
 
 ## v1 未包含(计划中)
 
 以下能力已存在于代码库中,但在 v1 公开接口中**被隐藏**,计划在后续版本引入:
 两比特 Z-crosstalk 提取、基于瞬态的频率标定、CPMG 协议、可调耦合器与电子学
-(AWG/ADC)硬件层。路线图见 [`RELEASE_TODO.md`](RELEASE_TODO.md)。
+(AWG/ADC)硬件层。路线图见 [`docs/architecture.md`](docs/architecture.md) §A2。
 
 ## 引用
 

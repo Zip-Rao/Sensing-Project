@@ -52,3 +52,12 @@ report/
 # Relocated from repo root (see each folder's README)
 notebooks/
 archive/
+
+# Development-only, not part of the distributed core platform (local only):
+#   legacy reference impl + mirror facade, test suite, agent/process docs.
+src/
+src_mirror/
+tests/
+CLAUDE.md
+AGENTS.md
+RELEASE_TODO.md
