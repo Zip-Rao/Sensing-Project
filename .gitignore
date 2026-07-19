@@ -58,6 +58,11 @@ archive/
 src/
 src_mirror/
 tests/
+pytest.ini
 CLAUDE.md
 AGENTS.md
 RELEASE_TODO.md
+
+# AI-assistant / editor tooling config (local only)
+.claude/
+.codex/
