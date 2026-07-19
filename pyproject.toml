@@ -45,8 +45,8 @@ test = [
 version = { attr = "sqc.__version__" }
 
 # The distributed product is the self-contained `sqc` package. The legacy
-# `src` package, its `src_mirror` facade, and the test suite live only in the
-# development tree (not part of the distribution).
+# `src` package and its `src_mirror` facade are also shipped (public) so the
+# equivalence test-suite runs on a fresh clone / in CI; R1 keeps src/ frozen.
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["sqc*"]
+include = ["sqc*", "src", "src_mirror*"]

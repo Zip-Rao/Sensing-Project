@@ -2,6 +2,10 @@
 
 **English** | [中文](README.zh-CN.md)
 
+[![tests](https://github.com/Serendipity-Zip/Sensing-Project/actions/workflows/tests.yml/badge.svg)](https://github.com/Serendipity-Zip/Sensing-Project/actions/workflows/tests.yml)
+![python](https://img.shields.io/badge/python-%E2%89%A53.10-blue)
+![license](https://img.shields.io/badge/license-MIT-green)
+
 A QuTiP-based, full-stack simulation platform for **time-dependent magnetic-field
 sensing** with superconducting Transmon qubits. It models the flux → qubit-frequency
 transduction chain and reconstructs the sensed waveform from simulated measurements,
@@ -92,11 +96,7 @@ python web_demo_v2.py
 - **Architecture / module reference & roadmap:** [`docs/architecture.md`](docs/architecture.md)
   (中文, six-layer stack, per-module API, extension guide, §A2 post-v1 roadmap).
 
-## Testing & development
-
-The test suite, the frozen legacy `src/` reference implementation, and its
-`src_mirror` facade live in the **development tree** (not part of the distributed
-package). In a development checkout:
+## Testing
 
 ```bash
 pip install -e ".[test]"
@@ -104,19 +104,17 @@ pytest tests/ -v
 pytest tests/regression -m regression      # physics regression baselines
 ```
 
-## Project layout (distributed)
+## Project layout
 
 ```
 sqc/                  the platform (devices, control, hardware, simulation,
                       experiments, reconstruction, calibration, workflows)
+tests/                unit / integration / equivalence / regression suites
 web_demo_v2.py        Gradio web demo (sqc-based)
 Simulation_sqc.ipynb  end-to-end tutorial notebook
 docs/                 architecture / technical documentation
+src/, src_mirror/     frozen legacy reference implementation + facade
 ```
-
-The development tree additionally holds a test suite (`tests/`), the frozen
-legacy implementation (`src/`, `src_mirror/`), and research material — these are
-not part of the distributed package.
 
 ## Not in v1 (planned)
 

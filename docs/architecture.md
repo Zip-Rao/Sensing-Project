@@ -258,7 +258,7 @@ src/                              ← 旧目录，永久冻结（R1 硬约束）
 src_mirror/                       ← facade 层，重导出自 sqc/
 tests/                            ← 测试套件
 docs/                             ← 本文档所在
-idea/                             ← 设计文档（refactor plan、phase handbooks）
+idea/                             ← 设计文档（refactor plan、phase handbooks；本地,不随发行）
 ```
 
 ### 3.4 模块职责一句话
@@ -1427,7 +1427,7 @@ wf.plot()
 
 - **添加新顶层 workflow**（如完整 RB workflow、双比特门优化 workflow）：继承 `Workflow` ABC，实现 `run() → dict`。
 - **修改现有 workflow 的某一步**：直接覆写对应的子调用，例如把 `TransferFunctionCalibration` 换成自定义算法。
-- **实现 stub 方法**：`SensingWorkflow` 的 11 个 stub 方法可按需实现，详见 `idea/refactor/phase_6_handbook.md` §6d.8。
+- **实现 stub 方法**：`SensingWorkflow` 的 11 个 stub 方法可按需实现（设计见内部 phase_6 handbook）。
 
 ---
 
@@ -2465,15 +2465,15 @@ mesolve(H_list, psi0, t_array, c_ops, e_ops)
 | v2.5 | 2026-05-17 | §4.5.2 追加 DelayRamsey **t_d 语义陷阱**注释:说明 `t_d` 是 Ramsey 起点相对 `t_fall` 的偏移而非测量点相对 falling edge 的延迟,实际采样时刻 `t_query = t_fall + t_d + t_sig`(t_sig ∈ 自由演化窗口),最早可测点为 `t_fall + t_rabi[-1]`;并提示 `flux_signal.t_list` 必须覆盖整个 t_query 范围(否则 `value_at` 越界返回 0 造成重建曲线"悬崖")。纯文档增补,无代码改动。 |
 | v2.6 | 2026-05-17 | **Cryoscope/DelayRamsey 相位 unwrap 统一**:消除 calibration 反演的 ~70 μΦ₀ DC 偏置。(1) 新建 `sqc/reconstruction/dispersion.py` 共享 4 个函数 — `omega_q_at_flux`/`cryoscope_phase_theory`/`cumulative_phase_theory`/`unwrap_phase_with_model`,作为相位 unwrap 唯一真理源。(2) 4 处迁移到统一 API:`CryoscopeExperiment`/`CryoscopeCalibration`/`DelayRamseyExperiment`/`DelayRamseyCalibration` 全部用 model-guided unwrap,实验端用累积积分锚定、标定端用方波相位锚定;旧的 baseline-subtraction + `np.unwrap` 残骸清理。(3) `CryoscopeCalibration` 末尾追加 h=0 锚定 — 减掉 `varphi[h≈0]` 让 `cal.inverse(0) == 0`,消除 IQReadout 系统相位污染。(4) `CryoscopeExperiment` `trunc_list` 越界 sanity check + 默认 `flux_signal.t_list` 延长到 100 ns,避免 `truncate()` 静默失效(silent failure)。(5) `DelayRamseyExperiment.run_baseline` 字段保留兼容性但标 deprecated。详见 §4.6.7。22 单元测试 + 5 物理回归 baseline 全绿(无需重生成)。数值验证:DC offset 由 +6.88e-5 → +2.15e-9 Φ₀。 |
 | v2.7 | 2026-05-18 | **PredistortionDesigner smooth=True 逆设计修复**:`_single_exp_to_iir_inverse` 未区分 `smooth=True/False`，对纯低通模式 (smooth=True, H(s)=1/(1+sτ)) 错误使用非平滑公式 (amp=0.3)，导致级联 H_inv·H = 1/(1+s·21ns) 而非 ≈1。修复：smooth=True 时加正则化极点 τ_reg=dt/4，级联 ≈1/(1+s·0.125ns)，阶跃响应 RMSE 从 0.274 降至 0.018 (15x 改善)。详见 §4.7.4。18 回归+单元测试全绿。 |
-| v2.8 | 2026-06-04 | **P10: 核函数体系三维扩展**。KernelEstimator 新增 mode (flux/omega)、method (sim/exp)、order (1..N) 三个正交维度。新增 Virtual Z 双实现（math σ_z 冲激 + hardware 相位重建）。新增 sim 模式（a†a 频率刺激，纯理论）。新增高阶 Volterra 对角核提取（振幅扫描 + 多项式拟合）及 KernelResult.save/load 序列化。新增 Hammerstein-Volterra 固定点迭代反卷积及 _omega_to_flux 色散反演。frequency.py 迁移到 omega kernel 直接路径，消除 κ workaround。Pulse.get_kernel() 转为 DeprecationWarning 兼容桥。+29 新单元测试；350 测试全绿；src/ 未变（R1）。详见 [phase_10_handbook](../idea/refactor/phase_10_kernel_extension_handbook.md)。 |
+| v2.8 | 2026-06-04 | **P10: 核函数体系三维扩展**。KernelEstimator 新增 mode (flux/omega)、method (sim/exp)、order (1..N) 三个正交维度。新增 Virtual Z 双实现（math σ_z 冲激 + hardware 相位重建）。新增 sim 模式（a†a 频率刺激，纯理论）。新增高阶 Volterra 对角核提取（振幅扫描 + 多项式拟合）及 KernelResult.save/load 序列化。新增 Hammerstein-Volterra 固定点迭代反卷积及 _omega_to_flux 色散反演。frequency.py 迁移到 omega kernel 直接路径，消除 κ workaround。Pulse.get_kernel() 转为 DeprecationWarning 兼容桥。+29 新单元测试；350 测试全绿；src/ 未变（R1）。详见 phase_10 内部 handbook。 |
 | v2.13 | 2026-07-17 | **v1.0.0 发布准备**。新增 §A2「v1 未公开的能力（post-v1 路线图）」——按 D3/D4 隐藏(非删除)Z-crosstalk、transient 频率标定、CPMG、coupler/electronics、SensingWorkflow 11 stub,附深路径导入与恢复方式。文档头 `适用于 sqc v0.3.0`→`v1.0.0`。配套(代码见 commit 历史):瞬态核路由统一到 `KernelEstimator`(去 `get_kernel` 弃用告警,数值不变)、`ZCrosstalkWorkflow` 从 `workflows.__all__` 隐藏、前端 `SHOW_EXPERIMENTAL` 开关、echo/create_pulse/distortion 缺陷修复。纯文档增补,src/ 未变(R1)。 |
 | v2.12 | 2026-07-16 | **闭环反馈新增 `step_method="gradient"`**(§4.7.3)。阻尼割线法 (damped secant) 数值梯度 Newton 步,无需 V_a/V_b 预括号,仅需 V_seed 起点。新增 damping/clamp/best-point 三重抗噪: damping∈(0,1] 压过冲, max_bias_step 钳位, 追踪 |residual| 最小点回写。首步/Δe=0 时退化为固定探测步。`SinglePointFrequencyCalibration` 新增 V_seed/damping/first_bias_step/max_bias_step 字段; `_build_result` 新增 `extra` 可选参数。+纯增量分支, src/ 未变(R1)。 |
 | v2.11 | 2026-06-07 | **瞬态测频 order≥3 修复 + Route B 落地**(§4.7.3 v2.11 注)。(1) 修复 order≥3 三次 Newton 的**符号 bug**(此前返回 ω_d−Δ,误差≈−2Δ,比线性更差)——统一到 δω=−Δ 约定。(2) `_calibrate_g3_taylor` 的 `delta_max_ghz` 默认改 `None`=**自适应**(旧默认 0.08 使 G1 偏低~0.6×、G3 全错);新增 `FrequencyMeasurement.g3_delta_max`。(3) **Route B** `g3_source="kernel_full"`:完整非对角核三重积分 ∭k₃ dt³(`_calibrate_g3_kernel_full`),免 Δ 扫描,与拟合互校。(4) **移除** `diag_legacy`(错误对象,小~170×),未知值抛 ValueError。效果:有效区 order3-fit 比线性精度↑~10×。+5 单元测试。src/ 未变(R1)。 |
 | v2.10 | 2026-06-07 | **核函数 σ_t 旋钮 + Richardson 外推 + 非对角(sim)提取**(§4.6.2 Phase 12 增补)。诊断并修复 exp 高阶对角偏差:(1) `_extract_kn_omega` 的 FD mesolve 改用 `atol=1e-12, rtol=1e-10`,消除 noise/h³ 主导(高阶"不太对"主因);(2) 新增 `probe_sigma_t` 旋钮(默认 `None`→2·dt,零回归)+ `richardson`/`richardson_sigmas` σ_t→0 外推,G₃/G₃_sim 从 0.84→0.96;(3) `extract_off_diagonal=True`(仅 method='sim') 经 `_heisenberg_kernels_offdiag` 产出完整 n 维核 k₂(M,M)/k₃(M,M,M),order≤3;(4) `KernelResult.off_diagonal` 字段 + n 维 save/load;(5) exp+offdiag 抛 NotImplementedError,`estimate_full` order≥2 补回 `_validate_inputs`;(6) `TransientReconstruction` Wiener/Hammerstein 路径对 ndim>1 核抛 ValueError(指向 LM)。+8 新单元测试。src/ 未变(R1)。 |
 
 下一步阅读：
-- 完整设计背景：[`idea/refactor/_refactor_plan.md`](../idea/refactor/_refactor_plan.md)
-- Phase 工作记录：[`idea/refactor/_handoff_state.md`](../idea/refactor/_handoff_state.md)
+- 完整设计背景:`idea/refactor/_refactor_plan.md`(内部开发文档,不随发行分发)
+- Phase 工作记录:`idea/refactor/_handoff_state.md`(内部开发文档,不随发行分发)
 - 实战 demo：`python web_demo_v2.py`
 
 ---

@@ -1,0 +1,45 @@
+name: tests
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+    env:
+      # Headless matplotlib backend so plotting code never opens a GUI in CI.
+      MPLBACKEND: Agg
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install (editable) + test extras
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[test]"
+
+      - name: Verify import
+        run: python -c "import sqc; print('sqc', sqc.__version__)"
+
+      - name: Unit + equivalence tests
+        run: pytest tests/unit tests/equivalence -q
+
+      - name: Physics regression baselines
+        run: pytest tests/regression -m regression -q
+
+      # Integration tests exercise full mesolve pipelines (slow); run on the
+      # primary Python version only to keep CI time bounded.
+      - name: Integration tests
+        if: matrix.python-version == '3.11'
+        run: pytest tests/integration -q
