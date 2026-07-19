@@ -12,7 +12,8 @@ predistortion pipelines + Gradio web demo).
 ### Added
 - `pyproject.toml` — `pip install -e .` support; `import sqc` no longer depends on
   the working directory. Optional extras: `[demo]` (Gradio), `[test]` (pytest).
-- `LICENSE` (MIT), `README.md`, `CITATION.cff`.
+- `LICENSE` (MIT), `README.md` (English) + `README.zh-CN.md` (中文, kept in
+  sync via cross-links), `CITATION.cff`.
 - Public package APIs: `sqc.control` and `sqc.simulation` now re-export their
   classes; `sqc.hardware` exports `CascadeDistortion`.
 

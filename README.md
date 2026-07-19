@@ -1,5 +1,7 @@
 # sqc — Superconducting Qubit Quantum Sensing Simulation Platform
 
+**English** | [中文](README.zh-CN.md)
+
 A QuTiP-based, full-stack simulation platform for **time-dependent magnetic-field
 sensing** with superconducting Transmon qubits. It models the flux → qubit-frequency
 transduction chain and reconstructs the sensed waveform from simulated measurements,
