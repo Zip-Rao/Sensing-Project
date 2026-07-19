@@ -2,10 +2,6 @@
 
 [English](README.md) | **中文**
 
-[![tests](https://github.com/Serendipity-Zip/Sensing-Project/actions/workflows/tests.yml/badge.svg)](https://github.com/Serendipity-Zip/Sensing-Project/actions/workflows/tests.yml)
-![python](https://img.shields.io/badge/python-%E2%89%A53.10-blue)
-![license](https://img.shields.io/badge/license-MIT-green)
-
 基于 QuTiP 的全栈仿真平台,用于超导 Transmon 量子比特的**时变磁场传感**。它对
 磁通 → 量子比特频率的转导链路建模,并从仿真测量中重建被感知的波形,遵循
 Gao、Rol、Touzard、Wang(2021)提出的六层 cQED 架构。
@@ -94,7 +90,10 @@ python web_demo_v2.py
 - **架构 / 模块参考与路线图:** [`docs/architecture.md`](docs/architecture.md)
   (中文,六层栈、逐模块 API、扩展指南、§A2 post-v1 路线图)。
 
-## 测试
+## 测试与开发
+
+测试套件、冻结的旧实现 `src/` 及其 `src_mirror` facade 位于**开发树**中
+(不随发行包分发)。在开发检出中:
 
 ```bash
 pip install -e ".[test]"
@@ -102,17 +101,18 @@ pytest tests/ -v
 pytest tests/regression -m regression      # 物理回归 baseline
 ```
 
-## 目录结构
+## 目录结构(分发)
 
 ```
 sqc/                  平台本体(devices, control, hardware, simulation,
                       experiments, reconstruction, calibration, workflows)
-tests/                单元 / 集成 / 等价 / 回归 测试套件
 web_demo_v2.py        Gradio Web 演示(基于 sqc)
 Simulation_sqc.ipynb  端到端教程 notebook
 docs/                 架构 / 技术文档
-src/, src_mirror/     冻结的旧实现参考 + facade
 ```
+
+开发树另含测试套件(`tests/`)、冻结的旧实现(`src/`、`src_mirror/`)及科研
+资料 —— 这些不随发行包分发。
 
 ## v1 未包含(计划中)
 

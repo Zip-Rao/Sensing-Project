@@ -53,7 +53,12 @@ report/
 notebooks/
 archive/
 
-# Internal process/planning docs (local only; agent + release workflow).
+# Development-only, not part of the distributed core platform (local only):
+#   legacy reference impl + mirror facade, test suite, agent/process docs.
+src/
+src_mirror/
+tests/
+pytest.ini
 CLAUDE.md
 AGENTS.md
 RELEASE_TODO.md
