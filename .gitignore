@@ -26,3 +26,29 @@ Thumbs.db
 
 # Local config (keep template)
 .env
+
+# ---------------------------------------------------------------------------
+# Release hygiene (2026-07-17): keep only the core platform on GitHub.
+# The folders below are kept LOCALLY but shielded from git (research outputs,
+# design/theory notes, the paper, dev notebooks, archived loose files).
+# Each has a local README explaining its contents. To re-track, remove its
+# line here and `git add`.
+# ---------------------------------------------------------------------------
+
+# Research outputs / scratch (local only)
+result/
+output/
+cell/
+kernel/
+note/
+appendix/
+
+# Design / theory / refactor-process notes (local only; core docs link into it)
+idea/
+
+# LaTeX paper (local only; edited locally)
+report/
+
+# Relocated from repo root (see each folder's README)
+notebooks/
+archive/
