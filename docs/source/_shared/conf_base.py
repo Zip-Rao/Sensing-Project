@@ -106,11 +106,6 @@ suppress_warnings = [
     # keeps -W meaningful for structural issues we own without failing on source
     # docstring quirks. Docstring cleanup is tracked as a separate follow-up.
     "docutils",
-    # The tutorial notebook marks code cells as 'ipython3', which requires the
-    # ipython package to register that Pygments lexer alias. CI installs only
-    # the [docs] extra (no ipython); with nbsphinx_execute="never" the
-    # pre-rendered outputs are shown unchanged, so this is cosmetic only.
-    "misc.highlighting_failure",
 ]
 
 # Each language tree is a self-contained source directory (en/ or zh/); the
@@ -137,6 +132,18 @@ def _skip_notimplemented_members(app, what, name, obj, skip, options):
     if "raise NotImplementedError" in source:
         return True
     return None
+
+
+# The tutorial notebook marks code cells with the 'ipython3' Pygments lexer,
+# whose alias is only registered when the (heavyweight) ipython package is
+# installed -- which CI's [docs] extra deliberately omits. Rather than pull in
+# ipython just for a highlighter alias, map 'ipython3' to Pygments' built-in
+# PythonLexer: real Python highlighting, zero extra dependencies, and the
+# warning disappears at the source (no -W suppression needed).
+from pygments.lexers import PythonLexer  # noqa: E402
+from sphinx.highlighting import lexers as _sphinx_lexers  # noqa: E402
+
+_sphinx_lexers["ipython3"] = PythonLexer()
 
 
 def setup(app):
