@@ -100,7 +100,18 @@ nitpicky = False
 # structural problems we own (broken toctrees, dangling cross-references,
 # missing files) without failing on these source-docstring quirks. Cleaning
 # the docstrings themselves is tracked as a separate source-quality follow-up.
-suppress_warnings = ["docutils"]
+suppress_warnings = [
+    # sqc/ docstrings use plain-text math notation (|x|, df/dPhi) that docutils
+    # tries to parse as RST substitution references. Suppressing this category
+    # keeps -W meaningful for structural issues we own without failing on source
+    # docstring quirks. Docstring cleanup is tracked as a separate follow-up.
+    "docutils",
+    # The tutorial notebook marks code cells as 'ipython3', which requires the
+    # ipython package to register that Pygments lexer alias. CI installs only
+    # the [docs] extra (no ipython); with nbsphinx_execute="never" the
+    # pre-rendered outputs are shown unchanged, so this is cosmetic only.
+    "misc.highlighting_failure",
+]
 
 # Each language tree is a self-contained source directory (en/ or zh/); the
 # other language's pages are simply not present, so no cross-language orphan
