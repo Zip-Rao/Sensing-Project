@@ -1,0 +1,7 @@
+{#- Language switcher shown in the furo sidebar.
+    Reads current_language / other_language_* from html_context (set per tree
+    in en/conf.py and zh/conf.py). Links to the sibling language site. -#}
+<div class="sqc-language-switch">
+  <span class="sqc-lang-label">🌐</span>
+  <a href="{{ other_language_url }}">{{ other_language_name }}</a>
+</div>

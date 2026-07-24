@@ -1,0 +1,54 @@
+# 安装
+
+## 环境要求
+
+- Python ≥ 3.10
+- [QuTiP](https://qutip.org/) ≥ 5.0(开源量子动力学库)
+- NumPy ≥ 1.24、SciPy ≥ 1.11、Matplotlib ≥ 3.7
+
+## 从源码安装(推荐)
+
+```bash
+git clone https://github.com/Serendipity-Zip/Sensing-Project.git
+cd Sensing-Project
+pip install -e .
+```
+
+以可编辑模式安装核心 `sqc` 包。遗留实现 `src/` 与测试套件不随发行分发,仅保留在本地。
+
+## 可选 extras
+
+```bash
+# 交互式 web demo(Gradio)
+pip install -e ".[demo]"
+
+# 文档构建工具(Sphinx + furo + nbsphinx …)
+pip install -e ".[docs]"
+
+# 测试套件
+pip install -e ".[test]"
+```
+
+## Conda 环境(项目开发)
+
+项目在名为 `qutip-env` 的 conda 环境中开发。复现方式:
+
+```bash
+conda create -n qutip-env python=3.11
+conda activate qutip-env
+pip install -e ".[demo,test]"
+```
+
+Windows 下完整 Python 路径为:
+`C:\Users\<user>\anaconda3\envs\qutip-env\python.exe`
+
+## 验证
+
+```python
+import sqc
+print(sqc.__version__)          # 1.0.0
+
+from sqc.devices import TransmonQubit
+from sqc.workflows import SensingWorkflow
+print("ok")
+```

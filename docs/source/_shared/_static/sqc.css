@@ -1,0 +1,16 @@
+/* sqc docs — minimal custom styling on top of furo. */
+
+.sqc-language-switch {
+    padding: 0.25rem 1rem 0.75rem;
+    font-size: 0.85rem;
+}
+
+.sqc-language-switch .sqc-lang-label {
+    margin-right: 0.35rem;
+    opacity: 0.7;
+}
+
+.sqc-language-switch a {
+    text-decoration: none;
+    font-weight: 600;
+}

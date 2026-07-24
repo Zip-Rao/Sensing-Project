@@ -20,6 +20,14 @@ dist/
 build/
 *.egg-info/
 
+# Documentation site build output (Sphinx); source under docs/source/ is tracked
+docs/build/
+docs/source/**/generated/
+# Tutorial notebook is copied into each language tree at build time from the
+# repo-root single source of truth (see docs/Makefile); ignore the copies.
+docs/source/en/Simulation_sqc.ipynb
+docs/source/zh/Simulation_sqc.ipynb
+
 # OS files
 .DS_Store
 Thumbs.db

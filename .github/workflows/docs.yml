@@ -1,0 +1,67 @@
+name: Docs
+
+# Build the bilingual Sphinx site and deploy to GitHub Pages.
+# English is served at the site root; Chinese at /zh/.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docs/**"
+      - "sqc/**"
+      - "pyproject.toml"
+      - ".github/workflows/docs.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Allow only one concurrent deployment.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install pandoc (needed by nbsphinx)
+        run: sudo apt-get update && sudo apt-get install -y pandoc
+
+      - name: Install package with docs extra
+        run: pip install -e ".[docs]"
+
+      - name: Copy tutorial notebook into both language trees
+        run: |
+          cp Simulation_sqc.ipynb docs/source/en/Simulation_sqc.ipynb
+          cp Simulation_sqc.ipynb docs/source/zh/Simulation_sqc.ipynb
+
+      - name: Build English (site root)
+        run: sphinx-build -W --keep-going -b html docs/source/en docs/build/html
+
+      - name: Build Chinese (/zh/)
+        run: sphinx-build -W --keep-going -b html docs/source/zh docs/build/html/zh
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs/build/html
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
