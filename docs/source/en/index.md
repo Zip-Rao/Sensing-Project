@@ -26,18 +26,25 @@ quickstart
 
 ```{toctree}
 :maxdepth: 2
-:caption: The Framework
+:caption: Framework
 
 architecture
 building_blocks/index
+theory
 ```
 
 ```{toctree}
 :maxdepth: 2
-:caption: Using the Platform
+:caption: Guides
 
 examples/index
 extending
+```
+
+```{toctree}
+:maxdepth: 2
+:caption: Full Example
+
 tutorial
 ```
 
@@ -46,6 +53,11 @@ tutorial
 :caption: Reference
 
 api/index
-theory
+```
+
+```{toctree}
+:maxdepth: 2
+:caption: About
+
 roadmap
 ```

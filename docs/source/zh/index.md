@@ -26,14 +26,21 @@ quickstart
 
 architecture
 building_blocks/index
+theory
 ```
 
 ```{toctree}
 :maxdepth: 2
-:caption: 使用平台
+:caption: 指南
 
 examples/index
 extending
+```
+
+```{toctree}
+:maxdepth: 2
+:caption: 完整示例
+
 tutorial
 ```
 
@@ -42,6 +49,11 @@ tutorial
 :caption: 参考
 
 api/index
-theory
+```
+
+```{toctree}
+:maxdepth: 2
+:caption: 关于
+
 roadmap
 ```

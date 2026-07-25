@@ -1,4 +1,4 @@
-# Tutorial
+# Full Example
 
 This end-to-end notebook walks through the `sqc` API on a full sensing example:
 building a qubit, applying a flux signal, simulating with QuTiP, and
