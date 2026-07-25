@@ -9,7 +9,7 @@
 ## 从源码安装(推荐)
 
 ```bash
-git clone https://github.com/Serendipity-Zip/Sensing-Project.git
+git clone https://github.com/Zip-Rao/Sensing-Project.git
 cd Sensing-Project
 pip install -e .
 ```
@@ -29,18 +29,15 @@ pip install -e ".[docs]"
 pip install -e ".[test]"
 ```
 
-## Conda 环境(项目开发)
+## Conda 环境(可选)
 
-项目在名为 `qutip-env` 的 conda 环境中开发。复现方式:
+任何 Python ≥ 3.10 的环境都可以——venv、conda 或系统 Python 均可。若偏好 conda:
 
 ```bash
-conda create -n qutip-env python=3.11
-conda activate qutip-env
+conda create -n sqc python=3.11   # 名字随意
+conda activate sqc
 pip install -e ".[demo,test]"
 ```
-
-Windows 下完整 Python 路径为:
-`C:\Users\<user>\anaconda3\envs\qutip-env\python.exe`
 
 ## 验证
 

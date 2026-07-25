@@ -9,7 +9,7 @@
 ## Install from source (recommended)
 
 ```bash
-git clone https://github.com/Serendipity-Zip/Sensing-Project.git
+git clone https://github.com/Zip-Rao/Sensing-Project.git
 cd Sensing-Project
 pip install -e .
 ```
@@ -30,19 +30,16 @@ pip install -e ".[docs]"
 pip install -e ".[test]"
 ```
 
-## Conda environment (project development)
+## Conda environment (optional)
 
-The project was developed inside a conda environment named `qutip-env`. To
-reproduce it:
+Any Python ≥ 3.10 environment works — venv, conda, or system Python. If you
+prefer conda:
 
 ```bash
-conda create -n qutip-env python=3.11
-conda activate qutip-env
+conda create -n sqc python=3.11   # name it whatever you like
+conda activate sqc
 pip install -e ".[demo,test]"
 ```
-
-On Windows the full Python path is:
-`C:\Users\<user>\anaconda3\envs\qutip-env\python.exe`
 
 ## Verify
 
