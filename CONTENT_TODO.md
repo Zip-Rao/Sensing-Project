@@ -182,6 +182,6 @@ make html          # 构建 en + zh(Windows 用 make.bat 或直接 sphinx-build)
 - [ ] building_blocks/reconstruction
 - [ ] building_blocks/calibration
 - [ ] building_blocks/workflows
-- [ ] examples/waveform_reconstruction
-- [ ] examples/frequency_calibration
-- [ ] examples/predistortion
+- [x] examples/waveform_reconstruction
+- [x] examples/frequency_calibration
+- [x] examples/predistortion
