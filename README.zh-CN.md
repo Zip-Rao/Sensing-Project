@@ -85,6 +85,9 @@ python web_demo_v2.py
 
 ## 文档
 
+- **在线文档:** [中文](https://zip-rao.github.io/Sensing-Project/zh/) ·
+  [English](https://zip-rao.github.io/Sensing-Project/) —— 构件参考、理论、示例,
+  每次 push 到 `main` 自动重建。
 - **教程 notebook:** [`Simulation_sqc.ipynb`](Simulation_sqc.ipynb) —— Rabi → Ramsey →
   差分回波 → 瞬态 → Cryoscope,端到端演示。
 - **架构 / 模块参考与路线图:** [`docs/architecture.md`](docs/architecture.md)

@@ -1,7 +1,15 @@
 {#- Language switcher shown in the furo sidebar.
     Reads current_language / other_language_* from html_context (set per tree
-    in en/conf.py and zh/conf.py). Links to the sibling language site. -#}
+    in en/conf.py and zh/conf.py). Links to the sibling language site.
+
+    other_language_target is a path RELATIVE TO THIS TREE'S BUILD ROOT
+    (en/ builds to the site root, zh/ builds to /zh/). pathto(..., 1) then
+    prepends the correct number of "../" for the current page's depth, so the
+    link is valid from both root and nested pages -- and works whether the
+    site is served from a domain root or a project subpath
+    (e.g. /Sensing-Project/). A hardcoded relative URL cannot do this: a fixed
+    "../zh/" over-climbs from the root page and escapes the project subpath. -#}
 <div class="sqc-language-switch">
   <span class="sqc-lang-label">🌐</span>
-  <a href="{{ other_language_url }}">{{ other_language_name }}</a>
+  <a href="{{ pathto(other_language_target, 1) }}">{{ other_language_name }}</a>
 </div>

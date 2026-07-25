@@ -87,6 +87,9 @@ python web_demo_v2.py
 
 ## Documentation
 
+- **Online docs:** [zip-rao.github.io/Sensing-Project](https://zip-rao.github.io/Sensing-Project/)
+  (English) · [中文](https://zip-rao.github.io/Sensing-Project/zh/) — building-block
+  reference, theory, and worked examples, rebuilt on every push to `main`.
 - **Tutorial notebook:** [`Simulation_sqc.ipynb`](Simulation_sqc.ipynb) — Rabi → Ramsey →
   echo → transient → cryoscope, worked end to end.
 - **Architecture / module reference & roadmap:** [`docs/architecture.md`](docs/architecture.md)
