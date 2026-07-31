@@ -1,5 +1,6 @@
 """sqc.workflows — High-level experimental workflows."""
 from .base import Workflow
+from .frequency_calibration import CalibrationStage, FrequencyCalibrationWorkflow
 from .predistortion_validation import PredistortionValidationWorkflow
 # NOTE (D3): ZCrosstalkWorkflow is hidden from the v1 public API. The
 # implementation remains in sqc/workflows/z_crosstalk.py and is importable via
@@ -19,6 +20,8 @@ from .sensing import (
 
 __all__ = [
     "Workflow",
+    "FrequencyCalibrationWorkflow",
+    "CalibrationStage",
     "PredistortionValidationWorkflow",
     # "ZCrosstalkWorkflow" hidden from v1 public API (D3); see note above.
     "SensingWorkflow",

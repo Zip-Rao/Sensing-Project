@@ -11,7 +11,7 @@ See _sensing theory.md §闭环反馈控制 for closed-loop algorithm reference
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Literal
+from typing import Callable, Literal, Optional
 
 import numpy as np
 from qutip import Qobj, QobjEvo, basis, mesolve
@@ -420,6 +420,43 @@ def _calibrate_g3_kernel_full(
 # Internal helper: transient single-point frequency measurement
 # ---------------------------------------------------------------------------
 
+def _solve_cubic_detuning(p_diff: float, G_lin: float, G3: float) -> float:
+    """Invert ``p_diff = G_lin·δω + (G₃/6)·δω³`` for δω via Newton, with a
+    fold guard.
+
+    When ``G_lin`` and ``G₃`` have opposite signs, ``p_diff(δω)`` is
+    non-monotone and turns over at ``|δω_fold| = sqrt(-2·G_lin/G₃)``. Beyond
+    the fold the cubic is not invertible and Newton (seeded from the linear
+    estimate) converges to the spurious far root of opposite sign — a large,
+    sign-flipped error. If the solved δω lands past the fold, this returns the
+    graceful order-1 linear estimate ``p_diff/G_lin`` instead.
+
+    Falls back to the linear estimate when the cubic is degenerate
+    (``G₃≈0`` or ``G_lin≈0``).
+    """
+    dw_lin = p_diff / G_lin if abs(G_lin) > 1e-12 else 0.0
+    if abs(G3) <= 1e-10 or abs(G_lin) <= 1e-12:
+        return dw_lin
+
+    dw = dw_lin
+    for _ in range(40):
+        dw2 = dw * dw
+        f_val = G_lin * dw + (G3 / 6.0) * dw * dw2 - p_diff
+        f_prime = G_lin + (G3 / 2.0) * dw2
+        if abs(f_prime) < 1e-15:
+            break
+        dw_new = dw - f_val / f_prime
+        if abs(dw_new - dw) < 1e-12 * max(abs(dw), 1e-12):
+            dw = dw_new
+            break
+        dw = dw_new
+
+    fold_sq = -2.0 * G_lin / G3   # > 0 only when signs oppose
+    if fold_sq > 0 and dw * dw > fold_sq:
+        return dw_lin             # order-1 fallback (monotone, no overshoot)
+    return dw
+
+
 def _measure_frequency_transient(
     qubit: object,
     omega_d: float,
@@ -576,22 +613,10 @@ def _measure_frequency_transient(
                 f"it is physically incorrect for constant-Δ inversion)."
             )
 
-        # Newton: f(δω)  = G_lin·δω + G₃/6·δω³ − p_diff
-        #         f'(δω) = G_lin + G₃/2·δω²
+        # Solve the cubic p_diff = G_lin·δω + (G₃/6)·δω³ for δω, with a fold
+        # guard that rejects the spurious far root past the turnover.
         if abs(G3) > 1e-10 and abs(G_lin) > 1e-12:
-            dw = p_diff / G_lin   # linear seed in the same (G_lin) convention
-            for _ in range(40):
-                dw2 = dw * dw
-                f_val = G_lin * dw + (G3 / 6.0) * dw * dw2 - p_diff
-                f_prime = G_lin + (G3 / 2.0) * dw2
-                if abs(f_prime) < 1e-15:
-                    break
-                dw_new = dw - f_val / f_prime
-                if abs(dw_new - dw) < 1e-12 * max(abs(dw), 1e-12):
-                    dw = dw_new
-                    break
-                dw = dw_new
-            delta_omega = dw
+            delta_omega = _solve_cubic_detuning(p_diff, G_lin, G3)
 
     return float(omega_d - delta_omega)
 
@@ -754,6 +779,7 @@ class FrequencyMeasurement(Calibration):
     )
     t_global: np.ndarray | None = None
     f_artificial: float | None = 0.1
+    omega_d: float | None = None
 
     def __post_init__(self):
         if self.tau_list is None:
@@ -762,13 +788,29 @@ class FrequencyMeasurement(Calibration):
             self.t_global = CONFIG.pulse.t_global.copy()
 
     # ------------------------------------------------------------------
-    def measure(self, flux: float | None = None) -> float:
+    def measure(self, flux: float | None = None,
+                omega_d: float | None = None) -> float:
         """Return f01 (angular, rad·GHz) at the given flux.
 
         Parameters
         ----------
         flux : float or None
             Flux offset (Φ₀).  Defaults to self.flux when None.
+        omega_d : float or None
+            Drive/reference frequency (angular, rad·GHz).  The measurement
+            returns ``omega_d + measured detuning``, so this sets the point the
+            detuning is measured *relative to*.  Resolution order: this
+            argument → ``self.omega_d`` → ``self.qubit.frequency`` (the
+            sweet-spot construction frequency).
+
+            Passing an explicit ``omega_d`` is what real experiments do: the
+            true f01 is unknown, so the drive is set at a spectroscopy estimate
+            and the measurement reports the residual detuning.  It also enables
+            dynamic re-centering (feedback): feed the previous estimate back as
+            ``omega_d`` to keep the transient measurement inside its linear
+            regime.  The default (``qubit.frequency``) measures detuning
+            relative to the sweet spot — convenient in simulation but assumes
+            the answer is already known.
 
         Returns
         -------
@@ -776,7 +818,11 @@ class FrequencyMeasurement(Calibration):
             Measured qubit frequency, signed (angular, rad·GHz).
         """
         flux_val = self.flux if flux is None else float(flux)
-        omega_d = self.qubit.frequency
+        omega_d = (
+            omega_d if omega_d is not None
+            else self.omega_d if self.omega_d is not None
+            else self.qubit.frequency
+        )
         match self.method:
             case "ramsey":
                 return _fit_ramsey_frequency(
@@ -911,11 +957,60 @@ class SinglePointFrequencyCalibration(Calibration):
     bracket_tightening: bool = True
     step_method: Literal["secant", "bisection", "gradient"] = "secant"
 
+    # Transient-measurement tuning (forwarded to the inner FrequencyMeasurement
+    # when measure_method="transient"; ignored for "ramsey").
+    order: int = 1
+    g3_source: Literal["fit", "kernel_full"] = "fit"
+
     # Gradient-method parameters (step_method="gradient")
     V_seed: float | None = None
     damping: float = 0.8
     first_bias_step: float = 0.01
-    max_bias_step: float = 0.05
+    # Per-step flux clamp. Near the sweet spot ∂f_q/∂V→0, so the damped-secant
+    # step blows up; too large a clamp flings V across the sweet spot (into the
+    # region where the transient discriminator is non-linear and mis-reads),
+    # stalling the coarse search. 0.02 keeps the search local enough to descend.
+    max_bias_step: float = 0.02
+
+    # Optional early-stop predicate (step_method="gradient" only). Called at
+    # the end of each iteration with a state dict; return True to stop early
+    # (e.g. gradient flattened, stall, cost budget). Ignored by secant /
+    # bisection, whose loops are not step-instrumented. Default None keeps the
+    # loop byte-for-byte unchanged.
+    stop_predicate: Optional[Callable[[dict], bool]] = None
+
+    # Drive-frequency policy (gradient step only). Sets the omega_d the inner
+    # measurement uses each iteration — the *reference* the detuning is measured
+    # relative to. The control error is ALWAYS f_q − f_target (absolute), so the
+    # policy only affects measurement linearity, never the convergence target.
+    #   "sweet"  : omega_d = qubit.frequency (sweet spot). Default; back-compat.
+    #   "target" : omega_d = f_target (LOCKED phase — measured detuning IS the
+    #              control error, simplest closed form).
+    #   "track"  : omega_d predicts f_q at the point about to be measured,
+    #              omega_d = f_hat_prev + s_hat·(V − V_prev) (TRACKING phase —
+    #              keeps |detuning| inside the protocol's linear window as the
+    #              search moves far from the sweet spot).
+    #   callable : user function(state) -> omega_d for arbitrary feedback laws.
+    drive_policy: "str | Callable[[dict], float]" = "sweet"
+    # Sensitivity source for "track" prediction and diagnostics.
+    #   "secant": s_hat = de/dV from the last two measurements (model-free,
+    #             matches a real experiment). "model": qubit.frequency_sensitivity.
+    sensitivity_source: Literal["secant", "model"] = "secant"
+    # Initial frequency estimate f̂_{q,0} for the "track" policy's first drive
+    # (f_{d,0} = omega_d_seed). Without it a fresh track stage falls back to the
+    # sweet spot on iter 0 — fatal when the target is far (the transient sees the
+    # full offset). A staged pipeline passes the previous stage's estimate here.
+    omega_d_seed: float | None = None
+    # Linear-range guard: if set, each iteration flags out_of_range when
+    # |detuning| > rho·linear_range, surfaced in the stop_predicate state so a
+    # caller can trigger re-acquisition. None disables the guard.
+    linear_range: float | None = None
+    rho: float = 0.6
+    # Convergence de-bounce (gradient step): require |e| ≤ epsilon on this many
+    # consecutive iterations before declaring convergence. Default 1 = current
+    # behaviour (stop on first hit). >1 re-measures in place to confirm, guarding
+    # against a noisy measurement that momentarily dips under tolerance.
+    converge_streak: int = 1
 
     # Inner-measurement parameters (forwarded to FrequencyMeasurement)
     tau_list: np.ndarray | None = None
@@ -931,7 +1026,8 @@ class SinglePointFrequencyCalibration(Calibration):
             self.t_global = CONFIG.pulse.t_global.copy()
 
         # Inner measurement: dual-sweep Ramsey so |Δω| is unconstrained
-        # during the search.
+        # during the search.  For transient mode, forward the kernel order /
+        # G₃ source so callers can widen the accurate range (order=3).
         self._meas = FrequencyMeasurement(
             qubit=self.qubit,
             method=self.measure_method,
@@ -939,7 +1035,49 @@ class SinglePointFrequencyCalibration(Calibration):
             t_rabi=self.t_rabi,
             t_global=self.t_global,
             f_artificial=None,
+            order=self.order,
+            g3_source=self.g3_source,
         )
+
+        # Non-default drive policies steer omega_d per iteration, which only the
+        # gradient loop threads (secant/bisection are not step-instrumented).
+        if (not (isinstance(self.drive_policy, str)
+                 and self.drive_policy == "sweet")
+                and self.step_method != "gradient"):
+            raise ValueError(
+                f"drive_policy={self.drive_policy!r} requires "
+                f"step_method='gradient'; got {self.step_method!r}."
+            )
+
+    # ------------------------------------------------------------------
+    def _resolve_omega_d(self, state: dict) -> float:
+        """Return the drive frequency for the iteration described by *state*.
+
+        The control error is always ``f_q − f_target`` (absolute); this only
+        chooses the reference the *detuning* is measured against, i.e. it keeps
+        the measurement inside its linear window. See the ``drive_policy`` field.
+        """
+        policy = self.drive_policy
+        if callable(policy):
+            return float(policy(state))
+        if policy == "sweet":
+            return float(self.qubit.frequency)
+        if policy == "target":
+            return float(self.f_target)
+        if policy == "track":
+            # First iteration (no prior estimate): use the seed estimate if
+            # given (f_{d,0} = f̂_{q,0}), else fall back to the sweet spot.
+            f_prev = state.get("f_hat_prev")
+            if f_prev is None:
+                return float(self.omega_d_seed
+                             if self.omega_d_seed is not None
+                             else self.qubit.frequency)
+            s_hat = state.get("s_hat")
+            if s_hat is None:
+                return float(f_prev)          # no slope yet: reuse last estimate
+            dV = state["V"] - state["V_prev"]
+            return float(f_prev + s_hat * dV)  # predict f_q at the new point
+        raise ValueError(f"unknown drive_policy={policy!r}.")
 
     # ------------------------------------------------------------------
     def calibrate(self) -> CalibrationTable:
@@ -997,6 +1135,12 @@ class SinglePointFrequencyCalibration(Calibration):
         V_prev = V_lo
         r_prev = self._meas.measure(V_lo) - f_target
 
+        # Sign of the residual at the lower bracket endpoint. Regula-falsi
+        # must replace whichever endpoint shares r_n's sign — hardcoding
+        # "r_n > 0 -> shrink V_hi" only holds when f increases with V, and
+        # breaks for monotonically-decreasing f(Phi) (qubit freq vs |flux|).
+        s_lo = 1.0 if r_prev > 0 else -1.0
+
         history: list[dict] = []
 
         while abs(r_n) > epsilon and n_iter < self.max_iter:
@@ -1022,12 +1166,14 @@ class SinglePointFrequencyCalibration(Calibration):
                 "f": float(f_n), "residual": float(r_n),
             })
 
-            # Bracket tightening (regula falsi)
+            # Bracket tightening (regula falsi): replace the endpoint whose
+            # residual shares r_n's sign, so the root stays bracketed
+            # regardless of whether f increases or decreases with V.
             if self.bracket_tightening:
-                if r_n > 0:
-                    V_hi = V_n
-                else:
+                if (r_n > 0) == (s_lo > 0):
                     V_lo = V_n
+                else:
+                    V_hi = V_n
 
         return self._build_result(f_target, V_n, r_n, n_iter, epsilon, history)
 
@@ -1130,8 +1276,14 @@ class SinglePointFrequencyCalibration(Calibration):
             else None
         )
 
-        f_n = self._meas.measure(V_n)
+        # --- seed measurement: resolve drive, measure, record diagnostics ---
+        omega_d = self._resolve_omega_d(
+            {"iter": 0, "V": V_n, "V_prev": V_n,
+             "f_hat_prev": None, "s_hat": None, "f_target": f_target}
+        )
+        f_n = self._meas.measure(V_n, omega_d=omega_d)
         e_n = f_n - f_target
+        delta_n = f_n - omega_d                    # local detuning (metrology)
         n_iter = 0
 
         # Track best point in case later iterations diverge
@@ -1139,17 +1291,27 @@ class SinglePointFrequencyCalibration(Calibration):
         best_residual = e_n
         best_abs_e = abs(e_n)
 
+        # Consecutive in-tolerance count (converge_streak de-bounce).
+        streak = 1 if abs(e_n) <= epsilon else 0
+        n_streak = max(1, int(self.converge_streak))
+
         history: list[dict] = []
         history.append({
             "iter": n_iter, "V": float(V_n),
             "f": float(f_n), "residual": float(e_n),
+            "omega_d": float(omega_d), "delta": float(delta_n),
             "is_best": True,
         })
 
         # ---- main loop ---------------------------------------------------
-        while abs(e_n) > epsilon and n_iter < self.max_iter:
+        while streak < n_streak and n_iter < self.max_iter:
             # --- compute step ---
-            if n_iter == 0:
+            s_secant = None                            # de/dV of last two pts
+            if abs(e_n) <= epsilon:
+                # Already in tolerance: hold position and re-measure to confirm
+                # (only reached when converge_streak > 1).
+                step = 0.0
+            elif n_iter == 0:
                 # No gradient yet: fixed probe step
                 step = self.first_bias_step * np.sign(e_n)
             else:
@@ -1158,6 +1320,8 @@ class SinglePointFrequencyCalibration(Calibration):
                 if abs(de) > 1e-15:
                     grad_inv = dV / de                     # dB/de
                     step = self.damping * e_n * grad_inv   # damped secant
+                    if abs(dV) > 1e-15:
+                        s_secant = de / dV                 # local ∂f_q/∂V
                 else:
                     # Gradient undefined: reuse probe step
                     step = self.first_bias_step * np.sign(e_n)
@@ -1166,17 +1330,41 @@ class SinglePointFrequencyCalibration(Calibration):
             step = float(np.clip(step, -self.max_bias_step, self.max_bias_step))
 
             # Apply step
-            V_prev, e_prev = V_n, e_n
+            f_prev_hat, V_prev, e_prev = f_n, V_n, e_n
             V_n = V_n - step
 
             # Clamp V_n into optional bounds
             if V_lo is not None:
                 V_n = max(V_lo, min(V_hi, V_n))
 
-            # Measure at new point
-            f_n = self._meas.measure(V_n)
+            # --- resolve drive frequency for this iteration ---
+            # Local sensitivity s_hat = ∂f_q/∂V. "secant" uses the slope of the
+            # last two measured points (model-free); "model" uses the analytic
+            # dispersion at the point we just stepped from.
+            if self.sensitivity_source == "model":
+                s_hat = float(self.qubit.frequency_sensitivity(V_prev))
+            else:
+                s_hat = s_secant
+            omega_d = self._resolve_omega_d({
+                "iter": n_iter + 1, "V": V_n, "V_prev": V_prev,
+                "f_hat_prev": f_prev_hat, "s_hat": s_hat, "f_target": f_target,
+            })
+
+            # Measure at new point (relative to the resolved drive)
+            f_n = self._meas.measure(V_n, omega_d=omega_d)
             e_n = f_n - f_target
+            delta_n = f_n - omega_d
             n_iter += 1
+
+            # Convergence de-bounce: count consecutive in-tolerance iterations.
+            streak = streak + 1 if abs(e_n) <= epsilon else 0
+
+            # Linear-range guard: flag when the local detuning leaves the
+            # protocol's trustworthy window (caller may trigger re-acquire).
+            out_of_range = (
+                self.linear_range is not None
+                and abs(delta_n) > self.rho * self.linear_range
+            )
 
             # Track best point
             is_best = abs(e_n) < best_abs_e
@@ -1188,8 +1376,33 @@ class SinglePointFrequencyCalibration(Calibration):
             history.append({
                 "iter": n_iter, "V": float(V_n),
                 "f": float(f_n), "residual": float(e_n),
+                "omega_d": float(omega_d), "delta": float(delta_n),
+                "out_of_range": bool(out_of_range),
                 "is_best": is_best,
             })
+
+            # Optional early stop: hand the caller a rich per-step state so it
+            # can switch phase on gradient/stall/divergence/budget signals that
+            # a plain residual threshold cannot express.
+            if self.stop_predicate is not None:
+                state = {
+                    "iter": n_iter,
+                    "V": float(V_n),
+                    "residual": float(e_n),
+                    "abs_residual": float(abs(e_n)),
+                    "step": float(step),
+                    "de": float(e_n - e_prev),
+                    "dV": float(V_n - V_prev),
+                    "delta": float(delta_n),
+                    "out_of_range": bool(out_of_range),
+                    "best_abs_residual": float(best_abs_e),
+                    "history": history,
+                }
+                if self.stop_predicate(state):
+                    stopped_by = "predicate"
+                    break
+        else:
+            stopped_by = "tolerance" if abs(e_n) <= epsilon else "max_iter"
 
         return self._build_result(
             f_target, best_V, best_residual,
@@ -1198,6 +1411,7 @@ class SinglePointFrequencyCalibration(Calibration):
                 "damping": self.damping,
                 "first_bias_step": self.first_bias_step,
                 "max_bias_step": self.max_bias_step,
+                "stopped_by": stopped_by,
             },
         )
 
