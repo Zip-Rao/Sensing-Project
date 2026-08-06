@@ -11,9 +11,9 @@ It models the flux → qubit-frequency transduction chain across an eight-layer
 cQED stack and reconstructs the sensed waveform from simulated measurements.
 
 The three built-in research pipelines (waveform reconstruction, frequency
-calibration, predistortion) are **worked examples** of composing the layers —
+calibration, predistortion) are **worked examples** of composing the layers,
 not the boundary of what the platform can do. Every layer exposes an extension
-interface so you can build your own sensing applications.
+interface for building new sensing applications.
 
 ```{toctree}
 :maxdepth: 2

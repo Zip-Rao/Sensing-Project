@@ -2,16 +2,16 @@
 
 ## 这层提供什么
 
-`simulation` 层是全栈的**求解器层**——夹在 {doc}`control`(产出脉冲与
-Hamiltonian 素材)和 {doc}`experiments`(编排完整协议)之间,只负责三件事:
-**把器件与信号组装成时变 Hamiltonian、驱动 QuTiP 求解器跑时间演化、把输出装进
-统一的结果容器**。它不含任何协议编排逻辑(那在 experiments 层),也不含任何
-重建/反演逻辑(那在 {doc}`reconstruction` 层)。
+`simulation` 层是全栈的求解器层,夹在 {doc}`control`(产出脉冲与 Hamiltonian
+素材)和 {doc}`experiments`(编排完整协议)之间,只负责三件事:把器件与信号
+组装成时变 Hamiltonian、驱动 QuTiP 求解器跑时间演化、把输出装进统一的结果
+容器。它不含任何协议编排逻辑(那在 experiments 层),也不含任何重建/反演逻辑
+(那在 {doc}`reconstruction` 层)。
 
-一条贯穿本层的设计约束:**Hamiltonian 构造是纯函数**——`HamiltonianBuilder`
-只读 `qubit` / `flux_signal` / `pulse`,输出 QuTiP list 格式的 `H_list` 与全局
-时间轴,**绝不就地修改任何输入对象**。这样同一组器件与信号可被不同参考系、
-不同求解器反复复用,不留副作用。
+一条贯穿本层的设计约束:Hamiltonian 构造是纯函数。`HamiltonianBuilder` 只读
+`qubit` / `flux_signal` / `pulse`,输出 QuTiP list 格式的 `H_list` 与全局时间轴,
+绝不就地修改任何输入对象。这样同一组器件与信号可被不同参考系、不同求解器反复
+复用,不留副作用。
 
 所有时间轴以 ns 计,且统一从 `sqc.config.CONFIG.awg.dt` 派生(见 {doc}`control`),
 本层沿用同一栅格,保证脉冲、磁通、自由演化能无缝拼接。
@@ -30,21 +30,22 @@ Hamiltonian 素材)和 {doc}`experiments`(编排完整协议)之间,只负责三
 | `extract_population` | 抽取函数 | 从 `result.states` 取某 Fock 能级布居 |
 | `generate_1f_noise` | 噪声生成 | FFT 法生成 $1/f$ 噪声时间序列 |
 
-## HamiltonianBuilder —— 时变 Hamiltonian 构造器
+## HamiltonianBuilder：时变 Hamiltonian 构造器
 
 本层的入口。把器件、磁通信号、控制脉冲组装成 `mesolve` 所需的 QuTiP list 格式
-Hamiltonian。**纯函数、无副作用**:所有方法是 `@staticmethod`,不改任何输入。
+Hamiltonian。它是纯函数、无副作用:所有方法是 `@staticmethod`,不改任何输入。
 
-**接口**:`HamiltonianBuilder.build(qubit, flux_signal=None, pulse=None,
-frame="rotating", omega_d=None) -> (H_list, t_global)`。
+**接口**
 
-- `qubit` —— `QubitSpec` 或 `TransmonQubit`(后者会自动调 `.spec()` 取内部
-  `QubitSpec`)。
-- `flux_signal` —— 磁通信号(需有 `.t_list` 与 `.samples`/`.signal`)。传 `None`
-  时退化为**静态** Hamiltonian,时间轴取 `CONFIG.pulse.make_time(0, 100)`。
-- `pulse` —— 控制脉冲;非 `None` 时把 `pulse.hamiltonian` 的各项追加进 `H_list`。
-- `frame` —— `"lab"`(实验室系)或 `"rotating"`(旋转系)。旋转系下频率系数减去
-  `omega_d`(默认取比特甜点频率 `spec.frequency()`)。
+`HamiltonianBuilder.build(qubit, flux_signal=None, pulse=None, frame="rotating", omega_d=None) -> (H_list, t_global)`
+
+| 参数 | 类型 | 含义 |
+|---|---|---|
+| `qubit` | `QubitSpec` 或 `TransmonQubit` | 器件参数(后者自动调 `.spec()`) |
+| `flux_signal` | `FluxSignal` | 磁通信号;`None` 时退化为静态 Hamiltonian |
+| `pulse` | `Pulse` 或 `CompositePulse` | 控制脉冲;非 `None` 时追加进 `H_list` |
+| `frame` | str | `"lab"`(实验室系)或 `"rotating"`(旋转系) |
+| `omega_d` | float | 驱动频率;默认取比特甜点频率 `spec.frequency()` |
 
 **返回的 `H_list` 结构**(与 `src/qubit.py:qubit_in_mag` 逐位对齐):
 
@@ -54,56 +55,95 @@ H_1 = \big(n + \tfrac12 I\big)\cdot \omega_{01}(\Phi(t))$$
 其中 $H_0$ 是常数系数项(非谐性),$H_1$ 的系数数组来自逐时刻代入磁通
 $\omega_{01}(\Phi(t))=$ `spec.frequency(spec.flux_bias + s)`。
 
+**输出**
+
+返回 `(H_list, t_global)` 元组:`H_list` 可直接喂给 `MesolveRunner.run()`,
+`t_global` 为全局时间轴。
+
 ```{note}
-两种参考系都写成 `n + 0.5*I`。那个 `0.5*I` 是一个**常数能量平移**,不影响动力学,
-保留它纯粹是为了与 `src/qubit.py:qubit_in_mag` 的输出逐位一致(回归基线依赖此)。
+两种参考系都写成 `n + 0.5*I`。那个 `0.5*I` 是一个常数能量平移,不影响动力学,
+保留它是为了与 `src/qubit.py:qubit_in_mag` 的输出逐位一致(回归基线依赖此)。
 ```
 
-## RunnerBase —— 求解器抽象基类
+## RunnerBase：求解器抽象基类
 
-所有仿真求解器的公共契约,是本层的**扩展点**。它只规定一个抽象方法:
+所有仿真求解器的公共契约,是本层的扩展点。它只规定一个抽象方法:
 
-- `run(*args, **kwargs)` —— 执行时间演化,返回一个 `ExperimentResult`。
+- `run(*args, **kwargs)`:执行时间演化,返回一个 `ExperimentResult`。
 
 要接入新的求解器(如 `sesolve`、蒙特卡洛轨迹、外部数值后端),继承 `RunnerBase`
 并实现 `run()`、令其返回 `ExperimentResult` 即可,详见 {doc}`../extending`。
 
-## MesolveRunner —— 主方程求解器
+## MesolveRunner：主方程求解器
 
-本层的主力求解器,直接封装 `qutip.mesolve`。`@dataclass`,唯一字段
-`options`(传给 `mesolve` 的选项字典,`None` 即用默认)。
+本层的主力求解器,直接封装 `qutip.mesolve`。
 
-**接口**:`run(H_list, psi0, t_list, c_ops, e_ops, store_states=False)
--> ExperimentResult`。
+**构造**
 
-- `H_list` —— `HamiltonianBuilder.build` 产出的 list 格式 Hamiltonian(内部用
-  `QobjEvo(H_list, tlist=t_list, order=1)` 包裹)。
-- `psi0` / `c_ops` / `e_ops` —— 初态、坍缩算符、期望算符(后两者常直接取
-  `qubit.get_collapse_operators()` 与自定义投影算符)。
-- `store_states` —— 是否保留每一步的态(供 `extract_population` 用)。
+`MesolveRunner(options=None)`
 
-返回的 `ExperimentResult` 中:`data["expect"]` 为期望值数组、`data["states"]`
-为态列表(未开 `store_states` 时为 `None`)、`axes["t"]` 为时间轴。
+**字段**
 
-## SlidingMeasurementRunner —— 滑动测量求解器
+| 字段 | 类型 | 含义 | 默认 |
+|---|---|---|---|
+| `options` | dict 或 None | 传给 `mesolve` 的选项字典 | `None`(用默认) |
 
-把控制脉冲在磁通信号上**逐延迟滑动**,在每个延迟点跑一次演化、测末态激发态
-布居 $p_e$,得到 $p_e$ 随延迟变化的一维迹。它内化了旧
+**方法**
+
+- `run(H_list, psi0, t_list, c_ops, e_ops, store_states=False) -> ExperimentResult`：
+
+| 参数 | 类型 | 含义 |
+|---|---|---|
+| `H_list` | list | `HamiltonianBuilder.build` 产出的 list 格式 Hamiltonian |
+| `psi0` | `Qobj` | 初态 |
+| `t_list` | `np.ndarray` | 时间轴(ns) |
+| `c_ops` | `list[Qobj]` | 坍缩算符(常取 `qubit.get_collapse_operators()`) |
+| `e_ops` | `list[Qobj]` | 期望算符(如投影算符) |
+| `store_states` | bool | 是否保留每一步的态(供 `extract_population` 用) |
+
+内部用 `QobjEvo(H_list, tlist=t_list, order=1)` 包裹 `H_list`。
+
+**输出**
+
+返回 `ExperimentResult`,其中:
+- `data["expect"]`：期望值数组(形状 `(len(t_list),)`)
+- `data["states"]`：态列表(未开 `store_states` 时为 `None`)
+- `axes["t"]`：时间轴
+
+## SlidingMeasurementRunner：滑动测量求解器
+
+把控制脉冲在磁通信号上逐延迟滑动,在每个延迟点跑一次演化、测末态激发态布居
+$p_e$,得到 $p_e$ 随延迟变化的一维迹。它内化了旧
 `src/protocal.py:Protocal.sliding_measrement` / `single_measurement` 的逻辑
-(旧拼写 `sliding_measrement` 仅在 `src_mirror` 兼容层保留)。`@dataclass`,
-字段同样是 `options`。
+(旧拼写 `sliding_measrement` 仅在 `src_mirror` 兼容层保留)。
 
-**接口**:`run(qubit, phi_signal, control_pulse, scan_list=None)
--> ExperimentResult`。
+**构造**
 
-- `qubit` —— 比特对象(需支持 `qubit_under_mag`,即逐时刻磁通下的比特序列)。
-- `phi_signal` —— 磁通信号(需有 `.t_list` 与 `.value_at()`)。
-- `control_pulse` —— 控制脉冲(`CompositePulse`)。
-- `scan_list` —— 延迟扫描轴;传 `None` 时按 `CONFIG.awg.dt` 自动生成(覆盖脉冲与
-  信号完整交叠的范围)。
+`SlidingMeasurementRunner(options=None)`
 
-返回的 `ExperimentResult` 中:`data["p_e"]` 为各延迟的激发态布居、
-`axes["scan"]` 为延迟轴、`metadata["elapsed"]` 记录耗时。
+**字段**
+
+| 字段 | 类型 | 含义 | 默认 |
+|---|---|---|---|
+| `options` | dict 或 None | 传给 `mesolve` 的选项字典 | `None`(用默认) |
+
+**方法**
+
+- `run(qubit, phi_signal, control_pulse, scan_list=None) -> ExperimentResult`：
+
+| 参数 | 类型 | 含义 |
+|---|---|---|
+| `qubit` | `TransmonQubit` | 比特(需支持 `qubit_under_mag`) |
+| `phi_signal` | `FluxSignal` | 磁通信号(需有 `.t_list` 与 `.value_at()`) |
+| `control_pulse` | `CompositePulse` | 控制脉冲 |
+| `scan_list` | `np.ndarray` | 延迟扫描轴;`None` 时自动生成 |
+
+**输出**
+
+返回 `ExperimentResult`,其中:
+- `data["p_e"]`：各延迟的激发态布居
+- `axes["scan"]`：延迟轴
+- `metadata["elapsed"]`：耗时
 
 ```{note}
 `SlidingMeasurementRunner` 内部对每个延迟点用收紧的容差
@@ -114,36 +154,53 @@ $\omega_{01}(\Phi(t))=$ `spec.frequency(spec.flux_bias + s)`。
 
 ### ExperimentResult
 
-可序列化的结果容器,`@dataclass`,四个字典字段:
+可序列化的结果容器。
 
-| 字段 | 含义 |
-|---|---|
-| `data` | 具名数据数组(`expect`、`p_e`、`states` 等) |
-| `axes` | 具名坐标轴(`t`、`scan`、`tau` 等) |
-| `metadata` | 自由元数据(求解器名、耗时、协议类型等) |
-| `config` | 仿真配置快照(EC、EJ、n_levels 等) |
+**构造**
 
-**方法**:`save(path)` —— pickle 落盘(protocol 5);`ExperimentResult.load(path)`
-(classmethod)—— 读回,类型不符时抛 `TypeError`。
+`ExperimentResult(data=None, axes=None, metadata=None, config=None)`
+
+**字段**
+
+| 字段 | 类型 | 含义 |
+|---|---|---|
+| `data` | dict | 具名数据数组(`expect`、`p_e`、`states` 等) |
+| `axes` | dict | 具名坐标轴(`t`、`scan`、`tau` 等) |
+| `metadata` | dict | 自由元数据(求解器名、耗时、协议类型等) |
+| `config` | dict | 仿真配置快照(EC、EJ、n_levels 等) |
+
+**方法**
+
+- `save(path)`：pickle 落盘(protocol 5)。
+- `ExperimentResult.load(path) -> ExperimentResult`(classmethod)：读回,类型不符时抛
+  `TypeError`。
 
 ### MeasurementTrace
 
-`@dataclass(frozen=True)`,表示单条一维扫描迹:字段 `axis`(扫描轴)、
-`p_e`(激发态布居)、`p_e_iq`(I/Q 投影,可为 `None`)、`metadata`。
+`@dataclass(frozen=True)`,表示单条一维扫描迹。
+
+**字段**
+
+| 字段 | 类型 | 含义 |
+|---|---|---|
+| `axis` | `np.ndarray` | 扫描轴 |
+| `p_e` | `np.ndarray` | 激发态布居 |
+| `p_e_iq` | `np.ndarray` 或 None | I/Q 投影(可选) |
+| `metadata` | dict | 附加元数据 |
 
 ### 抽取函数
 
-- `extract_expectation(result, e_ops_index=0) -> np.ndarray` —— 从 QuTiP
+- `extract_expectation(result, e_ops_index=0) -> np.ndarray`：从 QuTiP
   `mesolve`/`sesolve` result 取第 `e_ops_index` 个期望值数组;无 `.expect` 时抛
   `ValueError`。
-- `extract_population(result, level) -> np.ndarray` —— 从 `result.states`
+- `extract_population(result, level) -> np.ndarray`：从 `result.states`
   逐步投影取第 `level` 个 Fock 能级的布居(需求解时开 `store_states=True`);无
   `.states` 时抛 `ValueError`。
 
-## generate_1f_noise —— 1/f 噪声生成
+## generate_1f_noise：1/f 噪声生成
 
 `generate_1f_noise(t_list, amplitude, f_min, f_max, seed=None) -> np.ndarray`
-—— FFT 法生成实值 $1/f$ 噪声时间序列:在 $[f_{\min}, f_{\max}]$ 频段内按
+FFT 法生成实值 $1/f$ 噪声时间序列:在 $[f_{\min}, f_{\max}]$ 频段内按
 $1/\sqrt{f}$ 谱密度填复高斯谱、强制厄米对称后逆变换取实部。`seed` 固定后可复现。
 用于给磁通/频率注入 $1/f$ 类退相干噪声。
 
@@ -178,12 +235,11 @@ res.save("run.pkl")                       # 结果落盘(可 ExperimentResult.lo
 
 ## 物理角色 / 扩展
 
-- `HamiltonianBuilder` 对应"把物理器件 + 施加的磁通/微波场写成含时 Hamiltonian"
-  这一步——是仿真的建模环节,不涉及任何数值积分。
-- `MesolveRunner` 对应开放系统的**主方程时间演化**(含 $T_1$/$T_2$ 耗散);
-  `SlidingMeasurementRunner` 对应瞬态场感知里"滑动测量窗"那类扫描式实验。
+- `HamiltonianBuilder` 对应把物理器件与施加的磁通/微波场写成含时 Hamiltonian
+  这一步,是仿真的建模环节,不涉及任何数值积分。
+- `MesolveRunner` 对应开放系统的主方程时间演化(含 $T_1$/$T_2$ 耗散);
+  `SlidingMeasurementRunner` 对应瞬态场感知里滑动测量窗那类扫描式实验。
 - `ExperimentResult` 对应一次实验/仿真的原始输出记录,是 {doc}`experiments`、
   {doc}`reconstruction` 各层的统一数据接口。
-- **要接入自定义求解器**,继承 `RunnerBase` 实现 `run()` 并返回 `ExperimentResult`;
+- 要接入自定义求解器,继承 `RunnerBase` 实现 `run()` 并返回 `ExperimentResult`;
   完整扩展指南见 {doc}`../extending`。
-

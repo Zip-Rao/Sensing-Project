@@ -254,6 +254,9 @@ class SensingWorkflow(Workflow):
             "pulse": {
                 "t_rabi_duration": 20.0, "t_global_start": -50.0,
                 "t_global_end": 400.0,
+                "rotation_angle": np.pi / 2, "rabi_rate": None,
+                "envelope": "square", "envelope_sigma": None,
+                "phase1": np.pi / 2, "phase2": 0.0,
             },
             "hardware": {
                 "sample_rate": 2.0,
@@ -301,6 +304,12 @@ class SensingWorkflow(Workflow):
         t_rabi_duration: float | None = None,
         t_global_start: float | None = None,
         t_global_end: float | None = None,
+        rotation_angle: float | None = None,
+        rabi_rate: float | None = None,
+        pulse_envelope: object | None = None,
+        envelope_sigma: float | None = None,
+        phase1: float | None = None,
+        phase2: float | None = None,
         # ── Hardware ─────────────────────────────────────────────────
         sample_rate: float | None = None,
         # ── catch-all (ignored) ──────────────────────────────────────
@@ -325,7 +334,8 @@ class SensingWorkflow(Workflow):
         ``lm_basis_type``, ``use_adjoint``.
 
         **Pulse** — ``t_rabi_duration``, ``t_global_start``,
-        ``t_global_end`` (all in ns).
+        ``t_global_end`` (all in ns), ``rotation_angle``, ``rabi_rate``,
+        ``pulse_envelope``, ``envelope_sigma``, ``phase1``, ``phase2``.
 
         **Hardware** — ``sample_rate`` (GSa/s).
         """
@@ -367,6 +377,16 @@ class SensingWorkflow(Workflow):
         if t_rabi_duration is not None:  pp["t_rabi_duration"] = t_rabi_duration
         if t_global_start is not None:   pp["t_global_start"] = t_global_start
         if t_global_end is not None:     pp["t_global_end"] = t_global_end
+        if rotation_angle is not None:
+            pp["rotation_angle"] = rotation_angle
+            pp["rabi_rate"] = None
+        if rabi_rate is not None:
+            pp["rabi_rate"] = rabi_rate
+            pp["rotation_angle"] = None
+        if pulse_envelope is not None:   pp["envelope"] = pulse_envelope
+        if envelope_sigma is not None:   pp["envelope_sigma"] = envelope_sigma
+        if phase1 is not None:           pp["phase1"] = phase1
+        if phase2 is not None:           pp["phase2"] = phase2
 
         hp = self._params["hardware"]
         if sample_rate is not None:   hp["sample_rate"] = sample_rate
@@ -504,6 +524,10 @@ class SensingWorkflow(Workflow):
         for val in values:
             # update parameter
             self._params[group][field] = val
+            if group == "pulse" and field == "rotation_angle":
+                self._params["pulse"]["rabi_rate"] = None
+            elif group == "pulse" and field == "rabi_rate":
+                self._params["pulse"]["rotation_angle"] = None
             # re-sync config (needed if pulse/hardware group)
             if group in ("pulse", "hardware"):
                 self._sync_config()
@@ -859,6 +883,12 @@ class SensingWorkflow(Workflow):
                 qubit=qubit,
                 flux_signal=flux_signal,
                 t_rabi=self._cfg.pulse.t_rabi.copy(),
+                rotation_angle=self._params["pulse"]["rotation_angle"],
+                rabi_rate=self._params["pulse"]["rabi_rate"],
+                envelope=self._params["pulse"]["envelope"],
+                envelope_sigma=self._params["pulse"]["envelope_sigma"],
+                phase1=self._params["pulse"]["phase1"],
+                phase2=self._params["pulse"]["phase2"],
             )
         elif protocol == "ramsey":
             from sqc.experiments.ramsey import RamseyExperiment
@@ -950,13 +980,19 @@ class SensingWorkflow(Workflow):
                 qubit=qubit,
                 method=method,
             )
-            B = rec.reconstruct(measurement)
-            # RamseyReconstruction returns np.ndarray, wrap in FluxSignal
-            tau = measurement.axes.get("tau", measurement.axes.get("scan"))
-            if tau is not None:
-                fs = FluxSignal(type=8, t_list=tau, signal=B)
+            # Use the offset-corrected absolute-time axis so the wrapped
+            # FluxSignal lines up with the true flux (free evolution starts
+            # after the first pi/2 pulse, not at global t=0).
+            if "tau" in measurement.axes:
+                t_axis, B = rec.reconstruct_with_time(measurement)
+                fs = FluxSignal(type=8, t_list=t_axis, signal=B)
             else:
-                fs = FluxSignal(type=8, t_list=np.arange(len(B)), signal=B)
+                B = rec.reconstruct(measurement)
+                tau = measurement.axes.get("scan")
+                if tau is not None:
+                    fs = FluxSignal(type=8, t_list=tau, signal=B)
+                else:
+                    fs = FluxSignal(type=8, t_list=np.arange(len(B)), signal=B)
             return fs, details
 
         elif protocol == "echo":

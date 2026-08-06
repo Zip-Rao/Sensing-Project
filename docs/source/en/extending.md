@@ -1,8 +1,8 @@
 # Extending the Platform
 
 The three built-in pipelines are examples, not limits. Every layer of the stack
-exposes an abstract base class; subclass it and your object composes with the
-rest of the platform. This page gives the two most common recipes.
+exposes an abstract base class; subclass it and the new object composes with the
+rest of the platform. This page gives the two most common patterns.
 
 ## Add a new experiment protocol
 
@@ -47,7 +47,7 @@ class MyProtocolExperiment(Experiment):
 ```
 
 An {py:class}`~sqc.simulation.ExperimentResult` carries `data`, `axes`,
-`metadata`, and `config` dicts — the uniform contract every experiment returns.
+`metadata`, and `config` dicts, the uniform contract every experiment returns.
 
 ## Add a new reconstruction algorithm
 
@@ -88,5 +88,5 @@ and compared against the built-in methods with
 | calibration | {py:class}`~sqc.calibration.Calibration` | a new calibration routine |
 | workflows | {py:class}`~sqc.workflows.Workflow` | a new end-to-end pipeline |
 
-Follow the dependency rule ({doc}`architecture`): your subclass may import from
+Follow the dependency rule ({doc}`architecture`): a subclass may import from
 layers below it, never above.

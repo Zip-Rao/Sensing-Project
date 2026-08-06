@@ -1,0 +1,49 @@
+\section{Numerical parameters and cost accounting}
+\label{app:methods}
+
+The parameters used for the frozen numerical results are summarized in
+Table~\ref{tab:parameters}.  Frequencies in the simulation are angular
+frequencies; reported errors are divided by $2\pi$ and expressed in megahertz.
+
+\begin{center}
+ \refstepcounter{table}
+ \label{tab:parameters}
+ \begin{minipage}{\columnwidth}
+ \small\textsc{Table \thetable.} Parameters of the numerical calibration
+ benchmark.\par\smallskip
+ \centering
+ \begin{tabular}{lc}
+ \toprule
+ Parameter & Value \\
+ \midrule
+ $E_C/h$ & $0.2$ GHz \\
+ $E_J/h$ & $10$ GHz \\
+ Reference flux & $0.9553166\Phi_0$ \\
+ $T_1$ & $100~\mu$s \\
+ $T_2$ & $50~\mu$s \\
+ Hilbert-space dimension & 2 \\
+ Sampling interval & $0.5$ ns \\
+ $\pi/2$ pulse window & $10$ ns \\
+ Closed-loop target shift & $-20$ MHz \\
+ Residual tolerance & $0.016$ MHz \\
+ Damping factor & $0.8$ \\
+ Maximum flux step & $0.02\Phi_0$ \\
+ \bottomrule
+ \end{tabular}
+ \end{minipage}
+\end{center}
+
+For the accuracy--cost benchmark, Ramsey free-evolution times span
+$0\leq\tau<200$~ns with spacings of 0.5, 1, or 2~ns.  Double-sweep Ramsey uses
+two artificial-detuning scans; single-sweep Ramsey uses one.  The transient
+measurement requires two final-state simulations.  The fitted cubic route pays
+an additional one-time calibration cost, which is amortized across the five
+flux offsets in Fig.~\ref{fig:pareto}.
+
+The closed-loop benchmark instruments all calls made through the frequency
+measurement and kernel-estimation paths.  Calls to the master-equation solver
+and the state-vector solver are assigned equal unit cost.  The latter is
+typically cheaper, so the reported transient advantage in solver-call units is
+conservative.  Final residuals are recomputed from the analytic transmon
+dispersion at the returned flux point and are not taken from the internal
+measurement history.

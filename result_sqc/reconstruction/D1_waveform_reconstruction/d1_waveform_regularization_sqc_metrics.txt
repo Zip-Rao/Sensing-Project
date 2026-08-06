@@ -1,0 +1,35 @@
+D1 waveform reconstruction and regularization metrics
+========================================================================
+control envelope = gaussian
+control rotation angle = 1.5707963268 rad (pi/2)
+Gaussian sigma = 2 ns
+kernel points = 40
+top-row Wiener lambda_W = 10
+double-peak NRMSE = 3.48352e-02
+double-peak peak ratio = 0.94905
+double-peak LM NRMSE = 4.20121e-03
+double-peak LM peak ratio = 0.98829
+complex-waveform NRMSE = 5.93752e-02
+complex-waveform peak ratio = 1.11107
+complex-waveform LM NRMSE = 3.98881e-02
+complex-waveform LM peak ratio = 0.95120
+
+Step-like waveform regularization scan
+lambda_W      NRMSE       peak_ratio   correlation
+     0.1  4.59336e-02      1.11441    0.9959073
+     0.2  4.59276e-02      1.11435    0.9959086
+     0.5  4.58947e-02      1.11411    0.9959137
+       1  4.58020e-02      1.11385    0.9959193
+       2  4.54632e-02      1.11305    0.9959266
+       3  4.49136e-02      1.11139    0.9959332
+       5  4.32027e-02      1.10530    0.9959470
+     7.5  4.00333e-02      1.09256    0.9959616
+      10  3.59824e-02      1.07451    0.9959674
+      15  2.74145e-02      1.02498    0.9959336
+      20  2.54435e-02      0.96308    0.9958225
+      30  5.34418e-02      0.82149    0.9953812
+      50  1.28115e-01      0.56065    0.9941256
+
+baseline lambda_W = 5
+step-specific minimum NRMSE lambda_W = 20
+The minimum is specific to this cached noiseless step-like signal.

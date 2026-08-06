@@ -1182,8 +1182,18 @@ def build_app():
 
                 with gr.Row():
                     with gr.Column(scale=1):
+                        # "Differential Echo" is hidden from the v1 demo
+                        # (SHOW_EXPERIMENTAL=False): its closed-form retrieval
+                        # B = -phi/(2k·kappa·t_int) is not yet reliable
+                        # (t_int mis-derived from gap timing, off-scale B).
+                        # See RELEASE_TODO.md. Implementation stays importable
+                        # via sqc.experiments.echo.DiffEchoExperiment.
+                        _proto_choices = [
+                            p for p in PROTOCOL_INFO.keys()
+                            if SHOW_EXPERIMENTAL or p != "Differential Echo"
+                        ]
                         protocol = gr.Dropdown(
-                            list(PROTOCOL_INFO.keys()),
+                            _proto_choices,
                             value="Ramsey", label="Protocol",
                         )
                         proto_info = gr.HTML(protocol_info_html("Ramsey"))

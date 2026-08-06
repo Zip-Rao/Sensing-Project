@@ -370,6 +370,41 @@ class Pulse(PulseBase):
             trigger=self.trigger,
         )
 
+    # -- Copy helper -------------------------------------------------------
+
+    def _copy(self) -> "Pulse":
+        """Return an exact copy of this Pulse (no phase change)."""
+        return Pulse(
+            frame=self.frame,
+            omega_d=self.omega_d,
+            phase=self.phase,
+            Omega=self.Omega,
+            Omega_Q=self.Omega_Q,
+            is_rwa=self.is_rwa,
+            qubit=self.qubit,
+            trigger=self.trigger,
+        )
+
+    # -- Multi-kick phase shift (Virtual Z) --------------------------------
+
+    def with_phase_kicks(self, kicks: list[tuple[float, float]]) -> "Pulse":
+        """Return new Pulse with cumulative phase from multiple kicks.
+
+        A single Pulse has no sub-pulse structure, so all kicks are applied
+        as a single cumulative phase shift.
+
+        Parameters
+        ----------
+        kicks : list[tuple[float, float]]
+            List of ``(t_kick, delta_phi)`` tuples.
+
+        Returns
+        -------
+        Pulse
+        """
+        total = sum(dphi for _, dphi in kicks)
+        return self.with_phase_shift(total) if total != 0.0 else self._copy()
+
     # -- get_kernel (DEPRECATED shim → KernelEstimator, Phase 10.5) --------
 
     def get_kernel(self, qubit, t_samples=None, *,
@@ -600,6 +635,40 @@ class CompositePulse(PulseBase):
                     qubit=p.qubit,
                     trigger=p.trigger,
                 ))
+        return CompositePulse(new_pulses)
+
+    # -- Multi-kick phase shift (Virtual Z) --------------------------------
+
+    def with_phase_kicks(
+        self, kicks: list[tuple[float, float]]
+    ) -> "CompositePulse":
+        """Return new CompositePulse with sub-pulses phase-shifted by
+        multiple kicks.
+
+        Generalises :meth:`with_phase_shift` (the single-kick special
+        case).  For each sub-pulse, phase contributions from all kicks
+        whose time ≤ the sub-pulse's ``trigger`` are summed.
+
+        Parameters
+        ----------
+        kicks : list[tuple[float, float]]
+            List of ``(t_kick, delta_phi)`` tuples, sorted by ``t_kick``
+            ascending.  A sub-pulse at trigger ``t`` accumulates
+            ``sum(delta_phi for t_k, delta_phi in kicks if t >= t_k)``.
+
+        Returns
+        -------
+        CompositePulse
+        """
+        new_pulses = []
+        for p in self.pulses:
+            cumulative = sum(
+                dphi for t_k, dphi in kicks if p.trigger >= t_k
+            )
+            if cumulative != 0.0:
+                new_pulses.append(p.with_phase_shift(cumulative))
+            else:
+                new_pulses.append(p._copy())
         return CompositePulse(new_pulses)
 
     # -- get_kernel (DEPRECATED shim → KernelEstimator, Phase 10.5) --------

@@ -1,6 +1,6 @@
 # Sensing-Project 全栈化重构平台 — 技术文档
 
-> 版本: v2.13 | 日期: 2026-07-17 | 适用于 sqc v1.0.0
+> 版本: v2.18 | 日期: 2026-08-04 | 适用于 sqc v1.0.0
 >
 > 本文档按照 **Gao, Rol, Touzard, Wang 2021**（PRX Quantum 2, 040202）所提出的 cQED 六层全栈架构组织。
 > 每一章既给出物理动机，又详尽介绍代码模块、扩展接口与开发规范。
@@ -610,7 +610,7 @@ H_pulse = pulse.hamiltonian     # QuTiP list format
 ```python
 from sqc.control.sequence import (
     create_pulse,             # 单脉冲
-    create_ramsey_pulse,      # π/2 — τ — π/2
+    create_ramsey_pulse,      # configurable α — τ — α (default π/2)
     create_echo_pulse,        # π/2 — τ — π — τ — π/2
     create_diff_echo_pulse,   # π/2 — [echo]^k — π/2
     create_cpmg_pulse,        # CPMG 序列
@@ -619,6 +619,13 @@ from sqc.control.sequence import (
 
 t_rabi = CONFIG.pulse.t_rabi
 ramsey = create_ramsey_pulse(t_rabi, tau=100.0, omega_d=q.frequency, qubit=q)
+
+# Herb型固定驱动扫描：改变时间轴时，实际转角由 ∫Ω(t)dt 决定
+short = create_ramsey_pulse(
+    t_short, tau=0.0, omega_d=q.frequency, qubit=q,
+    rabi_rate=omega_max, phase1=np.pi / 2, phase2=0.0,
+    envelope="square",
+)
 ```
 
 **重要**：所有自由演化空隙（`Omega_0` 段）的时间轴使用 `CONFIG.awg.dt` 派生（v2.0 全局配置），不再硬编码 `np.linspace(0, tau, 100)`。
@@ -626,16 +633,44 @@ ramsey = create_ramsey_pulse(t_rabi, tau=100.0, omega_d=q.frequency, qubit=q)
 #### 4.3.5 门函数 (`sqc/control/gates.py`)
 
 ```python
-from sqc.control.gates import ideal_iSWAP, simulate_iSWAP, ideal_CZ, simulate_CZ
+from sqc.control.gates import (
+    ideal_iSWAP, simulate_iSWAP,
+    ideal_CZ, simulate_CZ,
+    simulate_cz_from_flux, CZResult,     # v2.6+ waveform-driven CZ
+)
 U_iswap = ideal_iSWAP()
 fidelity, U_sim = simulate_iSWAP(qubit1, qubit2, g, duration)
+
+# v2.6+: 波形驱动 CZ（接收显式时间轴和片上磁通，经色散关系 Φ→ω 转换后仿真）
+result = simulate_cz_from_flux(t, phi_chip, qubit1, qubit2, g)
+print(result.conditional_phase, result.leakage, result.infidelity)
 ```
+
+**`simulate_cz_from_flux(t, phi_chip, qubit1, qubit2, g, n_levels=3, store_trajectories=False, solver_options=None) → CZResult`** (v2.6)
+
+接收显式的片上磁通波形 `phi_chip(t)`（单位 Φ₀），通过 Transmon 色散关系
+ω(Φ) = √(8·EC·EJ|cos(πΦ)|) − EC 转换为瞬时频率/失谐，构建完整时变两 qubit
+Hamiltonian，用 QuTiP `propagator`（或 `mesolve`，当 `store_trajectories=True`）
+求解完整演化算符，再从计算子空间投影提取门指标。
+
+**`CZResult`** 数据类（v2.6），包含：
+- `U_eff`: 4×4 计算子空间有效酉矩阵（virtual Z 校正后）
+- `conditional_phase`: 条件相位 φ_CZ (rad)
+- `phase_error`: |φ_CZ − π| (rad)
+- `leakage`: 计算子空间外泄漏（四个计算基态平均）
+- `populations`: 关键非计算态布居（`pop_20`, `pop_02`）
+- `infidelity`: 平均门不保真度 1 − F_avg（F_avg = (|Tr(U_ideal† U_eff)|² + d)/(d(d+1)), d=4）
+- `phase_trajectory` / `leakage_trajectory`: 时间轨迹（仅 `store_trajectories=True`）
+
+与原 `simulate_CZ` 的关键区别：不内部硬编码理想失谐脉冲，而是接收外部
+（可能经控制线失真/预失真校正后的）片上磁通波形，使预失真→CZ 门的端到端
+验证成为可能。
 
 #### 4.3.6 扩展点
 
 - **添加新的 FluxSignal type**：在 `_generate()` 函数中添加新的 case；在 `_fill_default_params()` 中添加默认参数。详见 §7.4。
 - **添加新的脉冲序列工厂**：在 `sequence.py` 中按照 `create_ramsey_pulse` 的模板新建函数，返回 `CompositePulse`。
-- **添加新的门函数**：在 `gates.py` 中按 `ideal_iSWAP/simulate_iSWAP` 的模板。
+- **添加新的门函数**：在 `gates.py` 中按 `ideal_iSWAP/simulate_iSWAP` 的模板。波形驱动门可参照 `simulate_cz_from_flux` 模式（外部磁通 → 色散转换 → 时变 Hamiltonian → 演化算符 → 门指标）。
 
 ---
 
@@ -748,7 +783,7 @@ class Experiment(ABC):
 
 | Experiment | 描述 | Gao 章节 | 输出关键字段 |
 |---|---|---|---|
-| `RabiExperiment` | 扫描脉冲时长，观察 p_e 振荡 | §V.B.1 | `result.expect[0]` (qutip.Result) |
+| `RabiExperiment` | 定幅驱动（`omega_rabi`，默认 1.0 rad·GHz）扫脉冲时长，观察 p_e 完整振荡 $\sin^2(\Omega t/2)$ | §V.B.1 | `result.expect[0]` (qutip.Result) |
 | `RamseyExperiment` | π/2 − τ − π/2，测相位累积 | §V.B.2 Eq. 54 | `data["p_e"]`, `axes["tau"]` |
 | `DiffEchoExperiment` | π/2 − [echo]^k − π/2，差分回波 | §V.B.2 | `data["p_e"]`, `k`, `t_int` |
 | `TransientSensingExperiment` | 滑动 Ramsey + kernel 提取 | (项目原创) | `data["kernel"]`, `data["delta_p"]` |
@@ -826,7 +861,7 @@ result = exp.run()
 |---|---|---|---|---|
 | `RamseyReconstruction` | `method="iq"` | IQ 解调 → arctan2 → dφ/dτ | (p_e_I, p_e_Q) → B(τ) |
 | | `method="unwrap"` | arccos + k-span 解缠绕 | p_e(τ) → B(τ) |
-| `EchoReconstruction` | — | B = −φ/(2k·κ·t_int) | p_e_list → B |
+| `EchoReconstruction` | — | B = −φ/(2k·κ·t_int)（**post-v1 隐藏**，见 §A2） | p_e_list → B |
 | `TransientReconstruction` | `method="wiener"` | 线性 Wiener 反卷积 | Δp + kernel → Φ(t) |
 | | `method="hammerstein"` | Wiener + Transmon 色散反演 | Δp + kernel → Φ(t) |
 | | `method="lm"` | Levenberg-Marquardt 全密度矩阵优化 | p_meas → Φ(t) (基函数参数化) |
@@ -835,6 +870,16 @@ result = exp.run()
 | `DelayRamseyReconstruction` | `inversion="response"` | φ/τ → Δω → 色散反演 | φ(t_d) → Φ_tail(t) |
 | | `inversion="calibration"` | φ(z) 标定表反查 | φ(t_d) → Φ_tail(t) |
 | `PiPulseCompReconstruction` | — | Φ = −z* | z*(τ) → Φ_tail(τ) |
+
+> **Ramsey 重建时间轴偏移(v2.15)**:`RamseyReconstruction.reconstruct()` 返回的
+> `B` 以*自由进动时间* `τ` 为索引,但物理上 `B(τ)=(1/κ)dφ/dτ` 采样的是自由演化
+> 窗口**末端**的磁通,而自由演化并非从全局 t=0 开始——它在首个 π/2 脉冲之后
+> (`t = t_rabi[-1] - t_rabi[0]`)才开始。因此重建波形若直接对 `τ` 作图会整体
+> **左移一个 π/2 脉宽**(默认 ~9.5 ns)。修复:新增 `time_axis(measurement)` 与
+> `reconstruct_with_time(measurement) → (t, B)`,返回补偿后的绝对时间轴
+> `t = τ + (t_rabi[-1]-t_rabi[0])`(偏移量取自 `measurement.config["t_rabi"]`,
+> 缺失时回退 0.0,保持旧行为)。`SensingWorkflow` 的 `ramsey` 分支已改用校正后的
+> 时间轴包装 `FluxSignal`。`reconstruct()` 返回类型不变(仍为 `np.ndarray`),向后兼容。
 
 #### 4.6.2 `KernelEstimator` (`sqc/reconstruction/kernel.py`)
 
@@ -1151,6 +1196,12 @@ class CalibrationTable:
 > **v2.1 重构**（2026-05-14）：频率标定拆为两大类的统一入口 — `FluxResponseCalibration`（磁通响应 f(Φ)）和 `SinglePointFrequencyCalibration`（单点 f₀₁，含闭环反馈）；波形标定统一为 `WaveformCalibration`；新增 `CalibrationScheduler` 控制室。
 >
 > 重建前置标定（`CryoscopeCalibration` φ(h)、`DelayRamseyCalibration` φ(z)）已移入 `sqc/reconstruction/`，与各自的重建算法就近管理。
+>
+> **v2.6**（2026-08-02）：`WaveformCalibration` 的 `_ProtocolDrivenMeasurement` 新增
+> `_auto_flux_bias()` —— 替代原 `_warn_flux_bias()`，自动为各协议设置正确的 qubit
+> flux bias（cryoscope → sweet spot flux=0；transient/delay_ramsey/pi_pulse →
+> max-sensitivity bias ≈0.10 Φ₀），使用 `qubit.change_flux()` 确保内部状态（EJ,
+> frequency, anharmonicity）同步更新。不再需要调用者手动设置 flux。
 >
 > **v2.3 更新**（2026-05-15）：`_fit_ramsey_frequency` 支持双模人工失谐测频（见 §4.7.3 详例）；闭环反馈新增 `step_method="bisection"` 和 `bracket_tightening` 参数；瞬态测频 `_measure_frequency_transient` 完成实现。
 >
@@ -2462,10 +2513,15 @@ mesolve(H_list, psi0, t_array, c_ops, e_ops)
 | v2.3 | 2026-05-15 | 频率标定双模人工失谐测频：`_fit_ramsey_frequency` 拆分 `_fft_peak` + `_run_ramsey_sweep` + 编排层，支持单扫（`f_artificial`=float）和双扫（`f_artificial`=None）两种模式；闭环反馈新增 step_method=bisection 和 bracket_tightening 参数；_measure_frequency 切换双扫提高鲁棒性；瞬态测频 `_measure_frequency_transient` 完成实现。实验层新增 DelayRamseyExperiment 和 PiPulseCompensationExperiment，均支持 t_fall 参数；PiPulseComp z* 提取新增抛物线插值。IQ 读出新增 `_resample_hamiltonian` 统一时间网格 + max_step 选项消除插值伪影 |
 | v2.4 | 2026-05-16 | **P6**：用户可操作接口补完。P6a: `reconfigure()` 扩展至覆盖全部 6 层 CONFIG (AWG/Pulse/Reconstruction/Simulation/Transmon/ControlLine)。P6d: `SensingWorkflow` 统一科研入口 — `configure()` + `run(measure, reconstruct, calibrate)` + `sweep(param, values)` + `compare(methods)` + `plot()` + 11 个科研接口 stub。新增 `WorkflowResult`/`SweepResult`/`CompareResult` 数据结构。P6c: `Simulation_sqc.ipynb` 新增参数扫描演示 cell（扫幅度、扫 λ、扫 flux bias、reconfigure() 演示）。测试: +30 单元测试 (tests/unit/test_workflow.py)。 |
 | v2.5 | 2026-05-17 | **频率标定职责分离**:`SinglePointFrequencyCalibration` 拆分为两个职责清晰的类。新增 `FrequencyMeasurement(method="ramsey"\|"transient")` 单点测量类(`.measure(flux)` + `.calibrate()`);`SinglePointFrequencyCalibration` 瘦身为只含调谐方法,`method ∈ {"closed_loop"}`(保留 `method` 字段为未来策略预留),内部组合 `FrequencyMeasurement` 完成每步测频。顶层 transient 测频接通 Track B 1.2(`_measure_frequency_transient` 提到模块级,FrequencyMeasurement(method="transient") 即时可用)。Scheduler:`frequency_ramsey` → `frequency_measurement` 统一入口。`__init__.py` 导出 `FrequencyMeasurement`;src_mirror facade、测试、docs、notebooks 同步迁移。 |
+| v2.6 | 2026-08-02 | **波形驱动 CZ + 自动 flux bias**:(1) `sqc/control/gates.py` 新增 `CZResult` 数据类和 `simulate_cz_from_flux(t, phi_chip, qubit1, qubit2, g)` 函数——接收显式片上磁通波形,经 Transmon 色散 Φ→ω 转换后构建时变两 qubit Hamiltonian,从完整演化算符提取条件相位、泄漏、平均门保真度等指标。支持 `store_trajectories=True` 时通过 mesolve 记录相位和泄漏时间轨迹。(2) `sqc/calibration/waveform.py` 的 `_ProtocolDrivenMeasurement` 新增 `_auto_flux_bias()` 替代 `_warn_flux_bias()`——自动为各协议(cryoscope→sweet spot, transient/delay_ramsey/pi_pulse→max-sensitivity)设置正确 flux bias,使用 `qubit.change_flux()` 同步内部状态。新增 P6(协议对比预失真,E1)和 P7(预失真对 CZ 门影响,E2)两张结题报告图及完整数据产出至 `result_sqc/predistortion/`。 |
 | v2.5 | 2026-05-17 | §4.5.2 追加 DelayRamsey **t_d 语义陷阱**注释:说明 `t_d` 是 Ramsey 起点相对 `t_fall` 的偏移而非测量点相对 falling edge 的延迟,实际采样时刻 `t_query = t_fall + t_d + t_sig`(t_sig ∈ 自由演化窗口),最早可测点为 `t_fall + t_rabi[-1]`;并提示 `flux_signal.t_list` 必须覆盖整个 t_query 范围(否则 `value_at` 越界返回 0 造成重建曲线"悬崖")。纯文档增补,无代码改动。 |
 | v2.6 | 2026-05-17 | **Cryoscope/DelayRamsey 相位 unwrap 统一**:消除 calibration 反演的 ~70 μΦ₀ DC 偏置。(1) 新建 `sqc/reconstruction/dispersion.py` 共享 4 个函数 — `omega_q_at_flux`/`cryoscope_phase_theory`/`cumulative_phase_theory`/`unwrap_phase_with_model`,作为相位 unwrap 唯一真理源。(2) 4 处迁移到统一 API:`CryoscopeExperiment`/`CryoscopeCalibration`/`DelayRamseyExperiment`/`DelayRamseyCalibration` 全部用 model-guided unwrap,实验端用累积积分锚定、标定端用方波相位锚定;旧的 baseline-subtraction + `np.unwrap` 残骸清理。(3) `CryoscopeCalibration` 末尾追加 h=0 锚定 — 减掉 `varphi[h≈0]` 让 `cal.inverse(0) == 0`,消除 IQReadout 系统相位污染。(4) `CryoscopeExperiment` `trunc_list` 越界 sanity check + 默认 `flux_signal.t_list` 延长到 100 ns,避免 `truncate()` 静默失效(silent failure)。(5) `DelayRamseyExperiment.run_baseline` 字段保留兼容性但标 deprecated。详见 §4.6.7。22 单元测试 + 5 物理回归 baseline 全绿(无需重生成)。数值验证:DC offset 由 +6.88e-5 → +2.15e-9 Φ₀。 |
 | v2.7 | 2026-05-18 | **PredistortionDesigner smooth=True 逆设计修复**:`_single_exp_to_iir_inverse` 未区分 `smooth=True/False`，对纯低通模式 (smooth=True, H(s)=1/(1+sτ)) 错误使用非平滑公式 (amp=0.3)，导致级联 H_inv·H = 1/(1+s·21ns) 而非 ≈1。修复：smooth=True 时加正则化极点 τ_reg=dt/4，级联 ≈1/(1+s·0.125ns)，阶跃响应 RMSE 从 0.274 降至 0.018 (15x 改善)。详见 §4.7.4。18 回归+单元测试全绿。 |
 | v2.8 | 2026-06-04 | **P10: 核函数体系三维扩展**。KernelEstimator 新增 mode (flux/omega)、method (sim/exp)、order (1..N) 三个正交维度。新增 Virtual Z 双实现（math σ_z 冲激 + hardware 相位重建）。新增 sim 模式（a†a 频率刺激，纯理论）。新增高阶 Volterra 对角核提取（振幅扫描 + 多项式拟合）及 KernelResult.save/load 序列化。新增 Hammerstein-Volterra 固定点迭代反卷积及 _omega_to_flux 色散反演。frequency.py 迁移到 omega kernel 直接路径，消除 κ workaround。Pulse.get_kernel() 转为 DeprecationWarning 兼容桥。+29 新单元测试；350 测试全绿；src/ 未变（R1）。详见 phase_10 内部 handbook。 |
+| v2.17 | 2026-07-26 | **瞬态 Wiener 重建幅度回归修复**(对齐冻结 `src/` 参考,恢复 master 图效果)。notebook `SensingWorkflow` 重建峰值远小于 master,定位到**两个真实成因**:(1) **demo 工作点错误**(主因,非代码 bug)—— A7 `SensingWorkflow` 未设 `flux_bias`,默认 `0.0` 恰为 `dω/dΦ=0` 甜点、核病态(`ratio≈0.09`);已在两处 `configure()` 加 `flux_bias=0.25`(与 A1–A6 一致的敏感工作点),type-4 冲激 `ratio 0.09→1.31`。(2) **默认 λ 偏大** —— `CONFIG.reconstruction.lambda_reg` 由 `30.0` 改为 `5.0`(与 `src` harness `lambdas=5.0` 校准一致;`|H|²+λ²` 中 30² 过正则,在最优点使幅度 ~0.80 vs λ=5 的 ~1.02,约 1.3×)。**`/dt` 经核实并非 bug**:`src/analysis.py::wiener_deconvolution` 本身即含 `X_w = Y·G/dt`,[sqc/reconstruction/transient.py](sqc/reconstruction/transient.py) 的 `_wiener_deconvolution` 与之逐位一致 —— 数值验证在同一 `(delta_p, kernel, dt=0.5023, λ=5)` 下两者 `ratio` 均 = 0.9927(严格相等)。(此前一版 v2.17 曾误判 `/dt` 为 bug 并临时移除,导致 sqc 幅度反而偏小 2×,已回退。)新增两条回归测试:`test_sqc_wiener_matches_src_wiener_exactly`(断言 sqc helper 与 `src.Analysis.wiener_deconvolution` 在同输入下 `assert_array_close`,锁死跨库一致性)、`test_transient_wiener_amplitude_matches_src_reference`(在 `src.optimal_work_point()`=0.9553 处 sine 端到端 `ratio∈[0.9,1.5]`,~1.2)。**工作点结论**:线性区判据 `φ_max=κ·A·t_free ≲ 1 rad`;甜点(flux=0/0.5,κ=0)不可用,深度非线性(如 sine@flux=0.25,φ_max≈8,`ratio≈0.38`、`delta_p` 呈 peak-dip-peak 相位缠绕)线性 Wiener 失配;冲激因窗口短,flux=0.25 仍在可用区(`ratio 1.31`)。已就地重跑 notebook 填充输出。三个既有 baseline 失败(`test_transient/ramsey_default_baseline`、`test_transient_experiment_matches_baseline`)属**任务前**工作树对 `sqc/experiments/{transient,ramsey}.py` 默认信号的改动(type4→3、amp0.01→0.005),与本次重建修复无关(已 stash 验证)。 |
+| v2.16 | 2026-07-26 | **文档站 tutorial notebook 波形重建部分整顿**(`docs/source/_shared/Simulation_sqc.ipynb`,单一真源,构建时 cp 进 en/zh)。第一部分统一为「每协议 = 一段 markdown + 一段代码、同权」:(1) **删除**差分回波(spin echo)节——与 §A2 前端隐藏一致;(2) Ramsey 节改用 `reconstruct_with_time()`(v2.15 偏移修复)并加说明;(3) 保留 Cryoscope 为单块;(4) **新增** A5 延迟 Ramsey + A6 π 脉冲补偿两条拖尾重建(从根 notebook 适配,复用 `make_qubit`/`plot_true_vs_rec` 辅助函数),补全非隐藏 `*Reconstruction` 全集;(5) SensingWorkflow 三 cell **合并为一块** A7;(6) 章节重排 A1 Rabi→A2 Ramsey→A3 Transient→A4 Cryoscope→A5 DelayRamsey→A6 π-comp→A7 Workflow,第三部分导语删去"延迟 Ramsey/π 补偿归入本部分"。`nbsphinx_execute="never"`,故已就地执行填充输出(12 code cell 顺序执行、0 error;DelayRamsey RMSE 1.7e-5、π-comp 3.1e-5)。src/ 未变(R1)。 |
+| v2.15 | 2026-07-26 | **Ramsey 重建时间轴偏移修复 + 差分回波隐藏**。(1) `RamseyReconstruction` 新增 `time_axis()` / `reconstruct_with_time()`,补偿自由演化窗口相对全局 t=0 的偏移(首个 π/2 脉宽 `t_rabi[-1]-t_rabi[0]`,默认 ~9.5 ns)——此前重建波形直接对 τ 作图会整体左移,验证:默认高斯信号真峰 t=100 ns,校正后重建峰 100.5 ns(残差 = 1 dt)。`reconstruct()` 返回类型不变(向后兼容)。`SensingWorkflow.ramsey` 分支与 `Simulation_sqc.ipynb` Ramsey cell 改用校正轴。详见 §4.6.1 注。(2) **差分回波** `DiffEcho` 前端隐藏(`SHOW_EXPERIMENTAL` gate,从协议下拉移除),闭式反演不可靠,记入 §A2 + `RELEASE_TODO.md`;`DiffEchoExperiment`/`EchoReconstruction` 仍可深路径导入。src/ 未变(R1)。 |
+| v2.14 | 2026-07-26 | **RabiExperiment 恢复完整 Rabi 振荡**。此前 `build_sequence()` 把幅度设为 `(π/2)/(t_rabi[-1]-t_rabi[0])`,使全窗总转角固定为 π/2、`p_e` 单调爬到 0.5 即止(只有一个 π/2 转,看不到振荡)——偏离了旧 `Protocal.evolve` case 0 的定幅驱动。修复:新增公开字段 `omega_rabi: float = 1.0`(rad·GHz),`build_sequence()` 用定值幅度 `omega_rabi` 驱动,`p_e = sin²(Ωt/2)` 在默认 40 ns 窗内跑约 6 个完整周期(0↔1)。无 baseline 受影响(不存在 `rabi_default.pkl`);自洽性回归与 `test_global_embedding` 全绿。src/ 未变(R1)。 |
 | v2.13 | 2026-07-17 | **v1.0.0 发布准备**。新增 §A2「v1 未公开的能力（post-v1 路线图）」——按 D3/D4 隐藏(非删除)Z-crosstalk、transient 频率标定、CPMG、coupler/electronics、SensingWorkflow 11 stub,附深路径导入与恢复方式。文档头 `适用于 sqc v0.3.0`→`v1.0.0`。配套(代码见 commit 历史):瞬态核路由统一到 `KernelEstimator`(去 `get_kernel` 弃用告警,数值不变)、`ZCrosstalkWorkflow` 从 `workflows.__all__` 隐藏、前端 `SHOW_EXPERIMENTAL` 开关、echo/create_pulse/distortion 缺陷修复。纯文档增补,src/ 未变(R1)。 |
 | v2.12 | 2026-07-16 | **闭环反馈新增 `step_method="gradient"`**(§4.7.3)。阻尼割线法 (damped secant) 数值梯度 Newton 步,无需 V_a/V_b 预括号,仅需 V_seed 起点。新增 damping/clamp/best-point 三重抗噪: damping∈(0,1] 压过冲, max_bias_step 钳位, 追踪 |residual| 最小点回写。首步/Δe=0 时退化为固定探测步。`SinglePointFrequencyCalibration` 新增 V_seed/damping/first_bias_step/max_bias_step 字段; `_build_result` 新增 `extra` 可选参数。+纯增量分支, src/ 未变(R1)。 |
 | v2.11 | 2026-06-07 | **瞬态测频 order≥3 修复 + Route B 落地**(§4.7.3 v2.11 注)。(1) 修复 order≥3 三次 Newton 的**符号 bug**(此前返回 ω_d−Δ,误差≈−2Δ,比线性更差)——统一到 δω=−Δ 约定。(2) `_calibrate_g3_taylor` 的 `delta_max_ghz` 默认改 `None`=**自适应**(旧默认 0.08 使 G1 偏低~0.6×、G3 全错);新增 `FrequencyMeasurement.g3_delta_max`。(3) **Route B** `g3_source="kernel_full"`:完整非对角核三重积分 ∭k₃ dt³(`_calibrate_g3_kernel_full`),免 Δ 扫描,与拟合互校。(4) **移除** `diag_legacy`(错误对象,小~170×),未知值抛 ValueError。效果:有效区 order3-fit 比线性精度↑~10×。+5 单元测试。src/ 未变(R1)。 |
@@ -2520,6 +2576,7 @@ mesolve(H_list, psi0, t_array, c_ops, e_ops)
 | **Z-crosstalk 提取** `ZCrosstalkWorkflow` | `sqc/workflows/z_crosstalk.py` | 隐藏。可运行但重建标度有数值误差(`compensation_factor<1`、`phi_B` 偏大 ~5×),待修 | `git revert` 隐藏 commit,或手动加回 `workflows/__init__.py` 导入/`__all__` + 前端 `SHOW_EXPERIMENTAL=True` |
 | **前端 Z-Crosstalk 标签页** | `web_demo_v2.py` | 由 `SHOW_EXPERIMENTAL=False` gate 隐藏 | 翻为 `True` |
 | **transient 频率标定** | `sqc/calibration/frequency.py` `FluxResponseCalibration(method="transient")` | stub(`NotImplementedError`) | 实现 `_calibrate_transient`(Track B 1.2) |
+| **差分回波** `DiffEchoExperiment` / `EchoReconstruction` | `sqc/experiments/echo.py`、`sqc/reconstruction/echo.py` | 前端隐藏(`SHOW_EXPERIMENTAL=False`,不在协议下拉出现)。闭式反演 `B=−φ/(2k·κ·t_int)` 不可靠:`t_int` 由 gap 时序间接推导退化到 t_rabi 时长、p_e 饱和 ~0.76、重建 B 偏尺度/符号。实现仍可深路径导入 | 修正 `create_diff_echo_pulse` 的 `t_int` 语义并显式传入、核对标度与相位符号后翻 `SHOW_EXPERIMENTAL=True`。见 `RELEASE_TODO.md` |
 | **CPMG 协议** | 旧 `Protocal(type=3)` | 未实现;`sqc/experiments/` 无对应类 | 新建 CPMG 实验 + 重建(见 `_TODO_master.md` 4.3) |
 | **TunableCoupler / electronics(AWG/ADC)** | `sqc/devices/coupler.py`、`sqc/hardware/electronics.py` | stub(Phase 5) | 实现对应类 |
 | **SensingWorkflow 的 11 个方法** | `sqc/workflows/sensing.py` | `NotImplementedError`,类 docstring 标 "planned" | 逐个实现(见 D4) |

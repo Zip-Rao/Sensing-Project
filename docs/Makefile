@@ -13,10 +13,11 @@ help:
 	@echo "make zh      - build Chinese only"
 	@echo "make clean   - remove build output"
 
-# The tutorial notebook lives at the repo root (single source of truth). Copy it
+# The docs notebook's single source of truth lives under source/_shared/. Copy it
 # into each language tree before building so nbsphinx can pick it up. The copies
-# are gitignored.
-NOTEBOOK = ../Simulation_sqc.ipynb
+# are gitignored. (The repo-root Simulation_sqc.ipynb is a separate research
+# notebook and is NOT used by the docs site.)
+NOTEBOOK = source/_shared/Simulation_sqc.ipynb
 
 notebooks:
 	cp "$(NOTEBOOK)" "$(SOURCEDIR)/en/Simulation_sqc.ipynb"

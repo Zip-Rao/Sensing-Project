@@ -1,0 +1,58 @@
+{
+  "timestamp": "2026-08-03T15:04:33.514630",
+  "python": "3.12.13 (main, Mar  3 2026, 15:01:35) [MSC v.1944 64 bit (AMD64)]",
+  "numpy": "2.2.6",
+  "scipy": "1.15.3",
+  "qutip": "5.2.3",
+  "matplotlib": "3.10.3",
+  "config": {
+    "cz_flux_amp": 0.1691783618,
+    "cz_duration": 147.322517,
+    "cz_rise_frac": 0.2761768316,
+    "q2_flux_bias": 0.2166779812,
+    "g_coupling": 0.05,
+    "true_amps": [
+      0.04,
+      0.02
+    ],
+    "true_taus": [
+      80.0,
+      400.0
+    ],
+    "t_max_step": 200.0,
+    "step_amp": 0.05,
+    "fit_type": "single_exp",
+    "scan_amps": [
+      0.032,
+      0.034,
+      0.036000000000000004,
+      0.038,
+      0.04,
+      0.042,
+      0.044,
+      0.046,
+      0.048
+    ],
+    "scan_tau_fixed": 80.0
+  },
+  "metrics_summary": {
+    "cond_phase_ideal": 3.0865395268617175,
+    "phase_error_ideal": 0.05505312672807561,
+    "leakage_ideal": 0.0015152715154957974,
+    "infidelity_ideal": 0.002064267922402885,
+    "cond_phase_uncorrected": 2.4457616687046393,
+    "phase_error_uncorrected": 0.6958309848851538,
+    "leakage_uncorrected": 0.015337962665930016,
+    "infidelity_uncorrected": 0.08321613199191602,
+    "cond_phase_corrected": 3.116153822671431,
+    "phase_error_corrected": 0.025438830918361965,
+    "leakage_corrected": 0.0003569659227209421,
+    "infidelity_corrected": 0.0005948998060224531,
+    "phase_error_added_unc": 0.6407778581570782,
+    "phase_error_added_cor": -0.029614295809713642,
+    "infidelity_added_unc": 0.08115186406951314,
+    "infidelity_added_cor": -0.0014693681163804317,
+    "rmse_chip_unc": 0.005602043110504374,
+    "rmse_chip_cor": 0.0001217697116523907
+  }
+}

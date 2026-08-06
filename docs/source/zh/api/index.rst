@@ -1,15 +1,13 @@
-API Reference
-=============
+API 参考
+========
 
-The public API of ``sqc``, organised by the eight-layer cQED stack (bottom to
-top) plus the global configuration module. Each entry expands to a page listing
-the classes and functions exported by that subpackage (its ``__all__``).
+``sqc`` 的公开 API,按八层 cQED 栈(自底向上)加全局配置模块组织。每个条目展开为一
+个页面,列出该子包所导出(其 ``__all__``)的类与函数。
 
 .. note::
 
-   Only the v1 public surface is documented here. Capabilities planned for a
-   future release (and names excluded from a subpackage's ``__all__``) are
-   intentionally omitted; see the roadmap.
+   这里只记录 v1 公开面。计划在未来版本提供的能力(以及被排除在某子包 ``__all__``
+   之外的名字)是有意省略的;详见路线图。
 
 .. currentmodule:: sqc
 

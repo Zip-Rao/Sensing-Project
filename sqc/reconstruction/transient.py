@@ -46,6 +46,13 @@ def _wiener_deconvolution(Y, K, dt, lambda_reg):
 
         X_f = conj(K_f) / (|K_f|^2 + lambda_reg^2) * Y_f / dt
 
+    The trailing ``/ dt`` matches the frozen ``src`` reference
+    (``src/analysis.py::wiener_deconvolution``) exactly and is verified
+    identical end-to-end (see
+    ``tests/integration/test_transient_experiment.py``). The forward model is
+    the Riemann-sum convolution ``Y = conv(K, X) * dt``, so the inverse
+    carries ``/dt``.
+
     Parameters
     ----------
     Y : np.ndarray

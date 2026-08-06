@@ -1,0 +1,54 @@
+\section{Short-pulse frequency discriminator}
+\label{sec:discriminator}
+
+\subsection{Driven transmon}
+
+We consider a flux-tunable transmon at bias $\Phi$ with transition frequency
+$\omega_q(\Phi)$.  In a frame rotating at the drive frequency $\omega_d$ and
+under the rotating-wave approximation, the two-level Hamiltonian is
+\begin{align}
+ H(t)&=\frac{\Delta}{2}\sigma_z+\frac{\Omega(t)}{2}
+ \left[\cos\varphi(t)\sigma_x+\sin\varphi(t)\sigma_y\right],\nonumber\\
+ \Delta&=\omega_q(\Phi)-\omega_d.
+ \label{eq:hamiltonian}
+\end{align}
+The flux bias is the controlled variable and $\Delta$ is the quantity measured
+within each feedback iteration.
+
+The discriminator uses two zero-delay Ramsey sequences,
+\begin{align}
+ \mathcal S_+ &: R_y(\pi/2)R_x(\pi/2),\\
+ \mathcal S_- &: R_y(\pi/2)R_{-x}(\pi/2).
+ \label{eq:sequences}
+\end{align}
+Each branch contains the same state-preparation pulse and an analysis pulse
+whose phase differs by $\pi$.  If $p_+$ and $p_-$ are their final excited-state
+probabilities, we define
+\begin{equation}
+ p_{\mathrm d}=\frac{p_+-p_-}{2}.
+ \label{eq:pdiff}
+\end{equation}
+The branch symmetry cancels the even powers of detuning near resonance, giving
+\begin{equation}
+ p_{\mathrm d}=A_1\Delta+\frac{A_3}{3!}\Delta^3+O(\Delta^5).
+ \label{eq:cubic-response}
+\end{equation}
+Unlike a conventional Ramsey scan, this signal is generated entirely during
+the control pulses.  One frequency estimate therefore requires two driven
+evolutions after the response coefficients have been calibrated.
+
+\subsection{Local inverse and fold}
+
+The linear estimator is $\widehat\Delta_1=p_{\mathrm d}/A_1$.  The cubic
+estimator solves Eq.~\eqref{eq:cubic-response} for the root continuously
+connected to $\Delta=0$.  When $A_1A_3<0$, the cubic response has a turnover at
+\begin{equation}
+ |\Delta_{\mathrm{fold}}|=\sqrt{-\frac{2A_1}{A_3}}.
+ \label{eq:fold}
+\end{equation}
+Beyond this point, the same population difference can correspond to multiple
+detunings and no local polynomial correction can make the measurement globally
+invertible.  The implementation therefore rejects the distant cubic root and
+falls back to the linear estimate outside the calibrated branch.  This guard
+prevents a numerical root finder from returning a plausible but physically
+disconnected solution; it does not extend the capture range.

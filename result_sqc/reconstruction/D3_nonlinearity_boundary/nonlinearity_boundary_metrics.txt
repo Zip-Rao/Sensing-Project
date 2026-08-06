@@ -1,0 +1,20 @@
+D3 Gaussian-control nonlinearity boundary metrics
+==============================================================================
+control: Gaussian pi/2, pulse window=10 ns, envelope sigma=2 ns
+
+amp_param  peak_flux  model_err  wiener_rmse  wiener_ratio
+    0.010    0.00368     0.0355   1.5888e-04        1.1053
+    0.020    0.00736     0.0736   2.3638e-04        1.0326
+    0.030    0.01103     0.1144   3.1413e-04        0.9520
+    0.040    0.01471     0.1583   5.4035e-04        0.8694
+    0.050    0.01839     0.2056   9.4873e-04        0.7886
+    0.060    0.02207     0.2567   1.5069e-03        0.7129
+    0.080    0.02942     0.3722   2.9640e-03        0.5864
+    0.100    0.03678     0.5094   4.7361e-03        0.4929
+
+LM boundary points
+amp_param  rmse         ratio    runtime_s  status
+    0.010   1.1481e-05    0.9919      927.8  success 
+    0.040   1.4890e-04    0.9612      867.1  success 
+    0.080   1.0836e-03    0.8435      805.9  success 
+    0.100   2.1606e-03    0.7570     1037.9  success 

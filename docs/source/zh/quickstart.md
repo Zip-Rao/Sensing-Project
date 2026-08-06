@@ -8,19 +8,16 @@
 ```python
 from sqc.workflows import SensingWorkflow
 
-result = (
-    SensingWorkflow()
-    .configure(
-        protocol="ramsey",         # 传感协议
-        signal_type=3,             # 磁通信号形状(高斯脉冲)
-        signal_amplitude=0.01,     # 单位为 Phi_0
-        reconstruction="wiener",   # 重建算法
-    )
-    .run(measure=True, reconstruct=True)
+wf = SensingWorkflow().configure(
+    protocol="ramsey",         # 传感协议
+    signal_type=3,             # 磁通信号形状(高斯脉冲)
+    signal_amplitude=0.01,     # 单位为 Phi_0
+    reconstruction="unwrap",   # 重建算法(Ramsey 可选 "unwrap" 或 "iq")
 )
+result = wf.run(measure=True, reconstruct=True)
 
-print(result)          # 运行摘要
-# result 携带原始测量与重建波形
+wf.plot()              # 画出「测量 Δp + 重建波形 B(t)」
+# result 同样携带原始测量与重建波形
 ```
 
 `configure()` 只修改你显式传入的参数,其余保持默认(由
@@ -29,21 +26,29 @@ print(result)          # 运行摘要
 
 ## 比较重建算法
 
+多方法比较适用于 `transient`(瞬态)协议,其基于核卷积的算法家族(`wiener`、
+`hammerstein`)从同一份测量重建:
+
 ```python
-wf = SensingWorkflow().configure(protocol="ramsey", signal_type=3)
+wf = SensingWorkflow().configure(protocol="transient", signal_type=3)
+wf.run(measure=True, reconstruct=False)      # 先测量一次
 comparison = wf.compare(methods=["wiener", "lm"])
+print(comparison.best)
 ```
+
+每个协议只接受各自的重建方法:`transient` → `wiener` / `hammerstein` / `lm`;
+`ramsey` → `unwrap` / `iq`。
 
 ## 扫描参数
 
 ```python
-wf = SensingWorkflow().configure(protocol="ramsey")
+wf = SensingWorkflow().configure(protocol="ramsey", reconstruction="unwrap")
 sweep = wf.sweep("signal.amplitude", [0.005, 0.01, 0.02])
 ```
 
 ## 下一步
 
-- {doc}`architecture` — workflow 所基于的八层栈。
-- {doc}`building_blocks/index` — 直接使用各层以获得完全控制。
-- {doc}`examples/index` — 深入三条内置管道。
-- {doc}`extending` — 构建你自己的传感应用。
+- {doc}`architecture`:workflow 所基于的八层栈。
+- {doc}`building_blocks/index`:直接使用各层以获得完全控制。
+- {doc}`examples/index`:深入三条内置管道。
+- {doc}`extending`:构建新的传感应用。

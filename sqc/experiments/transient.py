@@ -35,9 +35,21 @@ class TransientSensingExperiment(Experiment):
     flux_signal_zero : FluxSignal or None
         Zero-flux reference signal. If None, creates constant-zero.
     t_rabi : np.ndarray
-        Rabi pulse time axis (ns). Default linspace(0, 10, 20).
+        Rabi pulse time axis (ns). Default ``CONFIG.pulse.t_rabi``.
     omega_d : float or None
         Drive frequency. Default qubit.frequency.
+    rotation_angle : float or None
+        Rotation angle of each sensing pulse (rad). Default pi/2. Set to None
+        when using ``rabi_rate``.
+    rabi_rate : float or None
+        Fixed peak Rabi rate. When set, the achieved angle follows from the
+        pulse duration and envelope.
+    envelope : {'square', 'gaussian'} or array-like
+        Microwave pulse envelope. Default square.
+    envelope_sigma : float or None
+        Gaussian envelope standard deviation (ns).
+    phase1, phase2 : float
+        Rotation-axis phases of the two adjacent pulses (rad).
     scan_list : np.ndarray or None
         Pre-computed delay list for sliding measurement.
     """
@@ -49,6 +61,12 @@ class TransientSensingExperiment(Experiment):
         default_factory=lambda: CONFIG.pulse.t_rabi.copy()
     )
     omega_d: float | None = None
+    rotation_angle: float | None = np.pi / 2
+    rabi_rate: float | None = None
+    envelope: object = "square"
+    envelope_sigma: float | None = None
+    phase1: float = np.pi / 2
+    phase2: float = 0.0
 
     # -- P9.B --
     control_line: object | None = None
@@ -65,7 +83,7 @@ class TransientSensingExperiment(Experiment):
             # Default test signal matches src/protocal.py case 4
             t_list = CONFIG.pulse.make_time(0, 200)
             self.flux_signal = FluxSignal(
-                type=4,
+                type=3,
                 t_list=t_list,
                 amplitude=0.01,
                 rise=10,
@@ -86,7 +104,12 @@ class TransientSensingExperiment(Experiment):
         """Build the Ramsey control pulse (tau=0)."""
         return create_ramsey_pulse(
             self.t_rabi, tau=0.0, omega_d=self.omega_d,
+            phase1=self.phase1, phase2=self.phase2,
             qubit=self.qubit,
+            rotation_angle=self.rotation_angle,
+            rabi_rate=self.rabi_rate,
+            envelope=self.envelope,
+            envelope_sigma=self.envelope_sigma,
         )
 
     def run(self) -> ExperimentResult:
@@ -129,6 +152,7 @@ class TransientSensingExperiment(Experiment):
         ).estimate_full(self.control_pulse, self.qubit)
         t_samples = kernel_result.t_samples
         kernel = list(kernel_result.k1)
+        effective_angle = float(self.control_pulse.pulses[0].get_angle_simple())
 
         # Compute delta_p
         delta_p = np.array(p_e) - np.array(p_e_base)
@@ -148,8 +172,18 @@ class TransientSensingExperiment(Experiment):
             metadata={
                 "experiment": "TransientSensingExperiment",
                 "omega_d": self.omega_d,
+                "rotation_angle": effective_angle,
+                "rabi_rate": self.rabi_rate,
+                "envelope": (
+                    self.envelope if isinstance(self.envelope, str) else "custom"
+                ),
+                "phase1": self.phase1,
+                "phase2": self.phase2,
             },
             config={
                 "t_rabi": self.t_rabi.copy(),
+                "rotation_angle": effective_angle,
+                "rabi_rate": self.rabi_rate,
+                "envelope_sigma": self.envelope_sigma,
             },
         )

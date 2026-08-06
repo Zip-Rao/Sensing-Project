@@ -182,8 +182,10 @@ class SimulationConfig:
 class ReconstructionConfig:
     """Default hyper-parameters for waveform reconstruction algorithms."""
 
-    # Wiener deconvolution
-    lambda_reg: float = 30.0
+    # Wiener deconvolution. 5.0 matches the frozen src reference calibration
+    # (src/.../generate_single_signal_data.py uses lambdas=5.0); higher values
+    # over-regularise and suppress the recovered amplitude.
+    lambda_reg: float = 5.0
 
     # Kernel estimation (stimulus perturbation)
     stim_amplitude: float = 0.0215     #: Φ₀ — hardcoded legacy default

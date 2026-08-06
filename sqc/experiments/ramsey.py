@@ -71,7 +71,7 @@ class RamseyExperiment(Experiment):
         if self.flux_signal is None:
             # Default test signal matches src/protocal.py case 1
             self.flux_signal = FluxSignal(
-                type=1,
+                type=3,
                 t_list=CONFIG.pulse.t_signal.copy(),
                 amplitude=0.001,
                 frequency=0.01,

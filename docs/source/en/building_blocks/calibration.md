@@ -25,7 +25,7 @@ alongside their reconstructors). They likewise subclass this layer's
 
 ## Class overview
 
-Grouped by function into four sets:
+Grouped by function into five sets:
 
 **Extension point + result container**
 
@@ -41,6 +41,8 @@ Grouped by function into four sets:
 | `FluxResponseCalibration` | Scan flux to build $f(\Phi)$ lookup (Ramsey point-by-point frequency measurement) |
 | `FrequencyMeasurement` | Single-point $f_{01}$ measurement (Ramsey, or the advanced transient method) |
 | `SinglePointFrequencyCalibration` | Single-point frequency **tuning**: closed-loop feedback drives $f_q(V)$ to target |
+| `FrequencyCalibrationWorkflow` | Orchestration implementing the four-stage state machine for frequency calibration |
+| `CalibrationStage` | Per-stage parameter container (used by `FrequencyCalibrationWorkflow`) |
 
 **Waveform / control-line calibration**
 
@@ -68,16 +70,29 @@ See {doc}`../extending`.
 
 ## CalibrationTable: calibration result container
 
-The uniform calibration result carrier (`@dataclass`). Core fields: `name`,
-`qubit_name`, `kind` (e.g. `"f_phi"`, `"f01"`, `"transfer_function"`,
-`"predistortion"`), `inputs`/`outputs` (independent/dependent variable, e.g.
-flux↔frequency), `fit_params` (fit/iteration details), `metadata`.
+The uniform calibration result carrier.
 
-Two lookup methods (cubic spline via SciPy; auto-degrades to quadratic/linear
-for too few points, with extrapolation):
+**Construction**
+
+`CalibrationTable(name, qubit_name=None, kind=None, inputs=None, outputs=None, fit_params=None, metadata=None)`
+
+**Fields**
+
+| Field | Type | Meaning |
+|---|---|---|
+| `name` | str | Calibration item name |
+| `qubit_name` | str | Associated qubit name |
+| `kind` | str | Calibration type (`"f_phi"`, `"f01"`, `"transfer_function"`, `"predistortion"`, etc.) |
+| `inputs` | `np.ndarray` | Independent variable (e.g. flux $\Phi$) |
+| `outputs` | `np.ndarray` | Dependent variable (e.g. frequency $\omega$) |
+| `fit_params` | dict | Fit/iteration details |
+| `metadata` | dict | Additional metadata |
+
+**Methods**
 
 - `evaluate(x) -> np.ndarray`: interpolate `outputs` at query points `x` (e.g.
-  get frequency at a given flux).
+  get frequency at a given flux). Cubic spline via SciPy; auto-degrades to
+  quadratic/linear for too few points, with extrapolation.
 - `inverse(y) -> np.ndarray`: inverse interpolation, finding the `inputs` such
   that `outputs ≈ y` (requires `outputs` to be monotonic; internally restricts to
   the monotonic segment to build the inverse).
@@ -85,11 +100,32 @@ for too few points, with extrapolation):
 ## FluxResponseCalibration: f(Φ) curve calibration
 
 Scan a sequence of DC flux points, measure the frequency at each with a Ramsey
-sequence, and build an $f(\Phi)$ lookup table. `@dataclass`, fields: `qubit`,
-`method` (`"ramsey"`), `h_list` (flux scan points, default `linspace(-0.03, 0.03, 51)`),
-`tau` (free-precession time per point), `t_rabi` (Rabi pulse time axis).
-`calibrate()` returns a table with `kind="f_phi"`, `inputs=flux`,
-`outputs=angular frequency`.
+sequence, and build an $f(\Phi)$ lookup table.
+
+**Construction**
+
+`FluxResponseCalibration(qubit, method="ramsey", h_list=None, tau=None, t_rabi=None)`
+
+**Fields**
+
+| Field | Type | Meaning | Default |
+|---|---|---|---|
+| `qubit` | `TransmonQubit` | Qubit under test | — |
+| `method` | str | Measurement method | `"ramsey"` |
+| `h_list` | `np.ndarray` | Flux scan points ($\Phi_0$) | `linspace(-0.03, 0.03, 51)` |
+| `tau` | float | Free-precession time per point (ns) | — |
+| `t_rabi` | `np.ndarray` | Rabi pulse time axis (ns) | `CONFIG.pulse.t_rabi` |
+
+**Methods**
+
+- `calibrate() -> CalibrationTable`: runs a Ramsey frequency measurement at each
+  flux point, returns a `kind="f_phi"` table, `inputs=flux`, `outputs=angular
+  frequency`.
+
+**Output**
+
+`CalibrationTable`, `kind="f_phi"`, `inputs` are the flux scan points, `outputs`
+the corresponding angular frequencies.
 
 ```{note}
 `method="transient"` (unknown transient signal → polynomial fit of
@@ -100,23 +136,45 @@ $\Delta\omega(\Phi)$) is a future feature that currently raises
 ## FrequencyMeasurement: single-point f01 measurement
 
 Measures $f_{01}$ at a single flux working point (read-only, no tuning).
-`@dataclass`, fields: `qubit`, `flux` (measurement flux point, default 0 i.e. the
-sweet spot), `method`, `tau_list`, `t_rabi`, `t_global`, `f_artificial`. The core
-method `measure(flux=None) -> float` returns a signed angular frequency;
-`calibrate()` packages the single-point measurement into a `kind="f01"` table.
 
-- `method="ramsey"` (default): Ramsey τ-sweep + FFT peak. Single-sweep mode
-  (`f_artificial=0.1`, assumes $|\Delta|<0.1$ GHz) is fast; `f_artificial=None`
-  uses double-sweep mode, robust for arbitrary $|\Delta|$ and signed, at 2× the
-  cost.
-- `method="transient"` (advanced): τ=0 orthogonal Ramsey (R_y–R_x and
-  R_y–R_{-x}) differential readout + control-kernel sensitivity
-  $G=\int k_1\,\mathrm{d}t$ to invert $\Delta\omega$ directly. Cheaper than the
-  τ-sweep but relies on the weak-signal linear approximation; suited to
-  $|\Delta\omega|$ near zero. With `order>=3` a cubic Newton correction is added,
-  the cubic coefficient $G_3$ chosen by `g3_source`: `"fit"` (odd-polynomial fit
-  of $p_\mathrm{diff}(\Delta)$ with adaptive scan range) or `"kernel_full"`
-  (full off-diagonal kernel triple integral $\iiint k_3$).
+**Construction**
+
+`FrequencyMeasurement(qubit, flux=0.0, method="ramsey", tau_list=None, t_rabi=None, t_global=None, f_artificial=0.1)`
+
+**Fields**
+
+| Field | Type | Meaning | Default |
+|---|---|---|---|
+| `qubit` | `TransmonQubit` | Qubit under test | — |
+| `flux` | float | Measurement flux point ($\Phi_0$) | `0.0` (sweet spot) |
+| `method` | str | Measurement method | `"ramsey"` (or `"transient"`) |
+| `tau_list` | `np.ndarray` | Free-evolution time sweep (ns) | `CONFIG.pulse.tau_list` |
+| `t_rabi` | `np.ndarray` | Rabi time axis (ns) | `CONFIG.pulse.t_rabi` |
+| `t_global` | `np.ndarray` | Global time axis (ns) | `CONFIG.pulse.t_global` |
+| `f_artificial` | float or None | Artificial detuning (GHz); `None`=dual-sweep mode | `0.1` |
+
+**Methods**
+
+- `measure(flux=None) -> float`: returns a signed angular frequency (rad·GHz).
+  - `method="ramsey"` (default): Ramsey τ-sweep + FFT peak. Single-sweep mode
+    (`f_artificial=0.1`, assumes $|\Delta|<0.1$ GHz) is fast; `f_artificial=None`
+    uses double-sweep mode, robust for arbitrary $|\Delta|$ and signed, at 2× the
+    cost.
+  - `method="transient"` (advanced): τ=0 orthogonal Ramsey (R_y–R_x and
+    R_y–R_{-x}) differential readout + control-kernel sensitivity
+    $G=\int k_1\,\mathrm{d}t$ to invert $\Delta\omega$ directly. Cheaper than the
+    τ-sweep but relies on the weak-signal linear approximation; suited to
+    $|\Delta\omega|$ near zero. With `order>=3` a cubic Newton correction is added,
+    the cubic coefficient $G_3$ chosen by `g3_source`: `"fit"` (odd-polynomial fit
+    of $p_\mathrm{diff}(\Delta)$ with adaptive scan range) or `"kernel_full"`
+    (full off-diagonal kernel triple integral $\iiint k_3$).
+- `calibrate() -> CalibrationTable`: packages the single-point measurement into
+  a `kind="f01"` table.
+
+**Output**
+
+`measure()` returns `float` (signed angular frequency); `calibrate()` returns
+`CalibrationTable` (`kind="f01"`).
 
 ```{note}
 The transient method is single-point frequency **measurement**, not the same as
@@ -130,24 +188,44 @@ curve): the former is implemented and public, the latter is not. Transient
 ## SinglePointFrequencyCalibration: single-point frequency tuning
 
 Closed-loop feedback tuning of $f_q(V)$ to a target frequency $f_\mathrm{target}$
-(Vepsalainen 2022). `@dataclass`, fields: `qubit`, `method` (`"closed_loop"`),
-`f_target`, `V_a`/`V_b` (bracketing bounds, from a preceding
-`FluxResponseCalibration`), `epsilon_f` (convergence tolerance, default
-$10^{-4}$ GHz·2π), `max_iter`, `measure_method` (`"ramsey"` or `"transient"`),
-`bracket_tightening` (regula-falsi bracket narrowing, default on), and
-`step_method` (one of three):
+(Vepsalainen 2022).
 
-- `"secant"` (default): secant method, superlinear convergence, typically 1–3
-  iterations.
-- `"bisection"`: bisection, $O(\log_2)$ convergence, bracket width halves each
-  step, suited to visualisation. Auto-handles an even $f(\Phi)$ crossing the
-  sweet spot (auto-splits the bracket).
-- `"gradient"`: damped secant (numerical-gradient Newton step), does not
-  require pre-bracketing $V_a$/$V_b$, only `V_seed`; a damping factor `damping`
-  (default 0.8) suppresses overshoot; `best_V` tracks the historical best point.
+**Construction**
 
-`calibrate()` returns a `kind="f01"` table; `fit_params["history"]` holds the
-full iteration trace.
+`SinglePointFrequencyCalibration(qubit, method="closed_loop", f_target=None, V_a=None, V_b=None, epsilon_f=1e-4, max_iter=20, measure_method="ramsey", step_method="secant", bracket_tightening=True, drive_policy="sweet", ...)`
+
+**Fields**
+
+| Field | Type | Meaning | Default |
+|---|---|---|---|
+| `qubit` | `TransmonQubit` | Qubit under test | — |
+| `method` | str | Tuning method | `"closed_loop"` |
+| `f_target` | float | Target frequency (rad·GHz) | — |
+| `V_a` | float | Flux-voltage bracket lower bound | — |
+| `V_b` | float | Flux-voltage bracket upper bound | — |
+| `epsilon_f` | float | Convergence tolerance (GHz·2π) | `1e-4` |
+| `max_iter` | int | Maximum iterations | `20` |
+| `measure_method` | str | Frequency measurement method | `"ramsey"` (or `"transient"`) |
+| `step_method` | str | Root-search stepper | `"secant"` (or `"bisection"`/`"gradient"`) |
+| `bracket_tightening` | bool | Regula-falsi bracket narrowing | `True` |
+| `drive_policy` | str or callable | Drive-frequency policy | `"sweet"` (or `"target"`/`"track"`/callable) |
+| `sensitivity_source` | str | Sensitivity source | `"secant"` (or `"model"`) |
+| `linear_range` | float | Linear window $\Delta_\mathrm{lin}$ | — |
+| `rho` | float | Out-of-range threshold ratio | `0.6` |
+| `converge_streak` | int | Consecutive convergence count | `1` |
+| `omega_d_seed` | float | First track drive frequency (rad·GHz) | `None` |
+| `damping` | float | Gradient damping factor (`step_method="gradient"` only) | `0.8` |
+| `V_seed` | float | Gradient initial flux (`step_method="gradient"` only) | — |
+
+**Methods**
+
+- `calibrate() -> CalibrationTable`: executes the closed-loop tuning, returns a
+  `kind="f01"` table; `fit_params["history"]` holds the full iteration trace.
+
+**Output**
+
+`CalibrationTable`, `kind="f01"`; `fit_params["history"]` contains per-iteration
+$V_k$, $f_{q,k}$, $e_k$, $f_{d,k}$, $\delta_k$, and the `out_of_range` flag.
 
 ### Two updates per iteration: flux voltage and drive frequency
 
@@ -168,13 +246,6 @@ different actuators:
   definition**, so it cannot move the convergence target; it only keeps $e_k$
   trustworthy.
 
-Why the second update is needed: each frequency measurement is a *local*
-discriminator, reporting a trustworthy detuning
-$\hat\delta = \hat f_q - f_d$ only while $|\delta| < \Delta_\mathrm{lin}$
-(especially the cheap transient method). If $f_d$ is pinned at the sweet spot
-while the search probes flux far away, the measured error becomes biased and the
-loop can diverge; the drive-frequency update removes that bias.
-
 **The invariant that makes this safe:** `measure()` returns the *absolute*
 frequency $f_d + \hat\delta$, and the loop computes
 $e_k = \mathrm{measure}(V_k) - f_\mathrm{target}$. So the control error is always
@@ -191,28 +262,14 @@ $f_d$ to follow the qubit does **not** hide residual error.
 | `"track"` | $\hat f_{q,k} + \hat s_k\,(V_{k+1}-V_k)$ | **TRACKING** | predicts $f_q$ at the next point so $|\delta|$ stays inside the linear window as the search moves |
 | `callable` | user-defined | any | arbitrary feedback / filtering / prediction laws |
 
-Supporting fields: `sensitivity_source` (`"secant"` — model-free slope of the
-last two points, default; or `"model"` — analytic `qubit.sensitivity(V)`) feeds
-the `"track"` prediction; `linear_range` ($\Delta_\mathrm{lin}$) with `rho`
-(default 0.6) flags `out_of_range` in each history row and in the
-`stop_predicate` state when $|\delta| > \rho\,\Delta_\mathrm{lin}$ — a caller
-can watch that signal to trigger a wider **re-acquire** stage. Each `history`
-row now also carries `omega_d` and `delta` for diagnostics.
-
-`converge_streak` (default 1) requires $|e|\le\epsilon$ on that many
-*consecutive* iterations before declaring convergence — it re-measures in place
-to de-bounce a noisy hit, useful in the LOCKED phase. `omega_d_seed` supplies the
-first `"track"` drive $f_{d,0}=\hat f_{q,0}$; without it a fresh track stage
-falls back to the sweet spot on iteration 0, which is fatal when the target is
-far (the transient then sees the full offset).
-
-### The four-stage state machine
+### The four-stage state machine and FrequencyCalibrationWorkflow
 
 Combining the two updates above with different measurement protocols and
 `drive_policy` values, the whole closed-loop calibration forms a four-stage
-state machine. Each stage is one `SinglePointFrequencyCalibration` pass, chained
-in order by `FrequencyCalibrationWorkflow` (below), seeding each stage from the
-previous stage's optimum flux and frequency estimate:
+state machine. Orchestration is handled by `FrequencyCalibrationWorkflow`; each
+stage is one `SinglePointFrequencyCalibration`, chained in order by the
+workflow, seeding each stage from the previous stage's optimum flux and
+frequency estimate:
 
 ```text
 COARSE_ACQUIRE
@@ -243,50 +300,93 @@ REACQUIRE
   (default 0.6) flags $|\delta| > \rho\,\Delta_\mathrm{lin}$ in the
   `out_of_range` signal, or a measurement fails, the caller watches that signal
   (via `stop_predicate`) and inserts a fresh wide-range stage to re-estimate the
-  frequency. Each `history` row carries `omega_d` and `delta` for diagnostics.
+  frequency.
 
-Fields supporting this state machine: `sensitivity_source` (`"secant"` —
-model-free slope of the last two points, default; or `"model"` — analytic
-`qubit.sensitivity(V)`) feeds the TRACKING prediction; `converge_streak`
-(default 1) requires $|e|\le\epsilon$ on that many *consecutive* iterations
-before declaring convergence, for noise rejection in the LOCKED stage;
-`omega_d_seed` supplies the first `"track"` drive $f_{d,0}=\hat f_{q,0}$ —
-without it a fresh TRACKING stage falls back to the sweet spot on iteration 0,
-fatal when the target is far (the transient then sees the full offset).
+#### FrequencyCalibrationWorkflow
 
-`FrequencyCalibrationWorkflow` (below) is the orchestration that runs this state
-machine: its `CalibrationStage` exposes `drive_policy`, `sensitivity_source`,
-`linear_range`/`rho`, `converge_streak`, and `seed_drive_from_prev` (default on:
-hands each TRACKING stage the previous stage's frequency estimate as
-`omega_d_seed`). See notebook §B2.2c for a −20 MHz far-target run where a naive
-single-stage transient stalls at the wrong flux while the state machine locks to
-kHz.
+**Construction**
+
+`FrequencyCalibrationWorkflow(stages, seed_drive_from_prev=True)`
+
+**Fields**
+
+| Field | Type | Meaning | Default |
+|---|---|---|---|
+| `stages` | `list[CalibrationStage]` | Stages to execute in order | — |
+| `seed_drive_from_prev` | bool | Hand each stage the previous stage's frequency estimate as `omega_d_seed` | `True` |
+
+**Methods**
+
+- `run() -> CalibrationTable`: executes all stages in order, returns the final
+  stage's `CalibrationTable`; `fit_params` contains the full state-machine trace.
+
+#### CalibrationStage
+
+**Construction**
+
+`CalibrationStage(name, calibration, stop_predicate=None)`
+
+**Fields**
+
+| Field | Type | Meaning |
+|---|---|---|
+| `name` | str | Stage name (`"COARSE_ACQUIRE"`/`"TRACKING"`/`"LOCKED"`/`"REACQUIRE"`) |
+| `calibration` | `SinglePointFrequencyCalibration` | The calibration instance for this stage (with `drive_policy`, `measure_method`, etc.) |
+| `stop_predicate` | callable | Stage termination condition (default: stop when own `epsilon_f` is met) |
 
 ## WaveformCalibration: waveform / control-line calibration
 
-The unified entry for the predistortion mainline (`@dataclass`); `method` selects
-one of two paths:
+The unified entry for the predistortion mainline.
 
-- `"transfer_function"`: measure the control-line step response, fit it to a
-  `DistortionModel`. Fields: `distortion` (analytical path: take the model's step
-  response directly), or `measurement_protocol`
-  (`"cryoscope"`/`"delay_ramsey"`/`"transient"`/`"pi_pulse"`, with
-  `qubit`+`control_line`, via a true quantum-simulation measurement); `fit_type`
-  (`"multi_exp"`/`"single_exp"`/`"fir"`/`"iir"`). `to_distortion_model()`
-  converts the result straight into a `DistortionModel`.
-- `"predistortion"`: given a measured transfer function `transfer_model`, design
-  a compensation filter (internally delegating to `PredistortionDesigner`);
-  fields `predistortion_method`, `n_taps`, `regularization`.
+**Construction**
 
-`calibrate()` returns a `kind="transfer_function"` or `"predistortion"` table
-depending on `method`.
+`WaveformCalibration(method="transfer_function", distortion=None, measurement_protocol=None, qubit=None, control_line=None, fit_type="single_exp", transfer_model=None, predistortion_method="auto", n_taps=72, regularization=1e-6)`
+
+**Fields**
+
+| Field | Type | Meaning | Default |
+|---|---|---|---|
+| `method` | str | Calibration path | `"transfer_function"` (or `"predistortion"`) |
+| `distortion` | `DistortionModel` | Distortion model (analytical path: take step response directly) | `None` |
+| `measurement_protocol` | str | Quantum-simulation measurement protocol | `None` (or `"cryoscope"`/`"delay_ramsey"`/`"transient"`/`"pi_pulse"`) |
+| `qubit` | `TransmonQubit` | Qubit (measurement path only) | `None` |
+| `control_line` | `ControlLine` | Control line (measurement path only) | `None` |
+| `fit_type` | str | Transfer-function fit type | `"single_exp"` (or `"multi_exp"`/`"fir"`/`"iir"`) |
+| `transfer_model` | `DistortionModel` | Measured transfer function (predistortion path only) | `None` |
+| `predistortion_method` | str | Predistortion design method | `"auto"` |
+| `n_taps` | int | FIR filter order | `72` |
+| `regularization` | float | Ridge regularization parameter | `1e-6` |
+
+**Methods**
+
+- `calibrate() -> CalibrationTable`: returns a `kind="transfer_function"` or
+  `"predistortion"` table depending on `method`.
+- `to_distortion_model() -> DistortionModel`: converts the calibration result
+  straight into a `DistortionModel`.
+
+**Output**
+
+`CalibrationTable`, `kind` depends on `method`; `to_distortion_model()` returns
+a `DistortionModel` ready to inject into a control line.
 
 ## PredistortionDesigner: inverse-filter designer
 
-A standalone predistortion-filter designer (`@dataclass`), usable on its own or
-called by `WaveformCalibration`. Fields: `method`
-(`"auto"`/`"fir_inverse"`/`"iir_inverse"`/`"frequency_inverse"`), `n_taps`,
-`regularization`. Core methods:
+A standalone predistortion-filter designer, usable on its own or called by
+`WaveformCalibration`.
+
+**Construction**
+
+`PredistortionDesigner(method="auto", n_taps=72, regularization=1e-6)`
+
+**Fields**
+
+| Field | Type | Meaning | Default |
+|---|---|---|---|
+| `method` | str | Design method | `"auto"` (or `"fir_inverse"`/`"iir_inverse"`/`"frequency_inverse"`) |
+| `n_taps` | int | FIR filter order | `72` |
+| `regularization` | float | Ridge regularization parameter | `1e-6` |
+
+**Methods**
 
 - `design(transfer_model, dt) -> DistortionModel`: given a transfer-function
   model, return its inverse model. `"auto"` uses an analytical IIR inverse for
@@ -296,16 +396,34 @@ called by `WaveformCalibration`. Fields: `method`
 - `check_pole_stability(b, a) -> bool`: check whether all IIR poles lie inside
   the unit circle (stable).
 
+**Output**
+
+`design()` returns `DistortionModel` (inverse model); `predistort()` returns the
+predistorted `Waveform`.
+
 ## CalibrationScheduler: calibration task scheduler
 
-The calibration task scheduler (`@dataclass`): maintains a registry of named
-calibration tasks with dependencies, executed in order. `register(name,
-cal_class, depends_on=...)` registers a task; `register_defaults()` loads the
-standard registry (e.g. `frequency_closed_loop` depends on
-`flux_response_ramsey`, `waveform_predistortion` depends on
-`waveform_transfer_function`). Execution: `run(name, **kw)` runs by name (auto-
-injecting dependency results), `run_next()` runs the next ready task;
-`get_result(name)`, `status()` query.
+The calibration task scheduler: maintains a registry of named calibration tasks
+with dependencies, executed in order.
+
+**Construction**
+
+`CalibrationScheduler()`
+
+**Methods**
+
+- `register(name, cal_class, depends_on=...)`: register a task.
+- `register_defaults()`: load the standard registry (e.g.
+  `frequency_closed_loop` depends on `flux_response_ramsey`,
+  `waveform_predistortion` depends on `waveform_transfer_function`).
+- `run(name, **kw)`: run by name (auto-injecting dependency results).
+- `run_next()`: run the next ready task.
+- `get_result(name)` / `status()`: query.
+
+**Output**
+
+`run()` returns `CalibrationTable`; `status()` returns
+`{"ready": [...], "running": ..., "completed": [...], "failed": [...]}`.
 
 ```{note}
 The Kelly 2018 DAG automation (`check_state → maintain → auto_calibrate`) is
@@ -359,6 +477,10 @@ print(scheduler.status())   # {"ready": ["flux_response_ramsey", ...], ...}
   and a compensation filter burned in. The three steps map respectively to
   `FluxResponseCalibration` → `SinglePointFrequencyCalibration` →
   `WaveformCalibration`.
+- `FrequencyCalibrationWorkflow` orchestrates `SinglePointFrequencyCalibration`
+  as a four-stage state machine (COARSE_ACQUIRE → TRACKING → LOCKED →
+  REACQUIRE), automatically switching between wide-range Ramsey and
+  high-precision transient measurement and converging to kHz level.
 - `CalibrationTable`'s `evaluate`/`inverse` underpin the
   `inversion="calibration"` path of the {doc}`reconstruction` layer: the
   reconstructor is passed the calibration table and, during inversion, calls

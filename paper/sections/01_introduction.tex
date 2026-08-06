@@ -1,0 +1,62 @@
+\section{Introduction}
+\label{sec:introduction}
+
+Superconducting qubits require frequent calibration because transition
+frequencies drift with flux bias, temperature, control conditions, and the
+electromagnetic environment.  Frequency error appears directly as a detuning
+in single-qubit control and propagates into gate, readout, and higher-level
+calibration tasks~\cite{krantz2019quantum,blais2021circuit}.  Modern calibration
+systems therefore organize repeated measurements and parameter updates into
+automated feedback loops~\cite{kelly2018physical,wittler_integrated_2021}.
+Reducing the cost of the elementary frequency measurement is valuable because
+the same primitive is executed across devices and repeated as the processor
+drifts~\cite{rol2017restless,werninghaus_high-speed_2021}.  This motivates a
+broader question: can the short control-pulse sequences already used around a
+working point provide calibration information themselves?
+
+Ramsey spectroscopy is a robust frequency estimator.  A pair of $\pi/2$
+pulses separated by a variable free-evolution interval converts detuning into
+population oscillations, and the oscillation frequency is extracted from a
+scan.  The scan provides a useful capture range and high precision, but its
+cost scales with the number of delay points and, when two artificial detunings
+are used to determine the sign, with two complete scans.  Fixed-delay Ramsey
+measurements reduce this burden once the frequency is already known locally,
+and have been incorporated into closed-loop stabilization protocols
+~\cite{vepsalainen2022improving}.  Their local phase response, however, becomes
+ambiguous after phase wrapping.
+
+Here we test this possibility in a frequency-calibration setting.  We remove
+the free-evolution interval and infer detuning from the response accumulated
+during two finite control pulses.  Orthogonal analysis branches form an odd
+differential signal whose slope is determined by a response kernel.  Such
+control-time response functions connect temporal sensing to driven-qubit
+dynamics~\cite{herb2024quantum,lin2025application}.  They suggest that a short
+pulse can be more than an operation surrounding a calibration experiment: its
+transient response can itself be the probe.  The question is then not only
+whether this response contains frequency information, but whether that local
+information can remain valid as a calibration loop moves the device.
+
+Two constraints are central.  First, the short-pulse response is nonlinear and
+only locally invertible; its leading correction depends on the full three-time
+response kernel.  Second, if the feedback loop changes the flux bias while the
+drive remains fixed, the qubit can leave the discriminator's monotonic window,
+corrupting both the frequency estimate and the subsequent controller update.
+
+Our central result is that short-pulse sequences can participate in
+closed-loop frequency calibration when these two constraints are controlled.
+A full three-time response kernel supplies the local cubic inverse.  A secant
+estimate of the frequency--flux slope then predicts the transition frequency
+at the next bias point.  Driving at this predicted frequency keeps the pulse
+response inside its calibrated window, while the feedback residual remains
+defined relative to the fixed target.  The response kernel and drive tracking
+therefore play supporting but distinct roles: one extracts information from
+the short sequence, and the other preserves the validity of that information
+along the calibration trajectory.
+
+We first derive the short-pulse discriminator and its local inverse.  We then
+separate drive tracking, which preserves measurement validity, from the flux
+update, which closes the control loop.  Numerical tests compare the local
+probe with Ramsey strategies using independently verified frequency errors and
+instrumented solver counts.  Besides demonstrating a useful operating regime,
+the comparison exposes a negative result: simply placing a short-pulse method
+before Ramsey in a coarse-to-fine workflow can cost more than Ramsey alone.

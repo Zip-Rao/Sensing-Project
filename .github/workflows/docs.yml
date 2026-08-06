@@ -39,10 +39,10 @@ jobs:
       - name: Install package with docs extra
         run: pip install -e ".[docs]"
 
-      - name: Copy tutorial notebook into both language trees
+      - name: Copy docs notebook into both language trees
         run: |
-          cp Simulation_sqc.ipynb docs/source/en/Simulation_sqc.ipynb
-          cp Simulation_sqc.ipynb docs/source/zh/Simulation_sqc.ipynb
+          cp docs/source/_shared/Simulation_sqc.ipynb docs/source/en/Simulation_sqc.ipynb
+          cp docs/source/_shared/Simulation_sqc.ipynb docs/source/zh/Simulation_sqc.ipynb
 
       - name: Build English (site root)
         run: sphinx-build -W --keep-going -b html docs/source/en docs/build/html
