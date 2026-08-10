@@ -123,10 +123,12 @@ measurement in its linear window). The drive frequency never enters the error
 definition—$e_k = \text{measure}(V_k) - f_\text{target}$ is always relative to
 the fixed target—so it only affects measurement trustworthiness, not the
 convergence target. Three drive policies (`"sweet"`/`"target"`/`"track"`),
-combined with different measurement protocols, form a four-stage state machine
-(COARSE_ACQUIRE → TRACKING → LOCKED → REACQUIRE) orchestrated by
-`FrequencyCalibrationWorkflow` in the next step. See
-{doc}`../building_blocks/calibration` for the full description of each policy.
+combined with different measurement protocols, form a six-state event-driven
+protocol (Acquire → Track → Verify → Lock + Reacquire) orchestrated by
+`FrequencyCalibrationRuntime`. See {doc}`../building_blocks/calibration` for
+the full description. The old four-stage pipeline interface
+(`FrequencyCalibrationWorkflow`) remains available; internally it already
+delegates to the shared `DampedSecantTracker` controller.
 ```
 
 ### Step 4: Multi-Stage Orchestration — Workflow Layer (`FrequencyCalibrationWorkflow`)
@@ -224,12 +226,43 @@ print(f"V_final={hybrid_result['V_final']:.6f}, "
       f"converged={hybrid_result['converged']}")
 ```
 
+### Event-Driven State Machine (V2 API)
+
+```python
+from sqc.workflows.frequency_runtime import FrequencyCalibrationRuntime
+from sqc.workflows.frequency_state_machine import FrequencyCalibrationConfig
+
+# Protocol config: thresholds + budgets + policies
+config = FrequencyCalibrationConfig(
+    epsilon_enter=2 * np.pi * 20e-3,      # 20 MHz — candidate entry
+    epsilon_final=2 * np.pi * 2e-3,       # 2 MHz  — final verification
+    N_verify=2,                            # consecutive passes required
+    max_commands=30,                       # command budget
+)
+
+# Runtime: state machine + tracker + QuTiP executor in one
+runtime = FrequencyCalibrationRuntime(qubit=qubit, f_target=f_target, config=config)
+result = runtime.run()
+
+print(f"state={result['state']}, run_status={result['run_status']}")
+print(f"f_final={result['f_final']/(2*np.pi):.4f} GHz, "
+      f"n_commands={result['n_commands']}, elapsed={result['elapsed']:.1f}s")
+
+# Persistence: save run state and resume from checkpoint later
+runtime.save_run("calibration_run_001")
+# ... later ...
+# runtime2 = FrequencyCalibrationRuntime.load_run("calibration_run_001", qubit=qubit)
+# runtime2.run()  # resumes from checkpoint
+```
+
 ```{note}
-`FluxResponseCalibration` runs a full Ramsey $\tau$-sweep (tens of `mesolve`
-calls) at every flux point, and the default `h_list` has 51 points, so a full
-calibration is a minutes-scale task. The 5-point coarse grid above is only to
-show the flow; for real runs, densify according to your accuracy needs or scan
-finely only near the band of interest.
+**Old API vs new API**: `FrequencyCalibrationWorkflow` is a one-shot pipeline
+(stage1→stage2→...) suited to rapid prototyping.
+`FrequencyCalibrationRuntime` + `FrequencyStateMachine` is the event-driven
+architecture: supports stepwise execution, state recovery
+(Track→Reacquire→Track), long-term Lock monitoring, and persistence with
+checkpoint recovery. Both share the same `DampedSecantTracker` control law.
+See {doc}`../building_blocks/workflows` for details.
 ```
 
 ## Reading the Results

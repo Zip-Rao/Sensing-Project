@@ -97,10 +97,11 @@ $f_q(V)$ 闭环反馈整定到目标频率 $f_\text{target}$（Vepsalainen 2022�
 和**驱动频率更新**（观测器，`drive_policy` 设定 $f_d$ 使测量落在线性窗内）。
 驱动频率不进入误差定义——$e_k = \text{measure}(V_k) - f_\text{target}$ 始终
 相对固定目标——因此只影响测量可信度，不改变收敛目标。三种驱动策略
-（`"sweet"`/`"target"`/`"track"`）配合不同测频协议构成四阶段状态机
-（COARSE_ACQUIRE → TRACKING → LOCKED → REACQUIRE），由下一步的
-`FrequencyCalibrationWorkflow` 编排。各策略的完整说明见
-{doc}`../building_blocks/calibration`。
+（`"sweet"`/`"target"`/`"track"`）配合不同测频协议构成六状态事件驱动协议
+（Acquire → Track → Verify → Lock + Reacquire），由 `FrequencyCalibrationRuntime`
+编排。各策略的完整说明见 {doc}`../building_blocks/calibration`。旧的四阶段
+pipeline 接口（`FrequencyCalibrationWorkflow`）仍可用，内部已委托给共享的
+`DampedSecantTracker` 控制器。
 ```
 
 ### 第四步：多阶段编排 — 工作流层 (`FrequencyCalibrationWorkflow`)
@@ -191,10 +192,41 @@ print(f"V_final={hybrid_result['V_final']:.6f}, "
       f"converged={hybrid_result['converged']}")
 ```
 
+### 事件驱动状态机（V2 新接口）
+
+```python
+from sqc.workflows.frequency_runtime import FrequencyCalibrationRuntime
+from sqc.workflows.frequency_state_machine import FrequencyCalibrationConfig
+
+# 协议配置：阈值 + 预算 + 策略
+config = FrequencyCalibrationConfig(
+    epsilon_enter=2 * np.pi * 20e-3,      # 20 MHz — 候选进入阈值
+    epsilon_final=2 * np.pi * 2e-3,       # 2 MHz  — 最终验证容差
+    N_verify=2,                            # 连续通过次数
+    max_commands=30,                       # 命令预算上限
+)
+
+# 运行时：状态机 + tracker + QuTiP 执行器 三合一
+runtime = FrequencyCalibrationRuntime(qubit=qubit, f_target=f_target, config=config)
+result = runtime.run()
+
+print(f"state={result['state']}, run_status={result['run_status']}")
+print(f"f_final={result['f_final']/(2*np.pi):.4f} GHz, "
+      f"n_commands={result['n_commands']}, elapsed={result['elapsed']:.1f}s")
+
+# 持久化：保存运行状态，可从断点恢复
+runtime.save_run("calibration_run_001")
+# ... 后续 ...
+# runtime2 = FrequencyCalibrationRuntime.load_run("calibration_run_001", qubit=qubit)
+# runtime2.run()  # 从 checkpoint 继续
+```
+
 ```{note}
-`FluxResponseCalibration` 在每个磁通点跑一次完整 Ramsey $\tau$ 扫描（数十次
-`mesolve`），默认 51 点，完整标定是分钟级任务。5 点粗网格仅为演示流程；实际
-运行请按精度需求加密，或只在关心的频段附近细扫。
+**旧接口 vs 新接口**：`FrequencyCalibrationWorkflow` 是一次性管线（stage1→stage2→...），
+适合快速原型。`FrequencyCalibrationRuntime` + `FrequencyStateMachine` 是事件驱动架构，
+支持逐步执行、状态回退（Track→Reacquire→Track）、长期 Lock 监视、持久化与断点恢复。
+两者底层共享同一个 `DampedSecantTracker` 控制律。详见
+{doc}`../building_blocks/workflows`。
 ```
 
 ## 结果解读
