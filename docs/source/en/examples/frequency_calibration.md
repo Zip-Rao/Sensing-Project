@@ -26,7 +26,11 @@ the `flux_bias` in {doc}`waveform_reconstruction` comes from.
 
 The frequency calibration pipeline executes in the following order: single-point
 measurement → sweep flux to build $f(\Phi)$ curve → lookup → closed-loop tuning
-→ multi-stage orchestration. The sections below follow this logical sequence.
+→ orchestration & run. The platform provides **two orchestration styles**: the
+original one-shot pipeline (`FrequencyCalibrationWorkflow`) and the new
+event-driven state machine (`FrequencyCalibrationRuntime` +
+`FrequencyStateMachine`). The sections below follow this logical sequence
+and conclude with a comparison to guide your choice.
 
 ## Pipeline Architecture
 
@@ -131,15 +135,24 @@ the full description. The old four-stage pipeline interface
 delegates to the shared `DampedSecantTracker` controller.
 ```
 
-### Step 4: Multi-Stage Orchestration — Workflow Layer (`FrequencyCalibrationWorkflow`)
+### Step 4: Orchestration & Run — Workflow Layer
 
-A single `SinglePointFrequencyCalibration` has its `measure_method` fixed at
-construction time—it cannot switch protocols mid-search, yet the coarse phase
-needs the wide-range Ramsey while the fine phase benefits from the fast
-transient method.
+The previous three steps all operate at a **single flux point** or with a
+**fixed strategy**. Real calibration needs to switch measurement protocols and
+drive policies depending on the search phase—the coarse phase needs wide-range
+Ramsey, the fine phase benefits from fast transient measurement; normal tracking
+needs the drive frequency to follow the qubit, while verification requires a
+frozen bias and an independent pass/fail judgement. The platform provides two
+ways to orchestrate this.
+
+#### Old API: one-shot pipeline `FrequencyCalibrationWorkflow`
+
 {py:class}`~sqc.workflows.frequency_calibration.FrequencyCalibrationWorkflow`
-chains multiple calibration stages into an ordered pipeline, seeding each stage
-from the previous stage's optimum flux and frequency estimate.
+chains multiple `SinglePointFrequencyCalibration` instances into an ordered
+pipeline, seeding each stage from the previous stage's optimum. Because each
+stage's `measure_method` is fixed at construction time, the pipeline is
+**one-way, irreversible**—stages can only move forward, with no backtracking
+or retry logic.
 
 Two construction modes:
 
@@ -152,6 +165,123 @@ Two construction modes:
 
 `run()` returns a merged iteration history (each row tagged with
 `phase`/`global_iter`/`cost`), `V_final`, `residual`, `converged`, and more.
+
+#### New API: event-driven state machine `FrequencyStateMachine` + `FrequencyCalibrationRuntime`
+
+The old pipeline's fundamental limitation is that it only has one path—**"keep
+going forward"**. If the coarse search overshoots, the transient discriminator
+loses lock, or verification fails, the pipeline cannot go back to re-acquire;
+it continues to the next stage and produces meaningless results. For real
+experiments that may run for hours—where the locked state must continuously
+monitor drift, schedule periodic audits, and automatically recover from
+loss-of-lock—a one-shot pipeline is entirely insufficient.
+
+The V2 API solves these problems with an **event-driven six-state protocol**.
+The calibration process is decomposed into discrete states, each with a clear
+responsibility and explicit entry/exit guard conditions:
+
+```text
+Acquire ──→ Track ──→ Verify ──→ Lock
+              ↑          │          │
+              │          │          │
+            Reacquire ◄─────────────┘
+```
+
+**Six states, each with one job**:
+
+| State | Responsibility | Can change flux? |
+|---|---|---|
+| **Acquire** | Wide-range Ramsey acquisition of absolute frequency—gets the initial "seed" estimate | No |
+| **Track** | Local transient frequency measurement + secant sensitivity estimate + flux stepping—the **only** state allowed to change bias | **Yes** |
+| **Verify** | Freeze the candidate bias; run independent double-sweep Ramsey to judge whether final tolerance is met | No (frozen on entry) |
+| **Lock** | Long-term stabilisation: low-cost drift monitoring + scheduled Ramsey audits | No |
+| **Reacquire** | After loss-of-lock / out-of-range / low confidence, re-run wide-range acquisition | No |
+| **SafeStop** | Budget exhausted / interlock / unrecoverable fault → safe hold | safe bias only |
+
+**Key design rules**:
+
+1. **Only Track may change the flux bias**—other states cannot even "nudge" it.
+   This prevents the self-deception of adjusting bias while supposedly verifying.
+2. **Verify freezes the candidate bias at entry**, holding it until exit. The
+   actual applied bias must match the frozen value within `bias_freeze_tolerance`.
+3. **Lock drift detection never adjusts bias directly**—small drift goes
+   Lock→Verify for independent confirmation; large jumps go Lock→Reacquire for
+   a fresh acquisition. This guarantees that "locked" means the bias was never
+   secretly moved.
+4. **Analytic $f(\Phi)$ is a simulation oracle only**—it never feeds the
+   transition reducer. All decisions are based on actual measurement results.
+
+**Threshold hierarchy**—four levels control transition tightness:
+
+```
+epsilon_hold  <  epsilon_final  <  epsilon_enter  <  Delta_val
+(10 kHz)         (100 kHz)         (5 MHz)           (20 MHz)
+physics bandwidth Verify pass       candidate entry   local validity window
+```
+
+- **Candidate condition** (Track → Verify): $|\text{error}| + \text{uncertainty} \le \epsilon_\text{enter}$
+- **Verification condition** (Verify → Lock): $|\text{error}| + \text{uncertainty} \le \epsilon_\text{final}$, for $N_\text{verify}$ consecutive passes
+- **Local validity** (must we leave Track?): $|\text{error}| + \text{uncertainty} \le \Delta_\text{val}$
+
+**Lock monitor hysteresis**—a critical design point that prevents noise-induced
+state chatter. The Lock state uses a low-cost transient monitor whose noise
+characteristics differ from the independent Verify Ramsey, so it cannot simply
+reuse the same threshold:
+
+| Monitor result | Action |
+|---|---|
+| $U_\text{mon} \le \epsilon_\text{mon\_clear}$ | All clear, reset suspect counter |
+| $\epsilon_\text{mon\_clear} < U_\text{mon} \le \epsilon_\text{mon\_suspect}$ | Grey zone: accumulate suspect count; after $N_\text{mon\_suspect}$ → Verify |
+| $\epsilon_\text{mon\_suspect} < U_\text{mon} < \Delta_\text{mon\_reacquire}$ | Clear drift, immediate Lock → Verify |
+| $U_\text{mon} \ge \Delta_\text{mon\_reacquire}$ or reference lost | Large jump, Lock → Reacquire directly |
+
+The benefit: a point that just passed Verify won't exit Lock on a single noisy
+monitor reading; genuine slow drift is caught after accumulating a grey-zone
+streak; catastrophic jumps trigger immediate re-acquisition without wasting
+verification attempts.
+
+**Command–event architecture**—the state machine does no I/O directly; it is
+decoupled from the measurement backend through commands and events:
+
+```text
+┌──────────────┐     command      ┌────────────┐     execute     ┌─────────────┐
+│ StateMachine │ ───────────────→ │  Runtime   │ ──────────────→ │ SQCExecutor │
+│  (pure logic) │                  │ (orchestr.)│                 │ (QuTiP backend)│
+│              │ ←─────────────── │            │ ←────────────── │             │
+└──────────────┘     event        └────────────┘    result       └─────────────┘
+```
+
+- **Commands** (machine → outside): `AcquireFrequency`, `TrackFrequency(bias, drive)`,
+  `VerifyFrequency(frozen_bias, drive)`, `MonitorFrequency(locked_bias)`, `SafeHold(bias)`
+- **Events** (outside → machine): `MeasurementSucceeded` (carries frequency,
+  uncertainty, validity flags), `MeasurementTechnicalFailure`, `MeasurementRejected`,
+  `TimerElapsed`, `InterlockTriggered`, `BudgetExhausted`, `CancelRequested`
+
+Every event carries a `command_id` matching the pending command, making the
+system idempotent—calling `next_command()` repeatedly returns the same command
+until a matching event arrives and the state advances.
+
+**Persistence & checkpoint recovery**: `FrequencyCalibrationRuntime` provides
+`save_run(dir)` and `load_run(dir, qubit)` methods that write run state to five
+files:
+
+| File | Content |
+|---|---|
+| `config.json` | Full protocol configuration |
+| `commands.jsonl` | Every command and its resulting event |
+| `transitions.jsonl` | Every state transition (from / to / reason) |
+| `checkpoint.json` | Full state machine snapshot (resumable from here) |
+| `result.json` | Final result summary |
+
+This is essential for long-running experiments—after a power loss or abnormal
+exit, the run can resume from the last checkpoint without losing calibration
+progress.
+
+**Relationship to the old API**: both share the same `DampedSecantTracker`
+control law (damped-secant step formula); numerical behaviour is identical.
+The old `FrequencyCalibrationWorkflow` already delegates each gradient stage to
+the tracker internally. The difference is at the orchestration layer—fixed
+pipeline vs. event loop + transition table.
 
 ### Underpinning: Device Layer (`TransmonQubit`)
 
@@ -228,40 +358,92 @@ print(f"V_final={hybrid_result['V_final']:.6f}, "
 
 ### Event-Driven State Machine (V2 API)
 
+The `FrequencyCalibrationWorkflow` above is good for "set parameters, run, read
+the result." In a real experiment, calibration may run for hours and encounter
+bias drift, measurement failures, or interlock triggers. The V2 API handles
+these with a **pausable, resumable, recoverable** six-state protocol.
+
+Using it is straightforward: construct a `FrequencyCalibrationConfig` and a
+`FrequencyCalibrationRuntime`, then call `run()`. The runtime internally:
+
+1. Creates and starts the `FrequencyStateMachine`
+2. Loops: `next_command()` → `SQCExecutor` performs the measurement →
+   `handle(event)` advances the state
+3. In Track state, automatically manages the `DampedSecantTracker` lifecycle
+   (`initialize` → `propose` → `accept`)
+4. Checkpoints every 10 commands
+
 ```python
 from sqc.workflows.frequency_runtime import FrequencyCalibrationRuntime
 from sqc.workflows.frequency_state_machine import FrequencyCalibrationConfig
 
-# Protocol config: thresholds + budgets + policies
+# ── Protocol config: all thresholds and budgets in one place ────────────
 config = FrequencyCalibrationConfig(
-    epsilon_enter=2 * np.pi * 20e-3,      # 20 MHz — candidate entry
-    epsilon_final=2 * np.pi * 2e-3,       # 2 MHz  — final verification
-    N_verify=2,                            # consecutive passes required
-    max_commands=30,                       # command budget
+    # -- thresholds (all angular frequency, rad·GHz) --
+    epsilon_enter=2 * np.pi * 20e-3,      # 20 MHz  — condition to enter Verify
+    epsilon_final=2 * np.pi * 2e-3,       # 2 MHz   — condition to pass Verify
+    Delta_val=2 * np.pi * 50e-3,          # 50 MHz  — local validity window
+
+    # -- verification policy --
+    N_verify=2,                            # 2 consecutive passes to confirm
+
+    # -- Lock monitor hysteresis --
+    epsilon_mon_clear=2 * np.pi * 5e-3,   # 5 MHz   — monitor says "clean"
+    epsilon_mon_suspect=2 * np.pi * 10e-3,# 10 MHz  — monitor says "suspect"
+    Delta_mon_reacquire=2 * np.pi * 30e-3,# 30 MHz  — large jump → reacquire
+    N_mon_suspect=3,                       # 3 consecutive suspects → Verify
+
+    # -- budgets --
+    max_commands=200,                      # total command limit
+    max_reacquire_attempts=5,             # reacquisition limit
+    max_wall_time=3600.0,                 # 1 hour wall-clock
+
+    # -- Track controller parameters --
+    damping=0.8,                           # damping factor (< 1 suppresses overshoot)
+    first_bias_step=0.01,                  # first probe step (Φ₀)
+    max_bias_step=0.02,                    # max bias change per step (Φ₀)
 )
 
-# Runtime: state machine + tracker + QuTiP executor in one
+# ── Run ────────────────────────────────────────────────────────────────
 runtime = FrequencyCalibrationRuntime(qubit=qubit, f_target=f_target, config=config)
 result = runtime.run()
 
-print(f"state={result['state']}, run_status={result['run_status']}")
-print(f"f_final={result['f_final']/(2*np.pi):.4f} GHz, "
-      f"n_commands={result['n_commands']}, elapsed={result['elapsed']:.1f}s")
+# ── Results ─────────────────────────────────────────────────────────────
+print(f"Final state: {result['state']}")            # "lock" / "safe_stop"
+print(f"Run status:  {result['run_status']}")       # "calibrated" / "completed" / "failed"
+print(f"Final freq:  {result['f_final']/(2*np.pi):.6f} GHz")
+print(f"Candidate Φ: {result['candidate_bias']:.6f} Φ₀")
+print(f"Commands: {result['n_commands']}, wall time: {result['elapsed']:.1f}s")
 
-# Persistence: save run state and resume from checkpoint later
+# ── Transition trace ────────────────────────────────────────────────────
+for t in result['transition_log']:
+    print(f"  v{t['version']}: {t['from']} → {t['to']}  [{t['reason']}]")
+
+# ── Persistence ─────────────────────────────────────────────────────────
 runtime.save_run("calibration_run_001")
-# ... later ...
+# Writes config.json / commands.jsonl / transitions.jsonl / checkpoint.json / result.json
+
+# ... hours later, resume from checkpoint ...
 # runtime2 = FrequencyCalibrationRuntime.load_run("calibration_run_001", qubit=qubit)
-# runtime2.run()  # resumes from checkpoint
+# runtime2.run()  # machine resumes from the last checkpoint
 ```
+
+This shows the core V2 workflow: configure thresholds → run → inspect the
+trace → persist. Each entry in `transition_log` records the source state,
+destination state, and the reason code that triggered the transition (e.g.
+`TARGET_CANDIDATE`, `DRIFT_SUSPECTED`, `REACQUIRE_LIMIT`), enabling post-hoc
+audit—why did we reacquire? How many consecutive suspect readings triggered
+the Verify? Every decision is traceable.
 
 ```{note}
 **Old API vs new API**: `FrequencyCalibrationWorkflow` is a one-shot pipeline
-(stage1→stage2→...) suited to rapid prototyping.
+(stage1→stage2→...) suited to rapid prototyping and batch simulation.
 `FrequencyCalibrationRuntime` + `FrequencyStateMachine` is the event-driven
-architecture: supports stepwise execution, state recovery
-(Track→Reacquire→Track), long-term Lock monitoring, and persistence with
-checkpoint recovery. Both share the same `DampedSecantTracker` control law.
+architecture: supports state recovery (Track→Reacquire→Track), long-term Lock
+monitoring with scheduled audits, and persistence with checkpoint recovery—
+ideal for long-running calibration experiments and multi-scenario reliability
+testing. Both share the same `DampedSecantTracker` control law (damped-secant
+step formula); numerical behaviour is identical.
 See {doc}`../building_blocks/workflows` for details.
 ```
 
@@ -287,5 +469,14 @@ See {doc}`../building_blocks/workflows` for details.
   `g3_source` selecting the cubic-coefficient source: `"fit"` (odd-polynomial
   fit of $p_\text{diff}(\Delta)$, adaptive range) or `"kernel_full"`
   (off-diagonal kernel $\iiint k_3\,dt^3$).
+- **V2 state machine results**: `runtime.run()` returns `state` (final protocol
+  state, e.g. `"lock"`), `run_status` (run lifecycle, e.g. `"calibrated"`
+  means Lock was successfully entered), `f_final` (final frequency estimate),
+  `candidate_bias` (locked bias value), `transition_log` (complete transition
+  trace—each entry has `from`/`to`/`reason`/`version`), `n_commands` (commands
+  consumed), and `elapsed` (wall-clock time). `transition_log` is the key to
+  post-hoc audit—every state change and its trigger reason is recorded.
 - See {doc}`../building_blocks/calibration` for the full field definitions and
-  method options of each calibration class.
+  method options of each calibration class; see
+  {doc}`../building_blocks/workflows` for V2 state machine thresholds and
+  configuration.
