@@ -10,6 +10,43 @@
 跑管道、`sweep()` 扫参、`compare()` 比较重建算法、`plot()` 自动出图。
 `PredistortionValidationWorkflow` 是预畸变主线的端到端验证工作流。
 
+### 频率标定的两种用法
+
+频率标定有三个相关类，按**新旧两套接口**组织：
+
+| | 旧接口（一次性） | 新接口（事件驱动） |
+|---|---|---|
+| **入口** | `FrequencyCalibrationWorkflow` | `FrequencyCalibrationRuntime` |
+| **核心** | 内部串联多个 `SinglePointFrequencyCalibration` | 内部驱动 `FrequencyStateMachine` |
+| **怎么跑** | `wf.run()` 一口气跑完 | `runtime.run()` 逐步事件循环 |
+| **能暂停吗** | 不能 | 能（`save_run` / `load_run` 持久化） |
+| **能回退吗** | 不能（阶段间只能前进） | 能（Track→Reacquire→Track, Lock→Verify→Lock） |
+| **共享组件** | `DampedSecantTracker`（步进公式） | 同一个 `DampedSecantTracker` |
+
+```text
+用户
+ │
+ ├── (旧) FrequencyCalibrationWorkflow.run()
+ │       内部: stage1 → stage2 → ...  一次性跑完
+ │       每 stage 内委托 DampedSecantTracker
+ │
+ └── (新) FrequencyCalibrationRuntime.run()
+             │
+             ├── FrequencyStateMachine  ← 纯状态转移（无 QuTiP）
+             │     六个状态: Acquire → Track → Verify → Lock
+             │     回退分支: Reacquire, SafeStop
+             │     DampedSecantTracker ← 共享步进公式
+             │
+             └── SQCExecutor ← 命令 → QuTiP 测量
+```
+
+**选型指南**：
+
+- 想一键跑完、不需要中途干预 → 用 `FrequencyCalibrationWorkflow`
+- 想逐步控制、可回退、可持久化、可模拟长期运行 → 用 `FrequencyCalibrationRuntime` + `FrequencyStateMachine`
+
+两者底层共享同一个 `DampedSecantTracker` 控制律，数值行为一致。
+
 ## 类总览
 
 **扩展点**

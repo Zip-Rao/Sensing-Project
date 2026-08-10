@@ -647,6 +647,18 @@ class FrequencyStateMachine:
             # No more commands — return a no-op SafeHold
             return SafeHold(bias=0.0, reason=ReasonCode.CANCELLED)
 
+        # Never issue another science command after a budget has expired.
+        budget_reason = self._budget.check(self.config)
+        if budget_reason is not None:
+            was_in_lock = self._state == FrequencyState.LOCK
+            self._transition_to(FrequencyState.SAFE_STOP, budget_reason)
+            self._run_status = (
+                RunStatus.COMPLETED
+                if was_in_lock or self._run_status == RunStatus.CALIBRATED
+                else RunStatus.FAILED
+            )
+            return SafeHold(bias=0.0, reason=budget_reason)
+
         # If a command is already pending, return it again (idempotent)
         if self._pending_command is not None:
             return self._pending_command
@@ -687,6 +699,9 @@ class FrequencyStateMachine:
                     and self._last_audit_time > 0
                     and (now - self._last_audit_time) >= self.config.audit_interval
                 ):
+                    self._transition_to(
+                        FrequencyState.VERIFY, ReasonCode.AUDIT_DUE,
+                    )
                     return VerifyFrequency(
                         frozen_bias=self._candidate_bias or 0.0,
                         drive=self.f_target,
@@ -708,20 +723,6 @@ class FrequencyStateMachine:
         (or be a spontaneous event like ``TimerElapsed``, ``InterlockTriggered``,
         ``CancelRequested``).
         """
-        # --- check budget first (global guard) ---
-        budget_reason = self._budget.check(self.config)
-        if budget_reason is not None:
-            was_in_lock = self._state == FrequencyState.LOCK
-            self._transition_to(
-                FrequencyState.SAFE_STOP, budget_reason,
-            )
-            if budget_reason == ReasonCode.BUDGET_EXHAUSTED:
-                # If we were in Lock, budget expiry is COMPLETED; else FAILED
-                self._run_status = (
-                    RunStatus.COMPLETED if was_in_lock else RunStatus.FAILED
-                )
-            return
-
         # --- spontaneous events (no command_id match needed) ---
         match event:
             case InterlockTriggered():
@@ -744,6 +745,10 @@ class FrequencyStateMachine:
                         FrequencyState.VERIFY, ReasonCode.AUDIT_DUE,
                     )
                     self._last_audit_time = _time.time()
+                    self._clear_pending()
+                return
+            case SafeHoldApplied() if self._state == FrequencyState.SAFE_STOP:
+                self._record_event(event)
                 self._clear_pending()
                 return
             case _:
@@ -867,6 +872,19 @@ class FrequencyStateMachine:
                 valid=True, ambiguous=False,
                 frequency=f, uncertainty=u,
             ):
+                if (
+                    self._candidate_bias is None
+                    or abs(event.applied_bias - self._candidate_bias)
+                    > self.config.bias_freeze_tolerance
+                ):
+                    self._verify_streak = 0
+                    self._transition_to(
+                        FrequencyState.SAFE_STOP, ReasonCode.INTERLOCK,
+                    )
+                    self._run_status = RunStatus.FAILED
+                    self._clear_pending()
+                    return
+
                 error = f - self.f_target
                 self._f_hat = f
                 self._uncertainty = u
@@ -921,6 +939,7 @@ class FrequencyStateMachine:
                 self._f_hat = f
                 self._uncertainty = u
                 self._technical_retries = 0
+                self._budget.record_lock_cycle()
 
                 if _check_monitor_clear(u, error, self.config):
                     self._monitor_streak = 0
@@ -952,11 +971,6 @@ class FrequencyStateMachine:
 
             case _:
                 pass
-
-        # After handling a Lock event, check if it was actually a Verify
-        # triggered by the audit timer
-        if isinstance(event, MeasurementSucceeded) and self._state == FrequencyState.VERIFY:
-            self._last_audit_time = _time.time()
 
         self._clear_pending()
 

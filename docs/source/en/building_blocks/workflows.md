@@ -14,6 +14,45 @@ parameter, `compare()` compares reconstruction algorithms, and `plot()`
 auto-visualises. `PredistortionValidationWorkflow` is the end-to-end validation
 workflow for the predistortion mainline.
 
+### Two ways to do frequency calibration
+
+Frequency calibration has three related classes, organised into **old and new APIs**:
+
+| | Old API (one-shot) | New API (event-driven) |
+|---|---|---|
+| **Entry point** | `FrequencyCalibrationWorkflow` | `FrequencyCalibrationRuntime` |
+| **Core** | Chains multiple `SinglePointFrequencyCalibration` internally | Drives `FrequencyStateMachine` internally |
+| **How to run** | `wf.run()` — runs to completion | `runtime.run()` — stepwise event loop |
+| **Pause/resume?** | No | Yes (`save_run` / `load_run` persistence) |
+| **Recovery?** | No (stages only go forward) | Yes (Track→Reacquire→Track, Lock→Verify→Lock) |
+| **Shared component** | `DampedSecantTracker` (step formula) | Same `DampedSecantTracker` |
+
+```text
+User
+ │
+ ├── (old) FrequencyCalibrationWorkflow.run()
+ │       internal: stage1 → stage2 → ...   one-shot pipeline
+ │       each stage delegates to DampedSecantTracker
+ │
+ └── (new) FrequencyCalibrationRuntime.run()
+            │
+            ├── FrequencyStateMachine  ← pure state transitions (no QuTiP)
+            │     six states: Acquire → Track → Verify → Lock
+            │     recovery branches: Reacquire, SafeStop
+            │     DampedSecantTracker ← shared step formula
+            │
+            └── SQCExecutor ← command → QuTiP measurement
+```
+
+**Which one to use**:
+
+- Want one-shot, no mid-run intervention → use `FrequencyCalibrationWorkflow`
+- Want stepwise control, recovery, persistence, long-run simulation → use
+  `FrequencyCalibrationRuntime` + `FrequencyStateMachine`
+
+Both share the same `DampedSecantTracker` control law — numerical behaviour is
+identical.
+
 ## Class overview
 
 **Extension point**

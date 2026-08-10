@@ -104,13 +104,12 @@ class FrequencyCalibrationRuntime:
         self._machine.start()
         self._journal = []
 
-        while self._machine.run_status == RunStatus.RUNNING:
+        safe_hold_attempted = False
+        while (
+            self._machine.run_status in (RunStatus.RUNNING, RunStatus.CALIBRATED)
+            or (self._machine.state == FrequencyState.SAFE_STOP and not safe_hold_attempted)
+        ):
             cmd = self._machine.next_command()
-
-            # Terminal command → exit loop
-            if isinstance(cmd, SafeHold):
-                self._record_journal(cmd, None)
-                break
 
             # Pre-process: for Track commands, use the tracker to refine the proposal
             cmd = self._enrich_command(cmd)
@@ -121,6 +120,12 @@ class FrequencyCalibrationRuntime:
 
             # Handle event → state transition
             self._machine.handle(event)
+
+            # Terminal status is not enough: send the safe-bias command to the
+            # executor and record its acknowledgement before leaving the loop.
+            if isinstance(cmd, SafeHold):
+                safe_hold_attempted = True
+                break
 
             # Post-process: update tracker after Track measurements
             self._post_process(cmd, event)
