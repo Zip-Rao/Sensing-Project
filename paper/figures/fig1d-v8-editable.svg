@@ -253,15 +253,11 @@
          x="11.5"
          y="12.75"
          text-anchor="middle"
-         id="text4">f̂<tspan
+         id="text4">U<tspan
    baseline-shift="sub"
    font-size="1.0px"
    font-style="normal"
-   id="tspan3">acq</tspan>, σ<tspan
-   baseline-shift="sub"
-   font-size="1.0px"
-   font-style="normal"
-   id="tspan4">acq</tspan></text>
+   id="tspan3">acq</tspan></text>
     </g>
     <g
        id="text-track">
@@ -280,7 +276,7 @@
    baseline-shift="sub"
    font-size="1.0px"
    font-style="normal"
-   id="tspan5">loop</tspan></text>
+   id="tspan5">tra</tspan></text>
     </g>
     <g
        id="text-verify">
@@ -318,7 +314,7 @@
    baseline-shift="sub"
    font-size="1.0px"
    font-style="normal"
-   id="tspan9">mon</tspan></text>
+   id="tspan9">loc</tspan></text>
     </g>
     <g
        id="text-reacquire">
@@ -333,15 +329,11 @@
          x="51.5"
          y="27.15"
          text-anchor="middle"
-         id="text12">f̂<tspan
+         id="text12">U<tspan
    baseline-shift="sub"
    font-size="1.0px"
    font-style="normal"
-   id="tspan11">R</tspan>, σ<tspan
-   baseline-shift="sub"
-   font-size="1.0px"
-   font-style="normal"
-   id="tspan12">R</tspan></text>
+   id="tspan11">reacq</tspan></text>
     </g>
   </g>
   <g
@@ -369,11 +361,7 @@
        class="condition"
        x="31.5"
        y="3.1"
-       text-anchor="middle">U<tspan
-   baseline-shift="sub"
-   font-size="0.78px"
-   font-style="normal"
-   id="tspan15">acq</tspan> ≤ ε<tspan
+       text-anchor="middle">≤ ε<tspan
    baseline-shift="sub"
    font-size="0.78px"
    font-style="normal"
@@ -383,11 +371,7 @@
        class="condition"
        x="21.5"
        y="10.15"
-       text-anchor="middle">U<tspan
-   baseline-shift="sub"
-   font-size="0.78px"
-   font-style="normal"
-   id="tspan17">acq</tspan> &gt; ε<tspan
+       text-anchor="middle">&gt; ε<tspan
    baseline-shift="sub"
    font-size="0.78px"
    font-style="normal"
@@ -397,11 +381,7 @@
        class="condition"
        x="31.5"
        y="6.75"
-       text-anchor="middle">U<tspan
-   baseline-shift="sub"
-   font-size="0.78px"
-   font-style="normal"
-   id="tspan19">loop</tspan> &gt; ε<tspan
+       text-anchor="middle">&gt; ε<tspan
    baseline-shift="sub"
    font-size="0.78px"
    font-style="normal"
@@ -411,11 +391,7 @@
        class="condition"
        x="41.5"
        y="10.15"
-       text-anchor="middle">U<tspan
-   baseline-shift="sub"
-   font-size="0.78px"
-   font-style="normal"
-   id="tspan21">loop</tspan> ≤ ε<tspan
+       text-anchor="middle">≤ ε<tspan
    baseline-shift="sub"
    font-size="0.78px"
    font-style="normal"
@@ -425,11 +401,7 @@
        class="condition"
        x="61.5"
        y="10.15"
-       text-anchor="middle">U<tspan
-   baseline-shift="sub"
-   font-size="0.78px"
-   font-style="normal"
-   id="tspan23">ver</tspan> ≤ ε<tspan
+       text-anchor="middle">≤ ε<tspan
    baseline-shift="sub"
    font-size="0.78px"
    font-style="normal"
@@ -439,11 +411,7 @@
        class="condition"
        x="71.5"
        y="6.75"
-       text-anchor="middle">U<tspan
-   baseline-shift="sub"
-   font-size="0.78px"
-   font-style="normal"
-   id="tspan25">mon</tspan> ≤ ε<tspan
+       text-anchor="middle">≤ ε<tspan
    baseline-shift="sub"
    font-size="0.78px"
    font-style="normal"
@@ -453,11 +421,7 @@
        class="condition"
        x="41.5"
        y="16.55"
-       text-anchor="middle">U<tspan
-   baseline-shift="sub"
-   font-size="0.78px"
-   font-style="normal"
-   id="tspan27">ver</tspan> &gt; ε<tspan
+       text-anchor="middle">&gt; ε<tspan
    baseline-shift="sub"
    font-size="0.78px"
    font-style="normal"
@@ -467,11 +431,7 @@
        class="condition"
        x="61.5"
        y="16.55"
-       text-anchor="middle">U<tspan
-   baseline-shift="sub"
-   font-size="0.78px"
-   font-style="normal"
-   id="tspan29">mon</tspan> &gt; ε<tspan
+       text-anchor="middle">&gt; ε<tspan
    baseline-shift="sub"
    font-size="0.78px"
    font-style="normal"
