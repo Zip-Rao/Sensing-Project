@@ -1,0 +1,12 @@
+{
+  "title": "Fig. 1(b): aligned single-window probe timing",
+  "page_mm": [53, 26.5],
+  "rows": ["scanned Ramsey", "fixed-delay Ramsey", "zero-delay short-pulse probe"],
+  "decisions": [
+    "one waveform per pulse window",
+    "phase alternatives described by labels and caption",
+    "measurement symbols aligned in one column",
+    "short-pulse pair right-aligned with the common analysis and measurement columns",
+    "sin-squared envelope retained as the current schematic choice"
+  ]
+}

@@ -1,54 +1,357 @@
-\section{Short-pulse frequency discriminator}
-\label{sec:discriminator}
+\section{System and calibration task}
+\label{sec:system}
 
-\subsection{Driven transmon}
+\subsection{Flux-tunable transmon and calibration objective}
+\label{sec:system-objective}
 
-We consider a flux-tunable transmon at bias $\Phi$ with transition frequency
-$\omega_q(\Phi)$.  In a frame rotating at the drive frequency $\omega_d$ and
-under the rotating-wave approximation, the two-level Hamiltonian is
-\begin{align}
- H(t)&=\frac{\Delta}{2}\sigma_z+\frac{\Omega(t)}{2}
- \left[\cos\varphi(t)\sigma_x+\sin\varphi(t)\sigma_y\right],\nonumber\\
- \Delta&=\omega_q(\Phi)-\omega_d.
- \label{eq:hamiltonian}
-\end{align}
-The flux bias is the controlled variable and $\Delta$ is the quantity measured
-within each feedback iteration.
+We consider a flux-tunable transmon qubit~\cite{krantz2019quantum} controlled through a calibrated flux-bias coordinate $\Phi$. Experimentally, $\Phi$ is controlled through a room-temperatue bias voltage $V_{\mathrm b}$ using a separately characterized voltage-to-flux conversion, as detailed in the Supplemental Material.
 
-The discriminator uses two zero-delay Ramsey sequences,
-\begin{align}
- \mathcal S_+ &: R_y(\pi/2)R_x(\pi/2),\\
- \mathcal S_- &: R_y(\pi/2)R_{-x}(\pi/2).
- \label{eq:sequences}
-\end{align}
-Each branch contains the same state-preparation pulse and an analysis pulse
-whose phase differs by $\pi$.  If $p_+$ and $p_-$ are their final excited-state
-probabilities, we define
+In the transmon regime, the flux dispersion of the qubit angular transition frequency is approximately given by~\cite{koch2007charge}
+%
 \begin{equation}
- p_{\mathrm d}=\frac{p_+-p_-}{2}.
- \label{eq:pdiff}
+\begin{split}
+\hbar\omega_{01}(\Phi)
+\simeq{}&
+\sqrt{8E_CE_J(\Phi)}-E_C, \\
+E_J(\Phi)
+={}&
+E_{J,\Sigma}
+\sqrt{
+\cos^2\left(\pi\Phi/\Phi_0\right)
++
+d^2\sin^2\left(\pi\Phi/\Phi_0\right)
+},
+\label{eq:transmon-dispersion}
+\end{split}
 \end{equation}
-The branch symmetry cancels the even powers of detuning near resonance, giving
-\begin{equation}
- p_{\mathrm d}=A_1\Delta+\frac{A_3}{3!}\Delta^3+O(\Delta^5).
- \label{eq:cubic-response}
-\end{equation}
-Unlike a conventional Ramsey scan, this signal is generated entirely during
-the control pulses.  One frequency estimate therefore requires two driven
-evolutions after the response coefficients have been calibrated.
 
-\subsection{Local inverse and fold}
-
-The linear estimator is $\widehat\Delta_1=p_{\mathrm d}/A_1$.  The cubic
-estimator solves Eq.~\eqref{eq:cubic-response} for the root continuously
-connected to $\Delta=0$.  When $A_1A_3<0$, the cubic response has a turnover at
+Equation~\eqref{eq:transmon-dispersion} describes the flux dependence of the
+transition frequency and thus provides the physical basis for frequency
+calibration through flux-bias tuning. The calibration objective is to find a
+flux bias $\Phi_\star$ such that
+%
 \begin{equation}
- |\Delta_{\mathrm{fold}}|=\sqrt{-\frac{2A_1}{A_3}}.
- \label{eq:fold}
+\left|\omega_{01}(\Phi_\star)-\omega_{\mathrm{tar}}\right|
+\leq \epsilon_\omega,
+\label{eq:calibration-success}
 \end{equation}
-Beyond this point, the same population difference can correspond to multiple
-detunings and no local polynomial correction can make the measurement globally
-invertible.  The implementation therefore rejects the distant cubic root and
-falls back to the linear estimate outside the calibrated branch.  This guard
-prevents a numerical root finder from returning a plausible but physically
-disconnected solution; it does not extend the capture range.
+%
+where $\omega_{\mathrm{tar}}$ is the target angular transition frequency and
+$\epsilon_\omega$ is the prescribed tolerance.
+
+In practice, a previously characterized frequency--flux map may no longer be
+accurate at the target tolerance because of slow shifts in the effective flux
+offset or device parameters\cite{paladino2014noise,vepsalainen2022improving}. We therefore formulate the calibration without
+assuming an up-to-date quantitative map $\omega_{01}(\Phi)$: the controller
+operates in the calibrated flux coordinate and obtains the local frequency
+information required for bias updates directly from measurements.
+
+Figure~\ref{fig:system-protocol}(a) summarizes this calibration setting. The
+full dispersion illustrates the physical tunability of the qubit, while the
+inset shows a local trajectory from the seed bias toward the target frequency.
+The displayed dispersion is withheld from the controller, which uses only the
+frequency information obtained at the visited bias points.
+
+\begin{figure*}[t]
+    \centering
+    % PLACEHOLDER: replace with the final four-panel system/protocol figure.
+    \includegraphics[width=0.9\textwidth]{figures/fig1-system-protocol.pdf}
+    \caption{Schematic overview of the physical system, measurement probes,
+    and calibration protocol. (a) Qubit frequency dispersion, with an inset showing the seed bias, target
+    frequency, and successive points of the local calibration trajectory. The
+    complete dispersion is withheld from the calibration controller. (b) Timing diagrams for scanned Ramsey,
+    fixed-delay Ramsey, and the bipartite short-pulse probe. (c) Construction
+    of the differential observable $p_{\mathrm d}$ from the phase-cycled
+    $+X$ and $-X$ branches, together with its locally monotonic response about
+    resonance. (d) The \textsc{Acquire--Track--Lock--Reacquire} protocol,
+    distinguishing flux-bias updates from drive-reference updates.}
+    \label{fig:system-protocol}
+\end{figure*}
+
+% A calibration cycle combines three distinct operations: measurement, estimation, and tuning. A measurement executes a probe at fixed $\Phi_n$ and returns population data. An estimator maps these data to $\widehat{\Delta}_n$ and $\widehat{\omega}_{01,n}$, and a tuning step changes the flux bias. Repeated cycles locate the target working point. Stabilization, in contrast, suppresses subsequent drift around an established working point and is not the primary task considered here.
+
+\subsection{Ramsey and bipartite short-pulse probes}
+\label{sec:system-probes}
+
+At each calibration iteration, the qubit is interrogated at a fixed flux bias
+by a control sequence followed by population readout. We refer to this
+pulse-and-readout operation as a measurement probe. We consider two types of
+probes: Ramsey probes and bipartite short-pulse probes. The driven dynamics of
+both probes are described by an effective two-level Hamiltonian. In a frame
+rotating at the drive frequency $\omega_d$ and under the rotating-wave
+approximation~\cite{krantz2019quantum,blais2021circuit},
+\begin{equation}
+\begin{aligned}
+\frac{H(t,\Phi)}{\hbar}
+={}&
+\frac{\Delta(\Phi)}{2}\sigma_z
++
+\frac{\Omega(t)}{2}
+\left[
+\cos\varphi(t)\sigma_x
++
+\sin\varphi(t)\sigma_y
+\right],
+\\
+\Delta(\Phi)
+={}&
+\omega_{01}(\Phi)-\omega_d .
+\end{aligned}
+\label{eq:hamiltonian}
+\end{equation}
+%
+Here $\Delta(\Phi)$ is the angular-frequency detuning, while $\Omega(t)$ and
+$\varphi(t)$ are the drive envelope and phase. The detuning term connects the
+unknown transition frequency to the driven dynamics. Ramsey and short-pulse
+probes use different control sequences to infer this detuning from population
+readout; once $\widehat\Delta$ is obtained, the transition frequency follows
+as $\widehat\omega_{01}=\omega_d+\widehat\Delta$.
+
+Figure~\ref{fig:system-protocol}(b) compares the timing structures of the
+two probe types. We first consider the Ramsey probe, which uses two nominal
+$\pi/2$ pulses separated by a free-evolution interval
+$\tau$~\cite{ramsey1950molecular}.
+
+For a Ramsey sequence with free-evolution time $\tau$ and analysis phase $\varphi$, the excited-state population is
+\begin{equation}
+    p_R(\Delta; \tau, \varphi) = \frac{1}{2}\left[ 1 + C\cos(\Delta\tau + \varphi) \right],
+    \label{eq:ramsey-response}
+\end{equation}
+where $C$ is the Ramsey contrast. We use this response in two measurement
+modes. Scanned Ramsey samples multiple values of $\tau$ to estimate the
+oscillation frequency over a broad range. Once the detuning has been confined
+to a known local interval, $\tau$ can instead be fixed at $\tau_0$, and two
+orthogonal analysis phases recover detuning from the measured quadratures,
+subject to phase wrapping~\cite{vepsalainen2022improving}. These modes provide
+a wide-range frequency estimate and a local frequency-estimation baseline,
+respectively. The scan processing, phase reconstruction, and choice of
+$\tau_0$ are specified in Appendix~\ref{app:methods}.
+
+We next turn to the bipartite short-pulse probe. Unlike the Ramsey probe,
+it contains no separate free-evolution interval and instead applies a common
+preparation rotation of angle $\alpha$ immediately
+followed by one of two analysis rotations whose phases differ by $\pi$~\cite{herb2024quantum}:
+\begin{equation}
+    R_y(\alpha) \longrightarrow R_{+x}(\alpha) \quad\text{or}\quad R_y(\alpha) \longrightarrow R_{-x}(\alpha).
+    \label{eq:bipartite-sequences}
+\end{equation}
+
+Here $\alpha = \int \Omega(t) \dd t$ is determined from the pulse envelope and duration. Varying $\alpha$ changes the differential detuning response and therefore the response coefficients and validated operating range introduced in Sec.~III.
+
+We refer to these two sequences as the $+X$ and $-X$ branches and denote
+their final excited-state populations by $p_{+X}$ and $p_{-X}$,
+respectively. We define the corresponding differential observable as
+\begin{equation}
+    p_{\mathrm d}
+    =
+    \frac{p_{+X}-p_{-X}}{2}.
+    \label{eq:pdiff}
+\end{equation}
+
+Figure~\ref{fig:system-protocol}(c) shows how the two branch populations
+form the differential response. Detuning nevertheless acts during the finite
+control pulses and changes the measured branch populations. Their difference
+provides a first-order-sensitive local frequency observable when
+\begin{equation}
+    \left.
+    \frac{\partial p_{\mathrm d}}{\partial\Delta}
+    \right|_{\Delta=0}
+    \neq 0.
+    \label{eq:local-identifiability}
+\end{equation}
+This condition is necessary for local inversion but does not guarantee an
+unambiguous response over an unrestricted detuning range. Section~III
+quantifies the local response and establishes its validated operating interval.
+
+
+\subsection{Calibration workflow and independent validation}
+\label{sec:calibration-workflow}
+
+The local-identifiability condition above concerns a probe at a fixed bias.
+During calibration, however, bias updates can move the qubit frequency beyond
+the invertible range of the short-pulse response. We therefore use the
+four-state \textsc{Acquire--Track--Lock--Reacquire} workflow shown in
+Fig.~\ref{fig:system-protocol}(d), combining wide-range frequency acquisition
+and recovery with local tracking and independent target confirmation. This
+organization follows the general setting of automated qubit calibration and
+closed-loop frequency feedback~\cite{kelly2018physical,
+wittler_integrated_2021,vepsalainen2022improving}.
+
+Measurement, estimation, and tuning remain distinct within the workflow. A
+probe returns population data, an estimator converts them into a frequency
+estimate and its uncertainty, and the tuning controller updates the physical
+flux bias. A separate drive-reference update changes only the reference of the
+next measurement. These two updates are governed by different frequency
+differences:
+%
+\begin{equation}
+\Delta_n
+=
+\omega_{01}(\Phi_n)-\omega_{d,n},
+\qquad
+r_n
+=
+\omega_{01}(\Phi_n)-\omega_{\mathrm{tar}}.
+\label{eq:detuning-and-residual}
+\end{equation}
+%
+The measurement detuning $\Delta_n$ determines whether the local probe remains
+valid, whereas the calibration residual $r_n$ determines whether the target
+has been reached. The flux-bias update reduces $r_n$ by changing the physical
+working point, while the drive-reference update controls $\Delta_n$ without
+moving that point.
+
+In \textsc{Lock}, the drive is placed at $\omega_{\mathrm{tar}}$, and an
+independent frequency measurement tests
+%
+\begin{equation}
+\left|
+\widehat\omega_{01}^{(\mathrm{ver})}
+-
+\omega_{\mathrm{tar}}
+\right|
++
+z_{1-\beta}\sigma_{\mathrm{ver}}
+\leq
+\epsilon_\omega.
+\label{eq:verification-condition}
+\end{equation}
+%
+Calibration success is declared only after
+$N_{\mathrm{lock}}$ consecutive verification measurements satisfy
+Eq.~\eqref{eq:verification-condition}. A failed verification returns the
+protocol to \textsc{Track} if the local-entry conditions remain satisfied and
+to \textsc{Reacquire} otherwise. Thus, \textsc{Lock} provides independent
+target confirmation and short-term holding rather than continued flux
+refinement or long-term stabilization.
+
+\textsc{Reacquire} repeats the wide-range frequency measurement and returns a
+new bias--frequency seed together with its uncertainty. A successful
+local-entry test then starts a new \textsc{Track} episode. The numerical
+thresholds for the Ramsey capture range, confidence margins, sensitivity
+checks, repeated-failure rule, and lock confirmation are specified in
+Appendix~\ref{app:methods}.
+
+To avoid self-validation, the verification measurement is independent of the
+short-pulse estimator used inside the feedback loop. We define
+$T_{\mathrm{hit}}(\epsilon_\omega)$ as the elapsed experimental time at which
+Eq.~\eqref{eq:verification-condition} is first confirmed with the prescribed
+confidence. The verification schedule and the cold-start, amortized, and
+local-tracking cost conventions are given in
+Appendix~\ref{app:methods}.
+
+Section~\ref{sec:inference-calibration} now constructs the estimator and
+controller that implement the local \textsc{Track} state. The wide-range
+acquisition, independent lock verification, and state-transition roles
+remain those defined here.
+
+% \subsection{Calibration workflow and independent validation}
+% \label{sec:calibration-workflow}
+
+% Automated qubit-calibration frameworks organize interdependent calibration
+% tasks and integrate measurement and parameter-update
+% routines~\cite{kelly2018physical,wittler_integrated_2021}, while closed-loop
+% frequency feedback couples repeated frequency estimates to physical
+% corrections~\cite{vepsalainen2022improving}. In the present method, such
+% orchestration is required because the short-pulse probe considered here
+% admits a validated inverse only over a local detuning interval: as the flux
+% bias is updated, the qubit frequency may move beyond this interval. We
+% therefore use scanned Ramsey to establish or recover a wide-range frequency
+% reference and reserve the short-pulse probe for repeated local tracking.
+% Within this workflow, two frequency differences must be distinguished:
+% %
+% \begin{equation}
+% \Delta_n=\omega_{01}(\Phi_n)-\omega_{d,n},
+% \qquad
+% r_n=\omega_{01}(\Phi_n)-\omega_{\mathrm{tar}}.
+% \label{eq:detuning-and-residual}
+% \end{equation}
+% %
+% The measurement detuning $\Delta_n$ determines whether the local probe remains
+% valid, while the calibration residual $r_n$ determines whether the target has
+% been reached. Accordingly, the flux-bias update moves the physical qubit
+% frequency toward $\omega_{\mathrm{tar}}$, whereas the drive-reference update
+% keeps the next measurement near resonance.
+
+% Figure~\ref{fig:system-protocol}(d) summarizes the
+% \textsc{Acquire--Track--Lock--Reacquire} workflow. In \textsc{Acquire}, a
+% scanned Ramsey measurement establishes the wide-range frequency reference
+% and initializes the drive. The protocol enters \textsc{Track} only when the
+% prescribed local-entry condition is satisfied. During \textsc{Track}, the
+% short-pulse probe supplies local frequency estimates while the drive follows
+% the predicted qubit frequency. A failure of the local-range, inversion,
+% confidence, or sensitivity conditions triggers \textsc{Reacquire}, which
+% restores the wide-range frequency reference before tracking resumes.
+
+% Once the target-entry condition is satisfied, the protocol enters
+% \textsc{Lock}. The drive is then fixed at $\omega_{\mathrm{tar}}$, and
+% independent verification measurements test the target condition. Calibration
+% success is declared only after $N_{\mathrm{lock}}$ consecutive independent
+% measurements confirm Eq.~\eqref{eq:calibration-success}. A failed verification
+% returns the protocol to \textsc{Track} if the local conditions remain valid
+% and to \textsc{Reacquire} otherwise. Thus, \textsc{Lock} provides independent
+% target confirmation and short-term holding rather than continued flux
+% refinement or long-term frequency stabilization.
+
+% To avoid self-validation, the verification measurements use an independent
+% frequency reference rather than the output of the estimator used in the loop.
+% The strategies are compared at a common verified error threshold under a
+% consistent resource-accounting convention. With the workflow and evaluation
+% framework established, Section~\ref{sec:inference-calibration} turns to the
+% technical construction of the local \textsc{Track} branch.
+
+
+% \section{Short-pulse frequency discriminator}
+% \label{sec:discriminator}
+
+% \subsection{Driven transmon}
+
+% We consider a flux-tunable transmon at bias $\Phi$ with transition frequency
+% $\omega_q(\Phi)$.  In a frame rotating at the drive frequency $\omega_d$ and
+% under the rotating-wave approximation, the two-level Hamiltonian is
+% \begin{align}
+%  H(t)&=\frac{\Delta}{2}\sigma_z+\frac{\Omega(t)}{2}
+%  \left[\cos\varphi(t)\sigma_x+\sin\varphi(t)\sigma_y\right],\nonumber\\
+%  \Delta&=\omega_q(\Phi)-\omega_d.
+%  \label{eq:hamiltonian}
+% \end{align}
+% The flux bias is the controlled variable and $\Delta$ is the quantity measured
+% within each feedback iteration.
+
+% The discriminator uses two zero-delay Ramsey sequences,
+% \begin{align}
+%  \mathcal S_+ &: R_y(\pi/2)R_x(\pi/2),\\
+%  \mathcal S_- &: R_y(\pi/2)R_{-x}(\pi/2).
+%  \label{eq:sequences}
+% \end{align}
+% Each branch contains the same state-preparation pulse and an analysis pulse
+% whose phase differs by $\pi$.  If $p_+$ and $p_-$ are their final excited-state
+% probabilities, we define
+% \begin{equation}
+%  p_{\mathrm d}=\frac{p_+-p_-}{2}.
+%  \label{eq:pdiff}
+% \end{equation}
+% The branch symmetry cancels the even powers of detuning near resonance, giving
+% \begin{equation}
+%  p_{\mathrm d}=A_1\Delta+\frac{A_3}{3!}\Delta^3+O(\Delta^5).
+%  \label{eq:cubic-response}
+% \end{equation}
+% Unlike a conventional Ramsey scan, this signal is generated entirely during
+% the control pulses.  One frequency estimate therefore requires two driven
+% evolutions after the response coefficients have been calibrated.
+
+% \subsection{Local inverse and fold}
+
+% The linear estimator is $\widehat\Delta_1=p_{\mathrm d}/A_1$.  The cubic
+% estimator solves Eq.~\eqref{eq:cubic-response} for the root continuously
+% connected to $\Delta=0$.  When $A_1A_3<0$, the cubic response has a turnover at
+% \begin{equation}
+%  |\Delta_{\mathrm{fold}}|=\sqrt{-\frac{2A_1}{A_3}}.
+%  \label{eq:fold}
+% \end{equation}
+% Beyond this point, the same population difference can correspond to multiple
+% detunings and no local polynomial correction can make the measurement globally
+% invertible.  The implementation therefore rejects the distant cubic root and
+% falls back to the linear estimate outside the calibrated branch.  This guard
+% prevents a numerical root finder from returning a plausible but physically
+% disconnected solution; it does not extend the capture range.

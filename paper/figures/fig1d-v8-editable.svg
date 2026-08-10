@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg xmlns="http://www.w3.org/2000/svg"
+     xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+     width="88mm" height="30mm" viewBox="0 0 88 30">
+  <title>Fig. 1(d): compact calibration workflow</title>
+  <desc>Layered Inkscape source for the provisional Fig. 1(d) workflow.</desc>
+  <defs>
+    <marker id="arrow-solid" markerWidth="1.2" markerHeight="0.65" refX="1.12" refY="0.325"
+            orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L1.2,0.325 L0,0.65 z" fill="#30343a"/>
+    </marker>
+    <marker id="arrow-recovery" markerWidth="1.2" markerHeight="0.65" refX="1.12" refY="0.325"
+            orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L1.2,0.325 L0,0.65 z" fill="#858b91"/>
+    </marker>
+    <style>
+      .state { font-family: "Times New Roman", "Latin Modern Roman", serif; font-size: 2.35px; font-weight: 700; fill: #202327; letter-spacing: 0; }
+      .role { font-family: "Times New Roman", "Latin Modern Roman", serif; font-size: 1.75px; font-style: italic; font-weight: 400; fill: #63686e; letter-spacing: 0; }
+      .edge-label { font-family: "Times New Roman", "Latin Modern Roman", serif; font-size: 1.75px; font-style: italic; font-weight: 400; fill: #3d4247; letter-spacing: 0; }
+      .math { font-family: "Times New Roman", "Latin Modern Roman", serif; font-size: 2px; font-style: italic; font-weight: 400; fill: #25292e; letter-spacing: 0; }
+      .panel { font-family: "Times New Roman", "Latin Modern Roman", serif; font-size: 2.5px; font-weight: 700; fill: #17191c; letter-spacing: 0; }
+      .node { fill: #ffffff; stroke: #3f444a; stroke-width: 0.30; }
+      .track-node { fill: #f1f6f8; stroke: #3f444a; stroke-width: 0.30; }
+      .flow { fill: none; stroke: #30343a; stroke-width: 0.22; stroke-linecap: square; stroke-linejoin: round; marker-end: url(#arrow-solid); }
+      .recovery { fill: none; stroke: #858b91; stroke-width: 0.18; stroke-dasharray: 0.75,0.6; stroke-dashoffset: 0.15; stroke-linecap: butt; stroke-linejoin: round; marker-end: url(#arrow-recovery); }
+    </style>
+  </defs>
+
+  <g inkscape:groupmode="layer" inkscape:label="01 Background" id="layer-background">
+    <rect id="page-background" width="88" height="30" fill="#ffffff"/>
+    <text id="panel-label" class="panel" x="0.7" y="2.8">(d)</text>
+  </g>
+
+  <g inkscape:groupmode="layer" inkscape:label="02 Transitions" id="layer-transitions">
+    <circle id="initial-state" cx="1.2" cy="11.9" r="0.43" fill="#30343a"/>
+    <path id="initial-to-acquire" class="flow" d="M2,11.9 H6.5"/>
+    <path id="acquire-to-track" class="flow" d="M25.5,11.9 H34.5"/>
+    <path id="track-to-lock" class="flow" d="M53.5,11.9 H62.5"/>
+    <path id="track-self-loop" class="flow" d="M48,8 V5.8 H40 V8"/>
+    <path id="track-to-reacquire" class="recovery" d="M47,16 V21"/>
+    <path id="reacquire-to-track" class="flow" d="M41,21 V16"/>
+    <path id="lock-to-reacquire" class="recovery" d="M72,16 V25.1 H53.5"/>
+    <path id="lock-to-output" class="flow" d="M81.5,11.9 H85.2"/>
+    <circle id="calibrated-output" cx="86" cy="11.9" r="0.55" fill="#ffffff" stroke="#30343a" stroke-width="0.22"/>
+  </g>
+
+  <g inkscape:groupmode="layer" inkscape:label="03 State Boxes" id="layer-state-boxes">
+    <rect id="box-acquire" class="node" x="7" y="8.3" width="18" height="7.2" rx="0.3"/>
+    <rect id="box-track" class="track-node" x="35" y="8.3" width="18" height="7.2" rx="0.3"/>
+    <rect id="box-lock" class="node" x="63" y="8.3" width="18" height="7.2" rx="0.3"/>
+    <rect id="box-reacquire" class="node" x="35" y="21.5" width="18" height="7.2" rx="0.3"/>
+  </g>
+
+  <g inkscape:groupmode="layer" inkscape:label="04 State Text" id="layer-state-text">
+    <g id="text-acquire">
+      <text class="state" x="16" y="11.35" text-anchor="middle">Acquire</text>
+      <text class="role" x="16" y="13.65" text-anchor="middle">wide-range Ramsey</text>
+    </g>
+    <g id="text-track">
+      <text class="state" x="44" y="11.35" text-anchor="middle">Track</text>
+      <text class="role" x="44" y="13.65" text-anchor="middle">short-pulse update</text>
+    </g>
+    <g id="text-lock">
+      <text class="state" x="72" y="11.35" text-anchor="middle">Lock</text>
+      <text class="role" x="72" y="13.65" text-anchor="middle">Ramsey verification</text>
+    </g>
+    <g id="text-reacquire">
+      <text class="state" x="44" y="24.55" text-anchor="middle">Reacquire</text>
+      <text class="role" x="44" y="26.85" text-anchor="middle">wide-range re-seed</text>
+    </g>
+  </g>
+
+  <g inkscape:groupmode="layer" inkscape:label="05 Edge Labels" id="layer-edge-labels">
+    <text id="label-seed-obtained" class="edge-label" x="30" y="10.6" text-anchor="middle">seed obtained</text>
+    <text id="label-target-entered" class="edge-label" x="58" y="10.6" text-anchor="middle">target entered</text>
+    <text id="label-target-not-reached" class="edge-label" x="44" y="4.9" text-anchor="middle">target not reached</text>
+    <text id="label-validity-lost" class="edge-label" x="48.2" y="18.9" text-anchor="start">validity lost</text>
+    <text id="label-seed-restored" class="edge-label" x="39.8" y="18.9" text-anchor="end">seed restored</text>
+    <text id="label-check-failed" class="edge-label" x="62.7" y="23.85" text-anchor="middle">check failed</text>
+    <text id="label-calibrated-output" class="math" x="86" y="9.8" text-anchor="middle">&#934;<tspan baseline-shift="sub" font-size="1.3" font-style="normal">cal</tspan></text>
+  </g>
+</svg>

@@ -70,7 +70,7 @@ Wiener 通道已验证与 src 逐位一致(见 `tests/integration/test_transient
 | 子目录 | 对应 `result/` | 预计产出文件 | src 源脚本 | 状态 |
 |---|---|---|---|---|
 | `reconstruction/different_signals/` | 同名 | `comparison_sqc.png/.pdf`(叠加src)、`reconstruction_only_sqc.png/.pdf`(仅sqc,原波形+重建)、`comparison_metrics_sqc.txt`、`check_{sine,step,double_peak,complex}_sqc.png`、`signal_{name}_sqc.npz` | `result/different_signals/generate_single_signal_data.py` | ✅ |
-| `reconstruction/D1_waveform_reconstruction/` | **新增(图 D1)** | `d1_waveform_regularization_sqc.png/.pdf/.npz`、metadata、metrics；高斯 `π/2` 控制下的双峰/复杂波形两法对比 + 类阶跃 Wiener λ 扫描 | 独立重算量子动力学、响应核及 LM | ✅ |
+| `reconstruction/D1_waveform_reconstruction/` | **新增(图 D1)** | `d1_waveform_regularization_sqc.png/.pdf/.npz`、metadata、metrics；高斯 `π/2` 控制下的双峰/复杂波形无噪基准 + `N_shot=10^4` 类阶跃投影噪声 Wiener λ 扫描 | 独立重算量子动力学和响应核；64 个噪声实现 | ✅ |
 | `reconstruction/amplitude_scan/` | `signal_amp/amplitude_scan/` | `amplitude_scan_results_sqc.png/.pdf`(仅sqc,报告候选)、`amplitude_scan_vs_src_sqc.png/.pdf`(叠加src)、`amplitude_{val}_sqc.npz` | `result/signal_amp/amplitude_scan/generate_amplitude_scan_data.py` | ✅ |
 | `reconstruction/lambda_scan/` | 同名 | `{wiener,lm}_lambda_scan_sqc.png/.pdf`(仅sqc)、`{wiener,lm}_lambda_scan_vs_src_sqc.png/.pdf`(叠加src)、`lambda_scan_sqc.npz` | `result/lambda_scan/plot_lambda_scan.py` | ✅ |
 | `reconstruction/basis_comparison/` | 同名 | `basis_comparison_sqc.png/.pdf`(仅sqc,src无npz)、`basis_comparison_sqc.npz` | `result/basis_comparison/generate_basis_comparison_data.py` | ✅ |

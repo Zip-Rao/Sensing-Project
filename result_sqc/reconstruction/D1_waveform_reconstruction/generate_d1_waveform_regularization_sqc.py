@@ -40,9 +40,12 @@ LAMBDA_GRID = np.array(
      15.0, 20.0, 30.0, 50.0],
     dtype=float,
 )
-DISPLAY_LAMBDAS = np.array([0.1, 5.0, 20.0, 50.0], dtype=float)
+DISPLAY_LAMBDAS = np.array([1.0, 5.0, 20.0, 50.0], dtype=float)
 TOP_WIENER_LAMBDA = 10.0
 BASELINE_LAMBDA = 5.0
+N_SHOTS = 10_000
+N_NOISE_REALIZATIONS = 64
+NOISE_SEED = 20260805
 
 COL_TRUTH = "#202020"
 COL_WIENER = "#d92523"
@@ -102,6 +105,10 @@ def generate_measurement_cache(name: str, with_lm: bool) -> dict[str, np.ndarray
         "original_signal": truth,
         "scan_time": np.asarray(result.axes["scan"], dtype=float),
         "delta_p": np.asarray(result.data["delta_p"], dtype=float),
+        "p_signal": np.asarray(result.data["p_e"], dtype=float),
+        "p_reference": np.asarray(
+            result.data["p_e"] - result.data["delta_p"], dtype=float
+        ),
         "kernel_time": np.asarray(result.axes["t_samples"], dtype=float),
         "kernel": np.asarray(result.data["kernel"], dtype=float),
         "pulse_time": np.asarray(experiment.t_rabi, dtype=float),
@@ -147,6 +154,8 @@ def load_or_generate(name: str, with_lm: bool, force: bool) -> dict[str, np.ndar
         version = int(np.asarray(cached.get("cache_version", -1)).item())
         sigma = float(np.asarray(cached.get("envelope_sigma_ns", np.nan)).item())
         if version == CACHE_VERSION and np.isclose(sigma, GAUSSIAN_SIGMA_NS):
+            if name == "step" and not {"p_signal", "p_reference"} <= set(cached):
+                return generate_measurement_cache(name, with_lm=with_lm)
             if not with_lm or "lm_recon" in cached:
                 return cached
     return generate_measurement_cache(name, with_lm=with_lm)
@@ -175,7 +184,7 @@ def compute_step_scan(step: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
     from sqc.reconstruction.transient import TransientReconstruction
 
     dt = float(step["scan_time"][1] - step["scan_time"][0])
-    recons = []
+    clean_recons = []
     for lam in LAMBDA_GRID:
         reconstructor = TransientReconstruction(
             method="wiener", lambda_reg=float(lam)
@@ -183,19 +192,68 @@ def compute_step_scan(step: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
         reconstructed = reconstructor.reconstruct(
             step["delta_p"], kernel=step["kernel"], dt=dt
         )
-        recons.append(np.asarray(reconstructed.signal, dtype=float))
-    recons = np.asarray(recons)
+        clean_recons.append(np.asarray(reconstructed.signal, dtype=float))
+    clean_recons = np.asarray(clean_recons)
+
     truth = np.asarray(step["original_signal"], dtype=float)
+    p_signal = np.clip(np.asarray(step["p_signal"], dtype=float), 0.0, 1.0)
+    p_reference = np.clip(np.asarray(step["p_reference"], dtype=float), 0.0, 1.0)
+    noisy_recons = []
+    measurement_noise_rms = []
+    for seed in NOISE_SEED + np.arange(N_NOISE_REALIZATIONS):
+        rng = np.random.default_rng(int(seed))
+        delta_p_noisy = (
+            rng.binomial(N_SHOTS, p_signal) / N_SHOTS
+            - rng.binomial(N_SHOTS, p_reference) / N_SHOTS
+        )
+        measurement_noise_rms.append(
+            np.sqrt(np.mean((delta_p_noisy - step["delta_p"]) ** 2))
+        )
+        rows = []
+        for lam in LAMBDA_GRID:
+            reconstructed = TransientReconstruction(
+                method="wiener", lambda_reg=float(lam)
+            ).reconstruct(delta_p_noisy, kernel=step["kernel"], dt=dt)
+            rows.append(np.asarray(reconstructed.signal, dtype=float))
+        noisy_recons.append(rows)
+    noisy_recons = np.asarray(noisy_recons)
+    measurement_noise_rms = np.asarray(measurement_noise_rms)
+
+    scale = float(np.max(truth) - np.min(truth))
+    noisy_nrmse = np.sqrt(
+        np.mean((noisy_recons - truth[None, None, :]) ** 2, axis=2)
+    ) / scale
+    noisy_peak_ratio = np.max(np.abs(noisy_recons), axis=2) / np.max(np.abs(truth))
+    noise_gain = np.sqrt(
+        np.mean((noisy_recons - clean_recons[None, :, :]) ** 2, axis=2)
+    ) / measurement_noise_rms[:, None]
+
+    median_nrmse = np.median(noisy_nrmse, axis=0)
+    best_idx = int(np.argmin(median_nrmse))
+    representative_idx = int(np.argmin(
+        np.abs(noisy_nrmse[:, best_idx] - np.median(noisy_nrmse[:, best_idx]))
+    ))
     return {
         "step_time": np.asarray(step["original_time"], dtype=float),
         "step_truth": truth,
         "step_lambdas": LAMBDA_GRID.copy(),
-        "step_reconstructions": recons,
-        "step_nrmse": np.array([nrmse(row, truth) for row in recons]),
-        "step_peak_ratio": np.array([peak_ratio(row, truth) for row in recons]),
-        "step_correlation": np.array(
-            [np.corrcoef(row, truth)[0, 1] for row in recons]
-        ),
+        "step_reconstructions": noisy_recons[representative_idx],
+        "step_clean_reconstructions": clean_recons,
+        "step_noisy_reconstructions": noisy_recons,
+        "step_nrmse": median_nrmse,
+        "step_nrmse_q10": np.quantile(noisy_nrmse, 0.10, axis=0),
+        "step_nrmse_q90": np.quantile(noisy_nrmse, 0.90, axis=0),
+        "step_nrmse_noiseless": np.array([nrmse(row, truth) for row in clean_recons]),
+        "step_peak_ratio": np.median(noisy_peak_ratio, axis=0),
+        "step_noise_gain": np.median(noise_gain, axis=0),
+        "step_noise_gain_q10": np.quantile(noise_gain, 0.10, axis=0),
+        "step_noise_gain_q90": np.quantile(noise_gain, 0.90, axis=0),
+        "step_measurement_noise_rms": measurement_noise_rms,
+        "step_n_shots": np.array(N_SHOTS),
+        "step_n_noise_realizations": np.array(N_NOISE_REALIZATIONS),
+        "step_noise_seed": np.array(NOISE_SEED),
+        "step_representative_index": np.array(representative_idx),
+        "step_representative_seed": np.array(NOISE_SEED + representative_idx),
         "step_dt_ns": np.array(dt),
     }
 
@@ -258,8 +316,10 @@ def plot_figure(double_peak, complex_signal, scan) -> tuple[str, str]:
         idx = int(np.argmin(np.abs(scan["step_lambdas"] - lam)))
         ax_c.plot(t, scan["step_reconstructions"][idx], color=color,
                   ls=linestyle, lw=1.45, label=rf"$\lambda_W={lam:g}$")
-    ax_c.set_title(r"(c) Step-like signal: Wiener $\lambda_W$ scan",
-                   fontsize=9.5)
+    ax_c.set_title(
+        rf"(c) Noisy step-like signal ($N_{{\mathrm{{shot}}}}={N_SHOTS:,}$)",
+        fontsize=9.5,
+    )
     ax_c.set(xlim=(45, 165), xlabel="Time (ns)",
              ylabel=r"Flux ($\Phi_0$)")
     ax_c.tick_params(labelsize=7.5)
@@ -279,11 +339,19 @@ def plot_figure(double_peak, complex_signal, scan) -> tuple[str, str]:
     ax_d2 = fig.add_subplot(sub[1], sharex=ax_d1)
     lambdas = scan["step_lambdas"]
     errors = scan["step_nrmse"]
-    ratios = scan["step_peak_ratio"]
+    errors_q10 = scan["step_nrmse_q10"]
+    errors_q90 = scan["step_nrmse_q90"]
+    errors_clean = scan["step_nrmse_noiseless"]
+    noise_gain = scan["step_noise_gain"]
     best_idx = int(np.argmin(errors))
     best_lambda = float(lambdas[best_idx])
 
-    ax_d1.semilogx(lambdas, errors, "o-", color=COL_WIENER, lw=1.4, ms=3.5)
+    ax_d1.fill_between(lambdas, errors_q10, errors_q90, color=COL_WIENER,
+                       alpha=0.18, linewidth=0, label="10%-90% interval")
+    ax_d1.loglog(lambdas, errors, "o-", color=COL_WIENER, lw=1.4, ms=3.5,
+                 label="noisy median")
+    ax_d1.loglog(lambdas, errors_clean, "--", color=COL_NOTE, lw=1.1,
+                 label="noiseless")
     ax_d1.axvline(BASELINE_LAMBDA, color=COL_NOTE, ls=":", lw=1.0)
     ax_d1.axvline(best_lambda, color=COL_METRIC, ls="--", lw=1.0)
     ax_d1.plot(best_lambda, errors[best_idx], marker="*", ms=7,
@@ -292,22 +360,28 @@ def plot_figure(double_peak, complex_signal, scan) -> tuple[str, str]:
                    xy=(best_lambda, errors[best_idx]), xytext=(-7, 7),
                    textcoords="offset points", fontsize=6.5, color=COL_METRIC,
                    ha="right")
-    ax_d1.set_title("(d) Regularization-selection metrics", fontsize=9.5)
+    ax_d1.set_title("(d) Noise-regularization trade-off", fontsize=9.5)
     ax_d1.set_ylabel("NRMSE", fontsize=8)
     ax_d1.tick_params(labelsize=7, labelbottom=False)
     ax_d1.grid(True, which="both", ls=":", alpha=0.35, lw=0.5)
+    ax_d1.legend(fontsize=5.7, frameon=False, loc="upper right", ncol=1)
 
-    ax_d2.semilogx(lambdas, ratios, "s-", color=COL_METRIC, lw=1.4, ms=3.5)
-    ax_d2.axhline(1.0, color=COL_TRUTH, ls="--", lw=0.9)
+    ax_d2.fill_between(
+        lambdas, scan["step_noise_gain_q10"], scan["step_noise_gain_q90"],
+        color=COL_METRIC, alpha=0.18, linewidth=0,
+    )
+    ax_d2.loglog(lambdas, noise_gain, "s-", color=COL_METRIC, lw=1.4, ms=3.5)
+    ax_d2.axhline(1.0, color=COL_TRUTH, ls="--", lw=0.9,
+                  label="unit noise gain")
     ax_d2.axvline(BASELINE_LAMBDA, color=COL_NOTE, ls=":", lw=1.0,
                   label=rf"baseline $\lambda_W={BASELINE_LAMBDA:g}$")
     ax_d2.axvline(best_lambda, color=COL_METRIC, ls="--", lw=1.0,
                   label=rf"min NRMSE $\lambda_W={best_lambda:g}$")
     ax_d2.set_xlabel(r"Regularization $\lambda_W$", fontsize=8.5)
-    ax_d2.set_ylabel("Peak ratio", fontsize=8)
+    ax_d2.set_ylabel(r"Noise gain $G_n$", fontsize=8)
     ax_d2.tick_params(labelsize=7)
     legend_d = ax_d2.legend(fontsize=5.9, frameon=True, fancybox=False,
-                            framealpha=0.90, loc="lower left", ncol=1,
+                             framealpha=0.90, loc="upper right", ncol=1,
                             borderpad=0.3, handlelength=2.2)
     legend_d.get_frame().set_facecolor("white")
     legend_d.get_frame().set_edgecolor("#bbbbbb")
@@ -369,11 +443,20 @@ def save_outputs(double_peak, complex_signal, scan) -> tuple[str, str]:
         "baseline_lambda": BASELINE_LAMBDA,
         "step_min_nrmse_lambda": float(scan["step_lambdas"][best_idx]),
         "step_min_nrmse": float(scan["step_nrmse"][best_idx]),
+        "noise": {
+            "model": "independent binomial projection sampling on signal and reference arms",
+            "n_shots_per_arm_per_point": N_SHOTS,
+            "n_realizations": N_NOISE_REALIZATIONS,
+            "base_seed": NOISE_SEED,
+            "representative_seed": int(scan["step_representative_seed"]),
+            "uncertainty_interval": "10th-90th percentile",
+        },
         "notes": [
             "All quantum dynamics and kernels use Gaussian pi/2 control pulses.",
             "Top-row Wiener reconstructions are recomputed with lambda_W=10.",
-            "The step scan reuses one Gaussian-control noiseless measurement.",
-            "The step-specific NRMSE minimum is not claimed as a global optimum.",
+            "The step scan adds independent binomial projection noise to the signal and reference arms.",
+            "Noisy metrics report medians over 64 realizations; bands are 10th-90th percentiles.",
+            "The step-specific noisy NRMSE minimum is not claimed as a global optimum.",
             "Top-row LM results are rerun with the same Gaussian control pulse.",
         ],
     }
@@ -403,20 +486,27 @@ def save_outputs(double_peak, complex_signal, scan) -> tuple[str, str]:
         f"{nrmse(complex_signal['lm_recon'], complex_signal['original_signal']):.5e}",
         f"complex-waveform LM peak ratio = {float(complex_signal['lm_ratio']):.5f}",
         "",
-        "Step-like waveform regularization scan",
-        "lambda_W      NRMSE       peak_ratio   correlation",
+        "Step-like waveform regularization scan with projection noise",
+        f"N_shot per arm per point = {N_SHOTS}",
+        f"noise realizations = {N_NOISE_REALIZATIONS}",
+        "lambda_W  clean_NRMSE  noisy_med  noisy_q10  noisy_q90  noise_gain  peak_ratio_med",
     ]
-    for lam, err, ratio, corr in zip(
-        scan["step_lambdas"], scan["step_nrmse"],
-        scan["step_peak_ratio"], scan["step_correlation"]
+    for lam, clean, err, q10, q90, gain, ratio in zip(
+        scan["step_lambdas"], scan["step_nrmse_noiseless"], scan["step_nrmse"],
+        scan["step_nrmse_q10"], scan["step_nrmse_q90"],
+        scan["step_noise_gain"], scan["step_peak_ratio"],
     ):
-        lines.append(f"{lam:8.3g}  {err:11.5e}  {ratio:11.5f}  {corr:11.7f}")
+        lines.append(
+            f"{lam:8.3g}  {clean:11.5e}  {err:9.5e}  {q10:9.5e}  "
+            f"{q90:9.5e}  {gain:10.5f}  {ratio:14.5f}"
+        )
     lines.extend([
         "",
         f"baseline lambda_W = {BASELINE_LAMBDA:g}",
         f"step-specific minimum NRMSE lambda_W = "
         f"{float(scan['step_lambdas'][best_idx]):g}",
-        "The minimum is specific to this cached noiseless step-like signal.",
+        f"representative noise seed = {int(scan['step_representative_seed'])}",
+        "The minimum is specific to this noisy step-like signal and noise model.",
     ])
     with open(metrics_path, "w", encoding="utf-8") as stream:
         stream.write("\n".join(lines) + "\n")

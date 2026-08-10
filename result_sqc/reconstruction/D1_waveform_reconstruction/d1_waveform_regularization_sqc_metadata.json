@@ -29,7 +29,7 @@
     50.0
   ],
   "display_lambdas": [
-    0.1,
+    1.0,
     5.0,
     20.0,
     50.0
@@ -37,12 +37,21 @@
   "top_wiener_lambda": 10.0,
   "baseline_lambda": 5.0,
   "step_min_nrmse_lambda": 20.0,
-  "step_min_nrmse": 0.02544354729117649,
+  "step_min_nrmse": 0.033824828944149204,
+  "noise": {
+    "model": "independent binomial projection sampling on signal and reference arms",
+    "n_shots_per_arm_per_point": 10000,
+    "n_realizations": 64,
+    "base_seed": 20260805,
+    "representative_seed": 20260818,
+    "uncertainty_interval": "10th-90th percentile"
+  },
   "notes": [
     "All quantum dynamics and kernels use Gaussian pi/2 control pulses.",
     "Top-row Wiener reconstructions are recomputed with lambda_W=10.",
-    "The step scan reuses one Gaussian-control noiseless measurement.",
-    "The step-specific NRMSE minimum is not claimed as a global optimum.",
+    "The step scan adds independent binomial projection noise to the signal and reference arms.",
+    "Noisy metrics report medians over 64 realizations; bands are 10th-90th percentiles.",
+    "The step-specific noisy NRMSE minimum is not claimed as a global optimum.",
     "Top-row LM results are rerun with the same Gaussian control pulse."
   ]
 }
