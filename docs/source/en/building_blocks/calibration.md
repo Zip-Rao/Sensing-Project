@@ -41,8 +41,20 @@ Grouped by function into five sets:
 | `FluxResponseCalibration` | Scan flux to build $f(\Phi)$ lookup (Ramsey point-by-point frequency measurement) |
 | `FrequencyMeasurement` | Single-point $f_{01}$ measurement (Ramsey, or the advanced transient method) |
 | `SinglePointFrequencyCalibration` | Single-point frequency **tuning**: closed-loop feedback drives $f_q(V)$ to target |
-| `FrequencyCalibrationWorkflow` | Orchestration implementing the four-stage state machine for frequency calibration |
+| `DampedSecantTracker` | Shared stepwise secant controller: `initialize`→`propose`→`accept` |
+| `FrequencyEstimate` / `TrackSnapshot` / `TrackProposal` / `TrackStepResult` | Controller data structures |
+| `FrequencyCalibrationWorkflow` | Multi-stage closed-loop calibration orchestration (legacy staged workflow) |
 | `CalibrationStage` | Per-stage parameter container (used by `FrequencyCalibrationWorkflow`) |
+
+**Event-driven frequency calibration state machine (V2)**
+
+| Class | Role |
+|---|---|
+| `FrequencyStateMachine` | Six-state event-driven protocol: Acquire→Track→Verify→Lock + Reacquire |
+| `FrequencyCalibrationConfig` | Protocol thresholds / budgets / policy parameters |
+| `FrequencyCalibrationRuntime` | Event-loop orchestration + tracker management + `save_run()`/`load_run()` persistence |
+| `SQCExecutor` | Command→QuTiP measurement: Ramsey (Acquire/Reacquire/Verify), Transient (Track/Monitor) |
+| `FaultInjectionExecutor` | Configurable fault injection for testing recovery paths |
 
 **Waveform / control-line calibration**
 
@@ -262,77 +274,96 @@ $f_d$ to follow the qubit does **not** hide residual error.
 | `"track"` | $\hat f_{q,k} + \hat s_k\,(V_{k+1}-V_k)$ | **TRACKING** | predicts $f_q$ at the next point so $|\delta|$ stays inside the linear window as the search moves |
 | `callable` | user-defined | any | arbitrary feedback / filtering / prediction laws |
 
-### The four-stage state machine and FrequencyCalibrationWorkflow
+### Stepwise secant controller: `DampedSecantTracker`
 
-Combining the two updates above with different measurement protocols and
-`drive_policy` values, the whole closed-loop calibration forms a four-stage
-state machine. Orchestration is handled by `FrequencyCalibrationWorkflow`; each
-stage is one `SinglePointFrequencyCalibration`, chained in order by the
-workflow, seeding each stage from the previous stage's optimum flux and
-frequency estimate:
+`sqc/calibration/frequency_control.py` extracts a **pure-math** controller from
+`_closed_loop_gradient()` — no QuTiP dependency, no I/O; only bias step
+computation, convergence checks, and best-point tracking. It is shared by
+the legacy batch API and the new `FrequencyStateMachine` Track state.
 
-```text
-COARSE_ACQUIRE
-    wide-range protocol (Ramsey) obtains the initial frequency
-    drive_policy="sweet"; flux-voltage update only
-        ↓  (residual detuning enters the linear window)
-TRACKING
-    drive frequency follows the predicted qubit frequency
-    local protocol (transient) measures the frequency at high precision
-    gradient descent updates the flux voltage
-    drive_policy="track"
-        ↓  (error falls near the target tolerance)
-LOCKED
-    drive frequency fixed at the target frequency
-    local protocol measures the target error directly
-    flux-voltage update only (de-bounced convergence)
-    drive_policy="target"
-        ↓  (detuning out of range |δ|>ρ·Δ_lin, or measurement fails)
-REACQUIRE
-    re-acquire: return to the wide-range stage to re-estimate the frequency
+**Three-step interface**:
+
+```python
+from sqc.calibration.frequency_control import DampedSecantTracker, FrequencyEstimate
+
+tracker = DampedSecantTracker(f_target=..., damping=0.8, max_bias_step=0.02)
+snapshot = tracker.initialize(seed_estimate, V_seed)    # 1. initialize
+proposal = tracker.propose(snapshot)                     # 2. propose next bias
+result = tracker.accept(snapshot, estimate, proposal)    # 3. accept, update state
 ```
 
-- **COARSE_ACQUIRE → TRACKING → LOCKED** is the normal forward path, driven in
-  turn by the `"sweet"` / `"track"` / `"target"` drive policies; each stage hands
-  off once its own `epsilon_f` is met.
-- **REACQUIRE** is not an automatic transition but an **orchestration-layer
-  response**: when `linear_range` ($\Delta_\mathrm{lin}$) with `rho`
-  (default 0.6) flags $|\delta| > \rho\,\Delta_\mathrm{lin}$ in the
-  `out_of_range` signal, or a measurement fails, the caller watches that signal
-  (via `stop_predicate`) and inserts a fresh wide-range stage to re-estimate the
-  frequency.
+**Step formula** (inside `propose`): first step uses a fixed probe
+`first_bias_step·sign(e)`; subsequent steps use the damped secant
+`step = damping·e·(dV/de)`, clamped to `[-max_bias_step, max_bias_step]`.
+When converged, `step=0` (re-measure in place for confirmation with
+`converge_streak>1`).
 
-#### FrequencyCalibrationWorkflow
+### Frequency calibration state machine V2: `FrequencyStateMachine`
 
-**Construction**
+v2.19 introduces an **event-driven** six-state protocol, replacing the old
+four-stage pipeline design:
 
-`FrequencyCalibrationWorkflow(stages, seed_drive_from_prev=True)`
+```text
+Acquire → Track → Verify → Lock
+             ↑        │        │
+             │        │        │
+           Reacquire <─────────+
+```
 
-**Fields**
+**Six-state responsibilities (hard constraints)**:
 
-| Field | Type | Meaning | Default |
+| State | Responsibility | Can change flux? | Measurement role |
 |---|---|---|---|
-| `stages` | `list[CalibrationStage]` | Stages to execute in order | — |
-| `seed_drive_from_prev` | bool | Hand each stage the previous stage's frequency estimate as `omega_d_seed` | `True` |
+| Acquire | Wide-range Ramsey acquisition of absolute frequency seed | No | global acquisition |
+| Track | Short-pulse local frequency measurement + secant sensitivity + flux update + drive tracking | **Yes** | local loop estimator |
+| Verify | Freeze candidate bias; independent Ramsey assessment of final tolerance | **No** | independent verifier |
+| Lock | Long-term frequency stabilization; low-cost drift monitoring; scheduled independent Ramsey audits | **No** | monitor only |
+| Reacquire | Wide-range re-acquisition after reference / branch / local validity loss | No | global recovery |
+| SafeStop | Safe hold after cancel / budget / interlock / unrecoverable fault | safe bias only | no science measurement |
 
-**Methods**
+**Threshold hierarchy**:
 
-- `run() -> CalibrationTable`: executes all stages in order, returns the final
-  stage's `CalibrationTable`; `fit_params` contains the full state-machine trace.
+```
+epsilon_hold < epsilon_final < epsilon_enter < Delta_val
+   10 kHz         100 kHz         5 MHz        20 MHz
+  (physics goal) (Verify pass)  (candidate)  (local window)
+```
 
-#### CalibrationStage
+**Command–event architecture**:
 
-**Construction**
+```python
+from sqc.workflows.frequency_runtime import FrequencyCalibrationRuntime
+from sqc.workflows.frequency_state_machine import FrequencyCalibrationConfig
 
-`CalibrationStage(name, calibration, stop_predicate=None)`
+config = FrequencyCalibrationConfig(
+    epsilon_enter=2 * np.pi * 20e-3,    # 20 MHz
+    epsilon_final=2 * np.pi * 2e-3,     # 2 MHz
+    N_verify=2,
+    max_commands=30,
+)
+runtime = FrequencyCalibrationRuntime(qubit=q, f_target=f_target, config=config)
+result = runtime.run()
+# result["state"] → "lock", result["run_status"] → "calibrated"
+```
 
-**Fields**
+**Lock monitor hysteresis** (prevents noise-induced state chatter):
 
-| Field | Type | Meaning |
-|---|---|---|
-| `name` | str | Stage name (`"COARSE_ACQUIRE"`/`"TRACKING"`/`"LOCKED"`/`"REACQUIRE"`) |
-| `calibration` | `SinglePointFrequencyCalibration` | The calibration instance for this stage (with `drive_policy`, `measure_method`, etc.) |
-| `stop_predicate` | callable | Stage termination condition (default: stop when own `epsilon_f` is met) |
+| Condition | Transition |
+|---|---|
+| `U_mon ≤ epsilon_mon_clear` | Lock → Lock, clear suspect streak |
+| `epsilon_mon_clear < U_mon ≤ epsilon_mon_suspect` | accumulate suspect streak; at `N_mon_suspect` → Verify |
+| `epsilon_mon_suspect < U_mon < Delta_mon_reacquire` | immediate Lock → Verify |
+| `U_mon ≥ Delta_mon_reacquire` or reference lost | Lock → Reacquire |
+
+**Persistence**: `runtime.save_run(dir)` writes `config.json` / `commands.jsonl` /
+`transitions.jsonl` / `checkpoint.json` / `result.json`;
+`FrequencyCalibrationRuntime.load_run(dir, qubit)` restores and resumes from
+the checkpoint.
+
+### FrequencyCalibrationWorkflow (legacy, kept for compatibility)
+
+The old multi-stage staged workflow interface remains available and internally
+delegates to `DampedSecantTracker`:
 
 ## WaveformCalibration: waveform / control-line calibration
 
@@ -477,10 +508,19 @@ print(scheduler.status())   # {"ready": ["flux_response_ramsey", ...], ...}
   and a compensation filter burned in. The three steps map respectively to
   `FluxResponseCalibration` → `SinglePointFrequencyCalibration` →
   `WaveformCalibration`.
-- `FrequencyCalibrationWorkflow` orchestrates `SinglePointFrequencyCalibration`
-  as a four-stage state machine (COARSE_ACQUIRE → TRACKING → LOCKED →
-  REACQUIRE), automatically switching between wide-range Ramsey and
-  high-precision transient measurement and converging to kHz level.
+- `DampedSecantTracker` is the single implementation of the frequency calibration
+  control law — shared by the legacy `_closed_loop_gradient` batch API and the new
+  `FrequencyStateMachine` stepwise interface, guaranteeing identical control
+  behavior.
+- `FrequencyStateMachine` is the V2 event-driven protocol: six states
+  (Acquire→Track→Verify→Lock + Reacquire + SafeStop) with full guards, budgets,
+  and monitor hysteresis. `FrequencyCalibrationRuntime` orchestrates the
+  command→event loop, manages the `DampedSecantTracker` lifecycle, and supports
+  `save_run`/`load_run` persistence with checkpoint recovery.
+- `FrequencyCalibrationWorkflow` (legacy) orchestrates
+  `SinglePointFrequencyCalibration` as a multi-stage pipeline (e.g.
+  transient→Ramsey hybrid); internally each gradient stage delegates to
+  `DampedSecantTracker`.
 - `CalibrationTable`'s `evaluate`/`inverse` underpin the
   `inversion="calibration"` path of the {doc}`reconstruction` layer: the
   reconstructor is passed the calibration table and, during inversion, calls

@@ -24,6 +24,9 @@
 |---|---|
 | `SensingWorkflow` | 统一研究入口:配置/执行/扫参/对比/可视化 |
 | `PredistortionValidationWorkflow` | 预畸变端到端验证:注入畸变→标定→设计逆滤波→验证改善 |
+| `FrequencyCalibrationWorkflow` | 多阶段闭环频率标定 (legacy staged workflow) |
+| `FrequencyStateMachine` | 事件驱动频率标定状态机 V2: Acquire→Track→Verify→Lock |
+| `FrequencyCalibrationRuntime` | 状态机运行时:事件循环 + tracker + 持久化 |
 
 **结果容器(活跃)**
 
@@ -86,6 +89,44 @@ experiment / reconstruction / calibration 三层。
 当前抛 `NotImplementedError`,不进 v1 公开面。v1 用 `run`/`sweep`/`compare` 已覆盖
 单管道、扫参与算法对比。
 ```
+
+## FrequencyCalibrationWorkflow —— 多阶段频率标定 (legacy)
+
+把 `SinglePointFrequencyCalibration` 编排为多阶段管线（如 transient→Ramsey hybrid）,每阶段以前一阶段的最优磁通和频率估计作初值。内部已委托给 `DampedSecantTracker`。
+
+**构造**
+
+`FrequencyCalibrationWorkflow(qubit, f_target, stages=None, V_seed=None, ...)`
+
+不传 `stages` 时自动构建默认两阶段 hybrid: coarse(transient+gradient) → fine(ramsey)。详见 {doc}`calibration`。
+
+## FrequencyStateMachine —— 事件驱动频率标定 V2
+
+v2.19 新增的**事件驱动**六状态协议: Acquire → Track → Verify → Lock,带 Reacquire 恢复分支和 SafeStop 安全保持。
+
+**设计原则**:
+- 纯状态机,无 QuTiP 依赖——可脱离仿真环境做转移表测试
+- 只有 **Track** 可以提出新的工作磁通偏置
+- **Verify** 从进入冻结候选偏置到退出,Lock 同样不改偏置
+- **Lock** 监测到漂移不直接调偏置——小漂移去 Verify,大跳变去 Reacquire
+- 解析 $f(\Phi)$ 只做仿真 oracle,不进转移决策
+
+**使用方式**（通过 `FrequencyCalibrationRuntime` 编排）:
+
+```python
+from sqc.workflows.frequency_runtime import FrequencyCalibrationRuntime
+from sqc.workflows.frequency_state_machine import FrequencyCalibrationConfig
+
+config = FrequencyCalibrationConfig(
+    epsilon_enter=2*np.pi*20e-3, epsilon_final=2*np.pi*2e-3,
+    N_verify=2, max_commands=30,
+)
+runtime = FrequencyCalibrationRuntime(qubit=q, f_target=f_target, config=config)
+result = runtime.run()
+# result["state"] → "lock", result["run_status"] → "calibrated"
+```
+
+详见 {doc}`calibration` 中「频率标定状态机 V2」一节。
 
 ## PredistortionValidationWorkflow —— 预畸变端到端验证
 
@@ -218,6 +259,9 @@ print(f"改善倍数: {val_result['metrics']['improvement_factor']:.1f}×")
 - 本层对应实验室的上层实验脚本:选协议、调参、跑一批数据、出结果。它把
   {doc}`devices`→{doc}`hardware`→{doc}`control`→{doc}`simulation`→{doc}`experiments`
   →{doc}`reconstruction`→{doc}`calibration` 七层全部串联,是用户无需直接操作底层的便捷入口。
+- `FrequencyCalibrationWorkflow` 是旧的多阶段频率标定接口,内部委托给 `DampedSecantTracker`。
+- `FrequencyStateMachine` + `FrequencyCalibrationRuntime` 是 V2 事件驱动接口:六状态协议
+  含完整守卫/预算/监视器迟滞,支持 `save_run`/`load_run` 持久化与断点恢复。
 - `SensingWorkflow.sweep()` 自动管理 CONFIG 同步(脉冲/硬件组参数改变时调
   `_sync_config()`),保证每次 `run()` 用的是当前参数对应的时间轴。
 - 对瞬态协议，`pulse.rotation_angle`与`pulse.rabi_rate`是互斥模式；扫描其中一项时

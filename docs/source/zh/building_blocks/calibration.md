@@ -36,8 +36,20 @@
 | `FluxResponseCalibration` | 扫磁通建 $f(\Phi)$ 查表(Ramsey 逐点测频) |
 | `FrequencyMeasurement` | 单点 $f_{01}$ 测量(Ramsey,或进阶的瞬态法) |
 | `SinglePointFrequencyCalibration` | 单点频率**整定**:闭环反馈把 $f_q(V)$ 调到目标 |
-| `FrequencyCalibrationWorkflow` | 频率标定四阶段状态机的编排实现 |
-| `CalibrationStage` | 状态机单阶段的参数容器(`FrequencyCalibrationWorkflow` 使用) |
+| `DampedSecantTracker` | 共享逐步割线控制器: `initialize`→`propose`→`accept` |
+| `FrequencyEstimate` / `TrackSnapshot` / `TrackProposal` / `TrackStepResult` | 控制器数据结构 |
+| `FrequencyCalibrationWorkflow` | 多阶段闭环标定编排 (legacy staged workflow) |
+| `CalibrationStage` | 单阶段参数容器(`FrequencyCalibrationWorkflow` 使用) |
+
+**事件驱动频率标定状态机 (V2)**
+
+| 类 | 角色 |
+|---|---|
+| `FrequencyStateMachine` | 六状态事件驱动协议: Acquire→Track→Verify→Lock + Reacquire |
+| `FrequencyCalibrationConfig` | 协议阈值/预算/策略参数 |
+| `FrequencyCalibrationRuntime` | 事件循环编排 + tracker 管理 + `save_run()`/`load_run()` 持久化 |
+| `SQCExecutor` | 命令→QuTiP 测量: Ramsey(Acquire/Reacquire/Verify), Transient(Track/Monitor) |
+| `FaultInjectionExecutor` | 可控故障注入,用于测试恢复路径 |
 
 **波形 / 控制线标定**
 
@@ -230,40 +242,84 @@ $e_k=\mathrm{measure}(V_k)-f_\mathrm{target}$ 算误差。所以无论 $f_d$ 在
 | `"track"` | $\hat f_{q,k}+\hat s_k\,(V_{k+1}-V_k)$ | **TRACKING** | 预测下一点的 $f_q$,搜索移动时让 $\|\delta\|$ 留在线性窗内 |
 | `callable` | 用户自定义 | 任意 | 任意反馈/滤波/预测律 |
 
-### 四阶段状态机与 FrequencyCalibrationWorkflow
+### 逐步割线控制器：`DampedSecantTracker`
 
-把上面两种更新与不同的测频协议、`drive_policy` 组合起来,整个闭环标定对应一个四阶段
-状态机。编排由 `FrequencyCalibrationWorkflow` 负责,每个阶段是一个
-`SinglePointFrequencyCalibration`,由 workflow 按序串联(每段以前一段的最优磁通和频率估计作初值):
+`sqc/calibration/frequency_control.py` 从 `_closed_loop_gradient()` 提取出**纯数学**控制器——无 QuTiP 依赖、不做 I/O,只负责偏置步长计算、收敛判断和最佳点追踪。被旧的 batch API 和新的 `FrequencyStateMachine` Track 状态共享。
 
-```text
-COARSE_ACQUIRE
-    宽范围协议(Ramsey)得到初始频率
-    drive_policy="sweet",仅更新磁通电压
-        ↓  (残余失谐进入线性窗)
-TRACKING
-    驱动频率跟随预测的 qubit 频率
-    局部协议(瞬态)高精度测频
-    梯度下降更新磁通电压
-    drive_policy="track"
-        ↓  (误差降到目标容差附近)
-LOCKED
-    驱动频率固定为目标频率
-    局部协议直接测量目标误差
-    仅更新磁通电压(去抖收敛)
-    drive_policy="target"
-        ↓  (失谐越界 |δ|>ρ·Δ_lin 或测量失效)
-REACQUIRE
-    重新捕获:回到宽范围阶段重估频率
+**三步接口**：
+
+```python
+from sqc.calibration.frequency_control import DampedSecantTracker, FrequencyEstimate
+
+tracker = DampedSecantTracker(f_target=..., damping=0.8, max_bias_step=0.02)
+snapshot = tracker.initialize(seed_estimate, V_seed)    # 1. 初始化
+proposal = tracker.propose(snapshot)                     # 2. 提议下一步 bias
+result = tracker.accept(snapshot, estimate, proposal)    # 3. 接收测量,更新状态
 ```
 
-- **COARSE_ACQUIRE → TRACKING → LOCKED** 是正常前进路径,依次由 `"sweet"` /
-  `"track"` / `"target"` 三种 `drive_policy` 驱动;每阶段自身的 `epsilon_f` 达标即
-  交棒下一段。
-- **REACQUIRE** 不是自动跳转,而是**编排层的响应**:当 `linear_range`
-  ($\Delta_\mathrm{lin}$)配 `rho`(默认 0.6)在 `out_of_range` 信号里报告
-  $|\delta|>\rho\,\Delta_\mathrm{lin}$,或测量失效时,调用方监听该信号(经
-  `stop_predicate`)插入一个新的宽范围阶段重估频率。
+**步进公式**（`propose` 内部）：首次用固定探测步 `first_bias_step·sign(e)`,后续用阻尼割线 `step = damping·e·(dV/de)`,clamp 到 `[-max_bias_step, max_bias_step]`。已收敛时 `step=0`（原地复测确认,配合 `converge_streak>1`）。
+
+### 频率标定状态机 V2：`FrequencyStateMachine`
+
+v2.19 新增**事件驱动**六状态协议,取代旧的四阶段 pipeline 设计：
+
+```text
+Acquire → Track → Verify → Lock
+             ↑        │        │
+             │        │        │
+           Reacquire <─────────+
+```
+
+**六状态职责（硬约束）**：
+
+| 状态 | 职责 | 允许改磁通? | 测量角色 |
+|---|---|---|---|
+| Acquire | 宽范围 Ramsey 捕获绝对频率种子 | 否 | global acquisition |
+| Track | 短脉冲局部测频 + 割线灵敏度 + 磁通更新 + drive tracking | **是** | local loop estimator |
+| Verify | 冻结候选偏置,独立 Ramsey 判定是否达到最终容差 | **否** | independent verifier |
+| Lock | 长期稳频,低成本漂移监测,按计划触发独立 Ramsey 审计 | **否** | monitor only |
+| Reacquire | 参考/分支/局部有效性丢失后重新做宽范围捕获 | 否 | global recovery |
+| SafeStop | 取消/预算/联锁/不可恢复故障后的安全保持 | 仅 safe bias | no science measurement |
+
+**阈值层次**：
+
+```
+epsilon_hold < epsilon_final < epsilon_enter < Delta_val
+   10 kHz         100 kHz         5 MHz        20 MHz
+  (物理目标)    (Verify 通过)   (候选进入)   (局部有效窗口)
+```
+
+**命令--事件架构**：
+
+```python
+from sqc.workflows.frequency_runtime import FrequencyCalibrationRuntime
+from sqc.workflows.frequency_state_machine import FrequencyCalibrationConfig
+
+config = FrequencyCalibrationConfig(
+    epsilon_enter=2 * np.pi * 20e-3,    # 20 MHz
+    epsilon_final=2 * np.pi * 2e-3,     # 2 MHz
+    N_verify=2,
+    max_commands=30,
+)
+runtime = FrequencyCalibrationRuntime(qubit=q, f_target=f_target, config=config)
+result = runtime.run()
+# result["state"] → "lock", result["run_status"] → "calibrated"
+```
+
+**Lock 监视器迟滞**（防止噪声抖动）：
+
+| 条件 | 转移 |
+|---|---|
+| `U_mon ≤ epsilon_mon_clear` | Lock → Lock, 清零 suspect streak |
+| `epsilon_mon_clear < U_mon ≤ epsilon_mon_suspect` | 累计 suspect streak; 达 `N_mon_suspect` → Verify |
+| `epsilon_mon_suspect < U_mon < Delta_mon_reacquire` | 立即 Lock → Verify |
+| `U_mon ≥ Delta_mon_reacquire` 或 reference lost | Lock → Reacquire |
+
+**持久化**: `runtime.save_run(dir)` 写入 `config.json` / `commands.jsonl` / `transitions.jsonl` / `checkpoint.json` / `result.json`; `FrequencyCalibrationRuntime.load_run(dir, qubit)` 可从断点恢复继续运行。
+
+### FrequencyCalibrationWorkflow（旧接口,保持兼容）
+
+旧的多阶段 staged workflow 接口仍可使用,内部已委托给 `DampedSecantTracker`：
 
 #### FrequencyCalibrationWorkflow
 
@@ -429,9 +485,14 @@ print(scheduler.status())   # {"ready": ["flux_response_ramsey", ...], ...}
 - 本层对应真实控制室里的标定程序:投片后第一步测 $f(\Phi)$,然后整定工作频率,
   最后测控制线传函并烧入补偿滤波器。三步分别对应 `FluxResponseCalibration`→
   `SinglePointFrequencyCalibration`→`WaveformCalibration`。
-- `FrequencyCalibrationWorkflow` 把 `SinglePointFrequencyCalibration` 编排为四阶段
-  状态机(COARSE_ACQUIRE → TRACKING → LOCKED → REACQUIRE),自动在宽范围 Ramsey
-  与高精度瞬态之间切换,收敛到 kHz 级。
+- `DampedSecantTracker` 是频率标定控制律的唯一实现——被旧的 `_closed_loop_gradient`
+  批量 API 和新的 `FrequencyStateMachine` 逐步接口共享,保证两者控制律完全一致。
+- `FrequencyStateMachine` 是 V2 事件驱动协议,六状态 (Acquire→Track→Verify→Lock +
+  Reacquire + SafeStop) 含完整守卫/预算/监视器迟滞;`FrequencyCalibrationRuntime`
+  编排命令→事件循环,管理 `DampedSecantTracker` 生命周期,并支持 `save_run`/`load_run`
+  持久化与断点恢复。
+- `FrequencyCalibrationWorkflow`(旧接口)把 `SinglePointFrequencyCalibration` 编排为
+  多阶段管线(如 transient→Ramsey hybrid),内部每个梯度阶段委托给 `DampedSecantTracker`。
 - `CalibrationTable` 的 `evaluate`/`inverse` 是 {doc}`reconstruction` 层
   `inversion="calibration"` 路径的基础:重建器把标定表传入,在反演时调 `inverse(φ)`
   把测到的相位翻回磁通幅度。

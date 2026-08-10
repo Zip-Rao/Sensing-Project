@@ -28,6 +28,9 @@ workflow for the predistortion mainline.
 |---|---|
 | `SensingWorkflow` | Unified research entry: configure/execute/sweep/compare/visualise |
 | `PredistortionValidationWorkflow` | End-to-end predistortion validation: inject distortion → calibrate → design inverse filter → verify improvement |
+| `FrequencyCalibrationWorkflow` | Multi-stage closed-loop frequency calibration (legacy staged workflow) |
+| `FrequencyStateMachine` | Event-driven frequency calibration state machine V2: Acquire→Track→Verify→Lock |
+| `FrequencyCalibrationRuntime` | State machine runtime: event loop + tracker + persistence |
 
 **Result containers (active)**
 
@@ -101,6 +104,52 @@ currently raise `NotImplementedError` and are not part of the v1 public surface.
 v1 covers single-pipeline runs, sweeps, and algorithm comparison via
 `run`/`sweep`/`compare`.
 ```
+
+## FrequencyCalibrationWorkflow — multi-stage frequency calibration (legacy)
+
+Orchestrates `SinglePointFrequencyCalibration` as a multi-stage pipeline
+(e.g. transient→Ramsey hybrid), with each stage seeded from the previous
+stage's optimum. Internally delegates to `DampedSecantTracker`.
+
+**Construction**
+
+`FrequencyCalibrationWorkflow(qubit, f_target, stages=None, V_seed=None, ...)`
+
+When `stages` is not given, a default two-stage hybrid is built:
+coarse (transient+gradient) → fine (ramsey). See {doc}`calibration` for details.
+
+## FrequencyStateMachine — event-driven frequency calibration V2
+
+v2.19 introduces an **event-driven** six-state protocol:
+Acquire → Track → Verify → Lock, with a Reacquire recovery branch and
+SafeStop safety hold.
+
+**Design principles**:
+- Pure state machine, no QuTiP dependency — transition table is testable offline
+- Only **Track** may propose a new working flux bias
+- **Verify** freezes the candidate bias from entry to exit; Lock also never
+  changes bias directly
+- Lock drift detection does not adjust bias — small drift → Verify, large
+  jump → Reacquire
+- Analytic $f(\Phi)$ is a simulation oracle only — never feeds the transition
+  reducer
+
+**Usage** (via `FrequencyCalibrationRuntime`):
+
+```python
+from sqc.workflows.frequency_runtime import FrequencyCalibrationRuntime
+from sqc.workflows.frequency_state_machine import FrequencyCalibrationConfig
+
+config = FrequencyCalibrationConfig(
+    epsilon_enter=2*np.pi*20e-3, epsilon_final=2*np.pi*2e-3,
+    N_verify=2, max_commands=30,
+)
+runtime = FrequencyCalibrationRuntime(qubit=q, f_target=f_target, config=config)
+result = runtime.run()
+# result["state"] → "lock", result["run_status"] → "calibrated"
+```
+
+See {doc}`calibration` "Frequency calibration state machine V2" for details.
 
 ## PredistortionValidationWorkflow — end-to-end predistortion validation
 
@@ -240,6 +289,12 @@ print(f"Improvement factor: {val_result['metrics']['improvement_factor']:.1f}×"
   {doc}`devices`→{doc}`hardware`→{doc}`control`→{doc}`simulation`→{doc}`experiments`
   →{doc}`reconstruction`→{doc}`calibration`, the convenient entry point that lets
   users avoid touching the lower layers directly.
+- `FrequencyCalibrationWorkflow` is the legacy multi-stage frequency calibration
+  interface; internally delegates to `DampedSecantTracker`.
+- `FrequencyStateMachine` + `FrequencyCalibrationRuntime` form the V2
+  event-driven interface: a six-state protocol with full guards, budgets, and
+  monitor hysteresis, supporting `save_run`/`load_run` persistence and
+  checkpoint recovery.
 - `SensingWorkflow.sweep()` manages CONFIG synchronisation automatically (calling
   `_sync_config()` when pulse/hardware-group parameters change), so each `run()`
   uses the time axis matching the current parameters.
