@@ -2,81 +2,123 @@
 <svg xmlns="http://www.w3.org/2000/svg"
      xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
      width="88mm" height="30mm" viewBox="0 0 88 30">
-  <title>Fig. 1(d): compact calibration workflow</title>
-  <desc>Layered Inkscape source for the provisional Fig. 1(d) workflow.</desc>
+  <title>Fig. 1(d): frequency-calibration state machine</title>
+  <desc>Editable Inkscape source for the Acquire--Track--Verify--Lock workflow.</desc>
   <defs>
-    <marker id="arrow-solid" markerWidth="1.2" markerHeight="0.65" refX="1.12" refY="0.325"
+    <marker id="arrow-forward" markerWidth="1.2" markerHeight="0.65" refX="1.12" refY="0.325"
             orient="auto" markerUnits="userSpaceOnUse">
       <path d="M0,0 L1.2,0.325 L0,0.65 z" fill="#30343a"/>
     </marker>
-    <marker id="arrow-recovery" markerWidth="1.2" markerHeight="0.65" refX="1.12" refY="0.325"
+    <marker id="arrow-fallback" markerWidth="1.2" markerHeight="0.65" refX="1.12" refY="0.325"
             orient="auto" markerUnits="userSpaceOnUse">
-      <path d="M0,0 L1.2,0.325 L0,0.65 z" fill="#858b91"/>
+      <path d="M0,0 L1.2,0.325 L0,0.65 z" fill="#555c62"/>
+    </marker>
+    <marker id="arrow-failure" markerWidth="1.2" markerHeight="0.65" refX="1.12" refY="0.325"
+            orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L1.2,0.325 L0,0.65 z" fill="#626970"/>
     </marker>
     <style>
-      .state { font-family: "Times New Roman", "Latin Modern Roman", serif; font-size: 2.35px; font-weight: 700; fill: #202327; letter-spacing: 0; }
-      .role { font-family: "Times New Roman", "Latin Modern Roman", serif; font-size: 1.75px; font-style: italic; font-weight: 400; fill: #63686e; letter-spacing: 0; }
-      .edge-label { font-family: "Times New Roman", "Latin Modern Roman", serif; font-size: 1.75px; font-style: italic; font-weight: 400; fill: #3d4247; letter-spacing: 0; }
-      .math { font-family: "Times New Roman", "Latin Modern Roman", serif; font-size: 2px; font-style: italic; font-weight: 400; fill: #25292e; letter-spacing: 0; }
-      .panel { font-family: "Times New Roman", "Latin Modern Roman", serif; font-size: 2.5px; font-weight: 700; fill: #17191c; letter-spacing: 0; }
+      .state { font-family: "Times New Roman", "Latin Modern Roman", serif; font-size: 2.15px; font-weight: 700; fill: #202327; letter-spacing: 0; }
+      .quantity { font-family: "Times New Roman", "Latin Modern Roman", serif; font-size: 1.55px; font-style: italic; fill: #4f555b; letter-spacing: 0; }
+      .condition { font-family: "Times New Roman", "Latin Modern Roman", serif; font-size: 1.17px; font-style: italic; fill: #30353a; letter-spacing: 0; }
+      .event { font-family: "Times New Roman", "Latin Modern Roman", serif; font-size: 1.14px; font-style: normal; fill: #4f555b; letter-spacing: 0; }
+      .legend { font-family: "Times New Roman", "Latin Modern Roman", serif; font-size: 1.02px; font-style: normal; fill: #30353a; letter-spacing: 0; }
+      .label-bg { fill: #ffffff; stroke: none; }
+      .panel { font-family: "Times New Roman", "Latin Modern Roman", serif; font-size: 2.2px; font-weight: 700; fill: #17191c; letter-spacing: 0; }
       .node { fill: #ffffff; stroke: #3f444a; stroke-width: 0.30; }
-      .track-node { fill: #f1f6f8; stroke: #3f444a; stroke-width: 0.30; }
-      .flow { fill: none; stroke: #30343a; stroke-width: 0.22; stroke-linecap: square; stroke-linejoin: round; marker-end: url(#arrow-solid); }
-      .recovery { fill: none; stroke: #858b91; stroke-width: 0.18; stroke-dasharray: 0.75,0.6; stroke-dashoffset: 0.15; stroke-linecap: butt; stroke-linejoin: round; marker-end: url(#arrow-recovery); }
+      .forward { fill: none; stroke: #30343a; stroke-width: 0.22; stroke-linecap: square; stroke-linejoin: round; marker-end: url(#arrow-forward); }
+      .fallback { fill: none; stroke: #555c62; stroke-width: 0.21; stroke-dasharray: 1.15,0.65; stroke-linecap: butt; stroke-linejoin: round; marker-end: url(#arrow-fallback); }
+      .failure { fill: none; stroke: #626970; stroke-width: 0.21; stroke-dasharray: 0.28,0.58; stroke-linecap: round; stroke-linejoin: round; marker-end: url(#arrow-failure); }
+      .legend-forward { fill: none; stroke: #30343a; stroke-width: 0.22; marker-end: url(#arrow-forward); }
+      .legend-fallback { fill: none; stroke: #555c62; stroke-width: 0.21; stroke-dasharray: 1.15,0.65; marker-end: url(#arrow-fallback); }
+      .legend-failure { fill: none; stroke: #626970; stroke-width: 0.21; stroke-dasharray: 0.28,0.58; stroke-linecap: round; marker-end: url(#arrow-failure); }
     </style>
   </defs>
 
   <g inkscape:groupmode="layer" inkscape:label="01 Background" id="layer-background">
     <rect id="page-background" width="88" height="30" fill="#ffffff"/>
-    <text id="panel-label" class="panel" x="0.7" y="2.8">(d)</text>
+    <text id="panel-label" class="panel" x="0.7" y="2.55">(d)</text>
   </g>
 
   <g inkscape:groupmode="layer" inkscape:label="02 Transitions" id="layer-transitions">
-    <circle id="initial-state" cx="1.2" cy="11.9" r="0.43" fill="#30343a"/>
-    <path id="initial-to-acquire" class="flow" d="M2,11.9 H6.5"/>
-    <path id="acquire-to-track" class="flow" d="M25.5,11.9 H34.5"/>
-    <path id="track-to-lock" class="flow" d="M53.5,11.9 H62.5"/>
-    <path id="track-self-loop" class="flow" d="M48,8 V5.8 H40 V8"/>
-    <path id="track-to-reacquire" class="recovery" d="M47,16 V21"/>
-    <path id="reacquire-to-track" class="flow" d="M41,21 V16"/>
-    <path id="lock-to-reacquire" class="recovery" d="M72,16 V25.1 H53.5"/>
-    <path id="lock-to-output" class="flow" d="M81.5,11.9 H85.2"/>
-    <circle id="calibrated-output" cx="86" cy="11.9" r="0.55" fill="#ffffff" stroke="#30343a" stroke-width="0.22"/>
+    <circle id="initial-state" cx="1.2" cy="11" r="0.38" fill="#30343a"/>
+    <path id="initial-to-acquire" class="forward" d="M1.85,11 H5"/>
+
+    <path id="acquire-to-track" class="forward" d="M18,11 H25"/>
+    <path id="track-to-verify" class="forward" d="M38,11 H45"/>
+    <path id="verify-to-lock" class="forward" d="M58,11 H65"/>
+    <path id="lock-to-output" class="forward" d="M78,11 H85.1"/>
+    <circle id="calibrated-output" cx="86" cy="11" r="0.50" fill="#ffffff" stroke="#30343a" stroke-width="0.22"/>
+
+    <path id="acquire-to-verify" class="forward" d="M16,7.8 C22.5,2.0 40.0,2.0 47,7.8"/>
+    <path id="track-self-loop" class="forward" d="M36,7.8 V5.25 H27 V7.8"/>
+    <path id="lock-self-loop" class="forward" d="M76,7.8 V5.25 H67 V7.8"/>
+
+    <path id="verify-to-track" class="fallback" d="M47,14.2 C45.3,16.55 37.7,16.55 36,14.2"/>
+    <path id="lock-to-verify" class="fallback" d="M67,14.2 C65.3,16.55 57.7,16.55 56,14.2"/>
+
+    <path id="track-to-reacquire" class="failure" d="M28.6,14.2 V18.45 C34.2,19.0 41.5,19.4 46.3,22.3"/>
+    <path id="verify-to-reacquire" class="failure" d="M51.5,14.2 V22.3"/>
+    <path id="lock-to-reacquire" class="failure" d="M74.4,14.2 V18.45 C68.8,19.0 61.5,19.4 56.7,22.3"/>
+    <path id="reacquire-to-track" class="forward" d="M43,25.4 H21.5 V16.1 H27.8 V14.2"/>
   </g>
 
   <g inkscape:groupmode="layer" inkscape:label="03 State Boxes" id="layer-state-boxes">
-    <rect id="box-acquire" class="node" x="7" y="8.3" width="18" height="7.2" rx="0.3"/>
-    <rect id="box-track" class="track-node" x="35" y="8.3" width="18" height="7.2" rx="0.3"/>
-    <rect id="box-lock" class="node" x="63" y="8.3" width="18" height="7.2" rx="0.3"/>
-    <rect id="box-reacquire" class="node" x="35" y="21.5" width="18" height="7.2" rx="0.3"/>
+    <rect id="box-acquire" class="node" x="5" y="7.8" width="13" height="6.4" rx="0.3"/>
+    <rect id="box-track" class="node" x="25" y="7.8" width="13" height="6.4" rx="0.3"/>
+    <rect id="box-verify" class="node" x="45" y="7.8" width="13" height="6.4" rx="0.3"/>
+    <rect id="box-lock" class="node" x="65" y="7.8" width="13" height="6.4" rx="0.3"/>
+    <rect id="box-reacquire" class="node" x="43" y="22.3" width="16" height="6.2" rx="0.3"/>
   </g>
 
   <g inkscape:groupmode="layer" inkscape:label="04 State Text" id="layer-state-text">
     <g id="text-acquire">
-      <text class="state" x="16" y="11.35" text-anchor="middle">Acquire</text>
-      <text class="role" x="16" y="13.65" text-anchor="middle">wide-range Ramsey</text>
+      <text class="state" x="11.5" y="10.65" text-anchor="middle">Acquire</text>
+      <text class="quantity" x="11.5" y="12.75" text-anchor="middle">f&#770;<tspan baseline-shift="sub" font-size="1.0px" font-style="normal">acq</tspan>, &#963;<tspan baseline-shift="sub" font-size="1.0px" font-style="normal">acq</tspan></text>
     </g>
     <g id="text-track">
-      <text class="state" x="44" y="11.35" text-anchor="middle">Track</text>
-      <text class="role" x="44" y="13.65" text-anchor="middle">short-pulse update</text>
+      <text class="state" x="31.5" y="10.65" text-anchor="middle">Track</text>
+      <text class="quantity" x="31.5" y="12.75" text-anchor="middle">U<tspan baseline-shift="sub" font-size="1.0px" font-style="normal">loop</tspan></text>
+    </g>
+    <g id="text-verify">
+      <text class="state" x="51.5" y="10.65" text-anchor="middle">Verify</text>
+      <text class="quantity" x="51.5" y="12.75" text-anchor="middle">U<tspan baseline-shift="sub" font-size="1.0px" font-style="normal">ver</tspan></text>
     </g>
     <g id="text-lock">
-      <text class="state" x="72" y="11.35" text-anchor="middle">Lock</text>
-      <text class="role" x="72" y="13.65" text-anchor="middle">Ramsey verification</text>
+      <text class="state" x="71.5" y="10.65" text-anchor="middle">Lock</text>
+      <text class="quantity" x="71.5" y="12.75" text-anchor="middle">U<tspan baseline-shift="sub" font-size="1.0px" font-style="normal">mon</tspan></text>
     </g>
     <g id="text-reacquire">
-      <text class="state" x="44" y="24.55" text-anchor="middle">Reacquire</text>
-      <text class="role" x="44" y="26.85" text-anchor="middle">wide-range re-seed</text>
+      <text class="state" x="51" y="25.05" text-anchor="middle">Reacquire</text>
+      <text class="quantity" x="51" y="27.15" text-anchor="middle">f&#770;<tspan baseline-shift="sub" font-size="1.0px" font-style="normal">R</tspan>, &#963;<tspan baseline-shift="sub" font-size="1.0px" font-style="normal">R</tspan></text>
     </g>
   </g>
 
-  <g inkscape:groupmode="layer" inkscape:label="05 Edge Labels" id="layer-edge-labels">
-    <text id="label-seed-obtained" class="edge-label" x="30" y="10.6" text-anchor="middle">seed obtained</text>
-    <text id="label-target-entered" class="edge-label" x="58" y="10.6" text-anchor="middle">target entered</text>
-    <text id="label-target-not-reached" class="edge-label" x="44" y="4.9" text-anchor="middle">target not reached</text>
-    <text id="label-validity-lost" class="edge-label" x="48.2" y="18.9" text-anchor="start">validity lost</text>
-    <text id="label-seed-restored" class="edge-label" x="39.8" y="18.9" text-anchor="end">seed restored</text>
-    <text id="label-check-failed" class="edge-label" x="62.7" y="23.85" text-anchor="middle">check failed</text>
-    <text id="label-calibrated-output" class="math" x="86" y="9.8" text-anchor="middle">&#934;<tspan baseline-shift="sub" font-size="1.3" font-style="normal">cal</tspan></text>
+  <g inkscape:groupmode="layer" inkscape:label="05 Transition Conditions" id="layer-transition-conditions">
+    <rect class="label-bg" x="37.1" y="15.55" width="8.8" height="1.75" rx="0.15"/>
+    <rect class="label-bg" x="57.1" y="15.55" width="8.8" height="1.75" rx="0.15"/>
+    <rect class="label-bg" x="31.0" y="17.65" width="4.8" height="1.75" rx="0.15"/>
+    <rect class="label-bg" x="64.0" y="17.65" width="10.4" height="1.75" rx="0.15"/>
+    <text id="condition-acquire-verify" class="condition" x="31.5" y="2.75" text-anchor="middle">U<tspan baseline-shift="sub" font-size="0.78px" font-style="normal">acq</tspan> &#8804; &#949;<tspan baseline-shift="sub" font-size="0.78px" font-style="normal">enter</tspan></text>
+    <text id="condition-acquire-track" class="condition" x="21.5" y="10.15" text-anchor="middle">U<tspan baseline-shift="sub" font-size="0.78px" font-style="normal">acq</tspan> &#62; &#949;<tspan baseline-shift="sub" font-size="0.78px" font-style="normal">enter</tspan></text>
+    <text id="condition-track-loop" class="condition" x="31.5" y="6.75" text-anchor="middle">U<tspan baseline-shift="sub" font-size="0.78px" font-style="normal">loop</tspan> &#62; &#949;<tspan baseline-shift="sub" font-size="0.78px" font-style="normal">enter</tspan></text>
+    <text id="condition-track-verify" class="condition" x="41.5" y="10.15" text-anchor="middle">U<tspan baseline-shift="sub" font-size="0.78px" font-style="normal">loop</tspan> &#8804; &#949;<tspan baseline-shift="sub" font-size="0.78px" font-style="normal">enter</tspan></text>
+    <text id="condition-verify-lock" class="condition" x="61.5" y="10.15" text-anchor="middle">U<tspan baseline-shift="sub" font-size="0.78px" font-style="normal">ver</tspan> &#8804; &#949;<tspan baseline-shift="sub" font-size="0.78px" font-style="normal">final</tspan></text>
+    <text id="condition-lock-loop" class="condition" x="71.5" y="6.75" text-anchor="middle">U<tspan baseline-shift="sub" font-size="0.78px" font-style="normal">mon</tspan> &#8804; &#949;<tspan baseline-shift="sub" font-size="0.78px" font-style="normal">hold</tspan></text>
+    <text id="condition-verify-track" class="condition" x="41.5" y="16.95" text-anchor="middle">U<tspan baseline-shift="sub" font-size="0.78px" font-style="normal">ver</tspan> &#62; &#949;<tspan baseline-shift="sub" font-size="0.78px" font-style="normal">final</tspan></text>
+    <text id="condition-lock-verify" class="condition" x="61.5" y="16.95" text-anchor="middle">U<tspan baseline-shift="sub" font-size="0.78px" font-style="normal">mon</tspan> &#62; &#949;<tspan baseline-shift="sub" font-size="0.78px" font-style="normal">hold</tspan></text>
+    <text id="event-track-failure" class="event" x="33.4" y="19.1" text-anchor="middle">invalid</text>
+    <text id="event-verify-failure" class="event" x="52.4" y="20.4" text-anchor="start">ambiguous</text>
+    <text id="event-lock-failure" class="event" x="69.2" y="19.1" text-anchor="middle">jump / ref. loss</text>
+    <text id="event-seed-restored" class="event" x="32.2" y="24.95" text-anchor="middle">valid seed</text>
+  </g>
+
+  <g inkscape:groupmode="layer" inkscape:label="06 Line Legend" id="layer-line-legend">
+    <path class="legend-forward" d="M65,23.6 H68.2"/>
+    <text class="legend" x="69.2" y="23.95">forward</text>
+    <path class="legend-fallback" d="M65,25.5 H68.2"/>
+    <text class="legend" x="69.2" y="25.85">fallback</text>
+    <path class="legend-failure" d="M65,27.4 H68.2"/>
+    <text class="legend" x="69.2" y="27.75">failure</text>
   </g>
 </svg>
