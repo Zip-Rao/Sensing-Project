@@ -299,7 +299,7 @@ class FrequencyCalibrationRuntime:
         self._journal.append(entry)
 
     # ------------------------------------------------------------------
-    # Checkpoint / save
+    # Persistence: save / load / resume
     # ------------------------------------------------------------------
 
     def save_journal(self, path: str):
@@ -311,3 +311,120 @@ class FrequencyCalibrationRuntime:
     def latest_checkpoint(self) -> StateMachineSnapshot | None:
         """Return the most recent checkpoint, or None."""
         return self._checkpoints[-1] if self._checkpoints else None
+
+    def save_run(self, directory: str):
+        """Persist the complete run state to *directory*.
+
+        Writes:
+        - ``config.json`` — protocol configuration
+        - ``commands.jsonl`` — journal of commands issued
+        - ``transitions.jsonl`` — state transition log
+        - ``checkpoint.json`` — latest machine snapshot
+        - ``result.json`` — final result summary
+        """
+        import os as _os
+        _os.makedirs(directory, exist_ok=True)
+
+        # config
+        config_d = {
+            "f_target": self.f_target,
+            "epsilon_enter": self.config.epsilon_enter,
+            "epsilon_final": self.config.epsilon_final,
+            "N_verify": self.config.N_verify,
+            "max_commands": self.config.max_commands,
+            "max_reacquire_attempts": self.config.max_reacquire_attempts,
+        }
+        with open(_os.path.join(directory, "config.json"), "w") as f:
+            _json.dump(config_d, f, indent=2, default=str)
+
+        # commands journal
+        self.save_journal(_os.path.join(directory, "commands.jsonl"))
+
+        # transitions
+        if self._machine is not None:
+            with open(_os.path.join(directory, "transitions.jsonl"), "w") as f:
+                for t in self._machine._transition_log:
+                    f.write(_json.dumps(t, default=str) + "\n")
+
+        # checkpoint
+        if self._machine is not None:
+            snap = self._machine.snapshot()
+            snap_d = {
+                "state": snap.state.value,
+                "run_status": snap.run_status.value,
+                "state_version": snap.state_version,
+                "candidate_bias": snap.candidate_bias,
+                "f_hat": snap.f_hat,
+                "uncertainty": snap.uncertainty,
+                "verify_streak": snap.verify_streak,
+                "monitor_streak": snap.monitor_streak,
+                "lock_accumulated_time": snap.lock_accumulated_time,
+                "budget": {
+                    "commands_issued": snap.budget.commands_issued,
+                    "total_shots": snap.budget.total_shots,
+                    "solver_calls": snap.budget.solver_calls,
+                    "reacquire_attempts": snap.budget.reacquire_attempts,
+                },
+            }
+            with open(_os.path.join(directory, "checkpoint.json"), "w") as f:
+                _json.dump(snap_d, f, indent=2, default=str)
+
+        # result
+        result_d = {
+            "state": self._machine.state.value if self._machine else "unknown",
+            "run_status": self._machine.run_status.value if self._machine else "unknown",
+            "f_final": self._machine._f_hat if self._machine else None,
+            "candidate_bias": self._machine._candidate_bias if self._machine else None,
+            "n_commands": len(self._journal),
+        }
+        with open(_os.path.join(directory, "result.json"), "w") as f:
+            _json.dump(result_d, f, indent=2, default=str)
+
+    @classmethod
+    def load_run(
+        cls, directory: str, qubit: object,
+    ) -> "FrequencyCalibrationRuntime":
+        """Restore a runtime from a previously saved run directory.
+
+        The restored runtime can be resumed by calling :meth:`run` — the
+        state machine will continue from the checkpoint.
+        """
+        import os as _os
+
+        # config
+        with open(_os.path.join(directory, "config.json")) as f:
+            config_d = _json.load(f)
+        config = FrequencyCalibrationConfig(
+            epsilon_enter=config_d.get("epsilon_enter", config_d.get("epsilon_enter", 0.0)),
+            epsilon_final=config_d.get("epsilon_final", 0.0),
+            N_verify=config_d.get("N_verify", 2),
+            max_commands=config_d.get("max_commands", 200),
+            max_reacquire_attempts=config_d.get("max_reacquire_attempts", 5),
+        )
+        f_target = config_d["f_target"]
+
+        runtime = cls(qubit=qubit, f_target=f_target, config=config)
+
+        # checkpoint
+        ckpt_path = _os.path.join(directory, "checkpoint.json")
+        if _os.path.exists(ckpt_path):
+            with open(ckpt_path) as f:
+                ckpt_d = _json.load(f)
+            snap = StateMachineSnapshot(
+                state=FrequencyState(ckpt_d["state"]),
+                run_status=RunStatus(ckpt_d["run_status"]),
+                state_version=ckpt_d.get("state_version", 0),
+                candidate_bias=ckpt_d.get("candidate_bias"),
+                f_hat=ckpt_d.get("f_hat"),
+                uncertainty=ckpt_d.get("uncertainty", 0.0),
+                verify_streak=ckpt_d.get("verify_streak", 0),
+                monitor_streak=ckpt_d.get("monitor_streak", 0),
+                lock_accumulated_time=ckpt_d.get("lock_accumulated_time", 0.0),
+            )
+            runtime._machine = FrequencyStateMachine(
+                config=runtime.config, f_target=runtime.f_target,
+            )
+            runtime._machine.restore(snap)
+            runtime._machine._run_status = RunStatus.RUNNING  # ready to resume
+
+        return runtime
