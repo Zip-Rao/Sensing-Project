@@ -1251,7 +1251,14 @@ class SinglePointFrequencyCalibration(Calibration):
         is a fixed probe step in the direction of −sign(e_n); subsequent
         steps use ΔV/Δe with damping.  When Δe == 0 the gradient is
         undefined and the probe step is reused.
+
+        Internally delegates to :class:`DampedSecantTracker` — the shared
+        stepwise controller also used by the event-driven state machine.
         """
+        from sqc.calibration.frequency_control import (
+            DampedSecantTracker,
+            FrequencyEstimate,
+        )
 
         # ---- seed --------------------------------------------------------
         if self.V_seed is not None:
@@ -1284,102 +1291,107 @@ class SinglePointFrequencyCalibration(Calibration):
         f_n = self._meas.measure(V_n, omega_d=omega_d)
         e_n = f_n - f_target
         delta_n = f_n - omega_d                    # local detuning (metrology)
-        n_iter = 0
 
         # Track best point in case later iterations diverge
         best_V = V_n
         best_residual = e_n
         best_abs_e = abs(e_n)
 
-        # Consecutive in-tolerance count (converge_streak de-bounce).
-        streak = 1 if abs(e_n) <= epsilon else 0
-        n_streak = max(1, int(self.converge_streak))
-
         history: list[dict] = []
         history.append({
-            "iter": n_iter, "V": float(V_n),
+            "iter": 0, "V": float(V_n),
             "f": float(f_n), "residual": float(e_n),
             "omega_d": float(omega_d), "delta": float(delta_n),
             "is_best": True,
         })
 
+        # ---- shared stepwise tracker ------------------------------------
+        tracker = DampedSecantTracker(
+            f_target=f_target,
+            damping=self.damping,
+            first_bias_step=self.first_bias_step,
+            max_bias_step=self.max_bias_step,
+            V_lo=V_lo, V_hi=V_hi,
+            converge_streak=self.converge_streak,
+            max_iter=self.max_iter,
+            epsilon_f=epsilon,
+            stop_predicate=None,   # checked manually for exact equivalence
+        )
+        seed_est = FrequencyEstimate(frequency=f_n)
+        snapshot = tracker.initialize(seed_est, V_n)
+
+        n_streak = max(1, int(self.converge_streak))
+
         # ---- main loop ---------------------------------------------------
-        while streak < n_streak and n_iter < self.max_iter:
-            # --- compute step ---
-            s_secant = None                            # de/dV of last two pts
-            if abs(e_n) <= epsilon:
-                # Already in tolerance: hold position and re-measure to confirm
-                # (only reached when converge_streak > 1).
-                step = 0.0
-            elif n_iter == 0:
-                # No gradient yet: fixed probe step
-                step = self.first_bias_step * np.sign(e_n)
-            else:
-                de = e_n - e_prev
-                dV = V_n - V_prev
-                if abs(de) > 1e-15:
-                    grad_inv = dV / de                     # dB/de
-                    step = self.damping * e_n * grad_inv   # damped secant
-                    if abs(dV) > 1e-15:
-                        s_secant = de / dV                 # local ∂f_q/∂V
-                else:
-                    # Gradient undefined: reuse probe step
-                    step = self.first_bias_step * np.sign(e_n)
+        stopped_by: str | None = None
+        while True:
+            proposal = tracker.propose(snapshot)
+            if proposal.converged:
+                stopped_by = proposal.diagnostics.get("reason", "max_iter")
+                if stopped_by == "already_converged":
+                    stopped_by = "tolerance"
+                break
 
-            # Clamp step
-            step = float(np.clip(step, -self.max_bias_step, self.max_bias_step))
-
-            # Apply step
-            f_prev_hat, V_prev, e_prev = f_n, V_n, e_n
-            V_n = V_n - step
-
-            # Clamp V_n into optional bounds
-            if V_lo is not None:
-                V_n = max(V_lo, min(V_hi, V_n))
+            # Save pre-step state for omega_d resolution
+            V_prev = snapshot.V
+            f_prev_hat = snapshot.f
+            n_iter = snapshot.n_iter
 
             # --- resolve drive frequency for this iteration ---
-            # Local sensitivity s_hat = ∂f_q/∂V. "secant" uses the slope of the
-            # last two measured points (model-free); "model" uses the analytic
-            # dispersion at the point we just stepped from.
             if self.sensitivity_source == "model":
                 s_hat = float(self.qubit.frequency_sensitivity(V_prev))
             else:
-                s_hat = s_secant
+                s_hat = proposal.s_hat
             omega_d = self._resolve_omega_d({
-                "iter": n_iter + 1, "V": V_n, "V_prev": V_prev,
-                "f_hat_prev": f_prev_hat, "s_hat": s_hat, "f_target": f_target,
+                "iter": n_iter + 1, "V": proposal.V_next,
+                "V_prev": V_prev,
+                "f_hat_prev": f_prev_hat, "s_hat": s_hat,
+                "f_target": f_target,
             })
 
-            # Measure at new point (relative to the resolved drive)
-            f_n = self._meas.measure(V_n, omega_d=omega_d)
-            e_n = f_n - f_target
+            # Measure at the proposed point
+            f_n = self._meas.measure(proposal.V_next, omega_d=omega_d)
             delta_n = f_n - omega_d
-            n_iter += 1
 
-            # Convergence de-bounce: count consecutive in-tolerance iterations.
-            streak = streak + 1 if abs(e_n) <= epsilon else 0
-
-            # Linear-range guard: flag when the local detuning leaves the
-            # protocol's trustworthy window (caller may trigger re-acquire).
+            # Linear-range guard
             out_of_range = (
                 self.linear_range is not None
                 and abs(delta_n) > self.rho * self.linear_range
             )
 
+            # Accept measurement into tracker
+            estimate = FrequencyEstimate(frequency=f_n)
+            result = tracker.accept(
+                snapshot, estimate, proposal,
+                extra_predicate_state={
+                    "delta": float(delta_n),
+                    "out_of_range": bool(out_of_range),
+                    "history": history,
+                },
+            )
+            snapshot = result.snapshot
+            e_n = snapshot.e
+            n_iter = snapshot.n_iter
+
             # Track best point
-            is_best = abs(e_n) < best_abs_e
+            is_best = result.is_best
             if is_best:
-                best_abs_e = abs(e_n)
-                best_residual = e_n
-                best_V = V_n
+                best_abs_e = abs(e_n) if e_n is not None else float("inf")
+                best_residual = e_n if e_n is not None else float("inf")
+                best_V = snapshot.V
 
             history.append({
-                "iter": n_iter, "V": float(V_n),
-                "f": float(f_n), "residual": float(e_n),
+                "iter": n_iter, "V": float(snapshot.V),
+                "f": float(f_n), "residual": float(e_n) if e_n is not None else float("inf"),
                 "omega_d": float(omega_d), "delta": float(delta_n),
                 "out_of_range": bool(out_of_range),
                 "is_best": is_best,
             })
+
+            # Check tracker stop reason
+            if result.stopped_by != "running":
+                stopped_by = result.stopped_by
+                break
 
             # Optional early stop: hand the caller a rich per-step state so it
             # can switch phase on gradient/stall/divergence/budget signals that
@@ -1387,22 +1399,30 @@ class SinglePointFrequencyCalibration(Calibration):
             if self.stop_predicate is not None:
                 state = {
                     "iter": n_iter,
-                    "V": float(V_n),
-                    "residual": float(e_n),
-                    "abs_residual": float(abs(e_n)),
-                    "step": float(step),
-                    "de": float(e_n - e_prev),
-                    "dV": float(V_n - V_prev),
+                    "V": float(snapshot.V),
+                    "residual": float(e_n) if e_n is not None else float("inf"),
+                    "abs_residual": float(abs(e_n)) if e_n is not None else float("inf"),
+                    "step": float(proposal.step),
+                    "de": float(e_n - snapshot.e_prev)
+                    if (e_n is not None and snapshot.e_prev is not None)
+                    else 0.0,
+                    "dV": float(snapshot.V - snapshot.V_prev),
                     "delta": float(delta_n),
                     "out_of_range": bool(out_of_range),
-                    "best_abs_residual": float(best_abs_e),
+                    "best_abs_residual": float(snapshot.best_abs_e),
                     "history": history,
                 }
                 if self.stop_predicate(state):
                     stopped_by = "predicate"
                     break
-        else:
-            stopped_by = "tolerance" if abs(e_n) <= epsilon else "max_iter"
+
+        if stopped_by is None:
+            e_final = snapshot.e
+            stopped_by = (
+                "tolerance"
+                if (e_final is not None and abs(e_final) <= epsilon)
+                else "max_iter"
+            )
 
         return self._build_result(
             f_target, best_V, best_residual,
