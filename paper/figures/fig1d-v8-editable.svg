@@ -137,17 +137,23 @@
        class="forward"
        d="M58,11 H65" />
     <path
-       id="lock-to-output"
+       id="lock-to-terminal"
        class="forward"
        d="M78,11 H85.1" />
     <circle
-       id="calibrated-output"
+       id="terminal-state-outer"
        cx="86"
        cy="11"
        r="0.50"
        fill="#ffffff"
        stroke="#30343a"
        stroke-width="0.22" />
+    <circle
+       id="terminal-state-inner"
+       cx="86"
+       cy="11"
+       r="0.23"
+       fill="#30343a" />
     <path
        id="acquire-to-verify"
        class="forward"
@@ -436,6 +442,12 @@
    font-size="0.78px"
    font-style="normal"
    id="tspan30">hold</tspan></text>
+    <text
+       id="event-stop"
+       class="event"
+       x="82"
+       y="10.15"
+       text-anchor="middle">stop</text>
     <text
        id="event-track-failure"
        class="event"

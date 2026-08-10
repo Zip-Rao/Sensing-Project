@@ -1,6 +1,6 @@
 # Sensing-Project 全栈化重构平台 — 技术文档
 
-> 版本: v2.18 | 日期: 2026-08-04 | 适用于 sqc v1.0.0
+> 版本: v2.19 | 日期: 2026-08-10 | 适用于 sqc v1.0.0
 >
 > 本文档按照 **Gao, Rol, Touzard, Wang 2021**（PRX Quantum 2, 040202）所提出的 cQED 六层全栈架构组织。
 > 每一章既给出物理动机，又详尽介绍代码模块、扩展接口与开发规范。
@@ -1188,6 +1188,7 @@ class CalibrationTable:
 | `FrequencyMeasurement(method="ramsey")` | 单点 f₀₁ 测量 | §V.A | Ramsey FFT（单/双扫模式可选） |
 | `FrequencyMeasurement(method="transient")` | 单点 f₀₁ 测量 | (项目原创) | 正交 Ramsey + 核函数灵敏度 G_α |
 | `SinglePointFrequencyCalibration(method="closed_loop")` | 闭环调谐到 f_target | Vepsalainen 2022 | secant/bisection/gradient 迭代,内层组合 `FrequencyMeasurement`(双扫 ramsey 或 transient); gradient 免括号,含阻尼+钳位+best-point |
+| `DampedSecantTracker` | 逐步割线控制器 | (项目原创) | 纯数学对象: `initialize` → `propose` → `accept`; 被旧的 `_closed_loop_gradient` 和新的 `FrequencyStateMachine` Track 状态共享 |
 | `WaveformCalibration(method="transfer_function")` | H(ω) 拟合 | §V.E | 阶跃响应 + 多指数/FIR/IIR 拟合 |
 | `WaveformCalibration(method="predistortion")` | 设计逆滤波器 | §V.E | H_inv(ω) = H*(ω) / (|H|² + λ²) |
 | `PredistortionDesigner` | 独立预失真设计器 | §V.E | 可按需独立使用 |
@@ -1372,6 +1373,56 @@ corrected = dist.apply_to_waveform(predistorted)
 - **添加新标定类型**：继承 `Calibration` ABC，实现 `calibrate()`，返回 `CalibrationTable`。
 - **改用真实实验数据替代仿真**：在 `Calibration.calibrate()` 中改为读取实际测量数据（pickle/CSV），不再调用 `mesolve`。
 
+#### 4.7.6 `DampedSecantTracker` — 共享逐步割线控制器（v2.19）
+
+`sqc/calibration/frequency_control.py` 从 `_closed_loop_gradient()` 提取出**纯数学**的阻尼割线步进控制器。它不依赖 QuTiP、不做 I/O——只负责偏置步长计算、收敛判断和最佳点追踪。
+
+**设计动机**：旧的 `_closed_loop_gradient()` 是一次性运行到结束的 batch 方法；事件驱动状态机的 Track 状态需要**逐步执行**（每步一个 `propose/accept`）。两者共享同一个控制律,避免代码重复。
+
+**四种数据结构**：
+
+| 类 | 职责 |
+|---|---|
+| `FrequencyEstimate` | 单次频率测量结果: `frequency`, `uncertainty`, `valid`, `ambiguous`, `method` |
+| `TrackSnapshot` | 控制器全量状态: `V`, `e`（当前+前次）, `best_V`, `best_abs_e`, `streak` |
+| `TrackProposal` | 控制器输出: `V_next`, `step`, `s_hat`, `converged` |
+| `TrackStepResult` | 接收测量后: `snapshot`（更新后）, `is_best`, `stopped_by` |
+
+**三步接口**：
+
+```python
+from sqc.calibration.frequency_control import DampedSecantTracker, FrequencyEstimate
+
+tracker = DampedSecantTracker(f_target=..., damping=0.8, max_bias_step=0.02)
+
+# Step 1: 用第一次测量结果初始化
+seed = FrequencyEstimate(frequency=f_measured)
+snapshot = tracker.initialize(seed, V_seed=0.0)
+
+# Step 2-N: 循环
+while True:
+    proposal = tracker.propose(snapshot)    # 计算下一步 bias
+    if proposal.converged:
+        break
+    # --- 调用者负责: 解析 omega_d, 执行测量 ---
+    estimate = measure(proposal.V_next, omega_d)
+    # ------------------------------------------
+    result = tracker.accept(snapshot, estimate, proposal)
+    snapshot = result.snapshot
+    if result.stopped_by != "running":
+        break
+```
+
+**步进公式**（`propose` 内部）：
+- **首次**: 固定探针步长 `step = first_bias_step · sign(e)`
+- **后续**: 阻尼割线 `step = damping · e · (dV/de)`, clamp 到 `[-max_bias_step, max_bias_step]`
+- **已收敛**: `step = 0`（原地重新测量确认,配合 `converge_streak > 1`）
+
+**辅助函数**:
+- `resolve_track_drive(V, V_prev, f_prev, s_hat)` — "track" 驱动策略: `ω_d = f_prev + s_hat·(V − V_prev)`
+
+**向后兼容**: `SinglePointFrequencyCalibration._closed_loop_gradient()` 内部已委托给 `DampedSecantTracker`——旧 API（`calibrate()` → `CalibrationTable`）行为完全不变,由 27 个等价测试验证。
+
 ---
 
 ### 4.8 workflows/ — 顶层科研流程
@@ -1474,11 +1525,101 @@ wf.plot()
 
 **预留科研接口** (stub, raise NotImplementedError)：`pipeline()`, `multi_qubit()`, `crosstalk()`, `save()`, `load()`, `diff()`, `benchmark()`, `find_optimal_work_point()`, `detectability_limit()`, `noise_characterize()`, `cross_validate()`。
 
-#### 4.8.4 扩展点
+#### 4.8.4 `FrequencyCalibrationWorkflow` + 事件驱动状态机（v2.19）
+
+频率标定有两套接口——**legacy staged workflow**（已有）和**事件驱动状态机**（新增）。两者共享 `DampedSecantTracker` 控制律。
+
+##### 旧接口（保持兼容）：`FrequencyCalibrationWorkflow`
+
+```python
+from sqc.workflows import FrequencyCalibrationWorkflow, CalibrationStage
+
+# 默认两阶段 transient→Ramsey hybrid
+wf = FrequencyCalibrationWorkflow(qubit=q, f_target=f_target, V_seed=0.0)
+result = wf.run()  # {"V_final", "residual", "history", ...}
+```
+
+自定义阶段管线：`stages=[CalibrationStage(name="coarse", measure_method="transient", ...), ...]`。
+
+##### 新接口（事件驱动）：`FrequencyStateMachine` + `FrequencyCalibrationRuntime`
+
+六状态协议：
+
+```
+Acquire → Track → Verify → Lock
+             ↑        │        │
+             │        │        │
+           Reacquire <─────────+
+```
+
+**文件分布**：
+
+| 文件 | 类 | 职责 |
+|---|---|---|
+| `sqc/workflows/frequency_state_machine.py` | `FrequencyStateMachine` | 纯状态机 — 无 QuTiP 依赖，只做状态转移 + 守卫评估 |
+| | `FrequencyCalibrationConfig` | 所有阈值、预算、策略参数 |
+| | `AcquireFrequency` / `TrackFrequency` / `VerifyFrequency` / `MonitorFrequency` / `SafeHold` | 5 种命令 |
+| | `MeasurementSucceeded` / `MeasurementTechnicalFailure` / ... | 9 种事件 |
+| | `ReasonCode` | 21 个冻结原因码 |
+| `sqc/workflows/frequency_backends.py` | `SQCExecutor` | 命令→QuTiP 测量: Ramsey(Acquire/Reacquire/Verify), Transient(Track/Monitor) |
+| | `FaultInjectionExecutor` | 可控故障注入 (fail/reject/ambiguous), 用于测试恢复路径 |
+| `sqc/workflows/frequency_runtime.py` | `FrequencyCalibrationRuntime` | 事件循环编排 + tracker 管理 + journal/checkpoint + `save_run()`/`load_run()` |
+
+**六状态职责**（硬约束）：
+
+| 状态 | 职责 | 允许改磁通? | 测量角色 |
+|---|---|---|---|
+| Acquire | 宽范围 Ramsey 捕获绝对频率种子 | 否 | global acquisition |
+| Track | 短脉冲局部测频 + 割线灵敏度 + 磁通更新 + drive tracking | **是** | local loop estimator |
+| Verify | 冻结候选偏置,独立 Ramsey 判定是否达到最终容差 | **否** | independent verifier |
+| Lock | 长期稳频,低成本漂移监测,按计划触发独立 Ramsey 审计 | **否** | monitor only |
+| Reacquire | 参考/分支/局部有效性丢失后重新做宽范围捕获 | 否 | global recovery |
+| SafeStop | 取消/预算/联锁/不可恢复故障后的安全保持 | 仅 safe bias | no science measurement |
+
+**阈值层次**：
+
+```
+epsilon_hold < epsilon_final < epsilon_enter < Delta_val
+   10 kHz         100 kHz         5 MHz        20 MHz
+  (物理目标)    (Verify 通过)   (候选进入)   (局部有效窗口)
+```
+
+**Lock 监视器迟滞**（防止噪声抖动）：
+
+| 条件 | 转移 |
+|---|---|
+| `U_mon ≤ epsilon_mon_clear` | Lock → Lock, 清零 suspect streak |
+| `epsilon_mon_clear < U_mon ≤ epsilon_mon_suspect` | 累计 suspect streak; 达 `N_mon_suspect` → Verify |
+| `epsilon_mon_suspect < U_mon < Delta_mon_reacquire` | 立即 Lock → Verify |
+| `U_mon ≥ Delta_mon_reacquire` 或 reference lost | Lock → Reacquire |
+
+**最小使用示例**：
+
+```python
+from sqc.workflows.frequency_runtime import FrequencyCalibrationRuntime
+from sqc.workflows.frequency_state_machine import FrequencyCalibrationConfig
+
+config = FrequencyCalibrationConfig(
+    epsilon_enter=2 * np.pi * 20e-3,    # 20 MHz
+    epsilon_final=2 * np.pi * 2e-3,     # 2 MHz
+    N_verify=2,
+    max_commands=30,
+)
+runtime = FrequencyCalibrationRuntime(qubit=q, f_target=f_target, config=config)
+result = runtime.run()
+# result["state"] → "lock", result["run_status"] → "calibrated"
+```
+
+**持久化**：`runtime.save_run(dir)` 写入 `config.json` / `commands.jsonl` / `transitions.jsonl` / `checkpoint.json` / `result.json`；`FrequencyCalibrationRuntime.load_run(dir, qubit)` 恢复并可从断点继续。
+
+**测试覆盖**: 35 纯状态机单元测试（全部转移表 §11.1）+ 7 QuTiP 集成测试（命令→事件回路, Acquire→Verify→Lock, 故障注入, SafeStop）。
+
+#### 4.8.5 扩展点
 
 - **添加新顶层 workflow**（如完整 RB workflow、双比特门优化 workflow）：继承 `Workflow` ABC，实现 `run() → dict`。
 - **修改现有 workflow 的某一步**：直接覆写对应的子调用，例如把 `TransferFunctionCalibration` 换成自定义算法。
 - **实现 stub 方法**：`SensingWorkflow` 的 11 个 stub 方法可按需实现（设计见内部 phase_6 handbook）。
+- **使用事件驱动状态机**：通过 `FrequencyCalibrationConfig` 调整阈值和预算策略；通过 `FaultInjectionExecutor` 测试恢复路径；通过 `FrequencyCalibrationRuntime.load_run()` 从断点恢复长期运行。
 
 ---
 
@@ -2032,15 +2173,26 @@ sqc.config.CONFIG = sqc.config.Config(
 | `FluxResponseCalibration` | `sqc.calibration.frequency` | f(Φ) 磁通响应标定 |
 | `FrequencyMeasurement` | `sqc.calibration.frequency` | 单点 f₀₁ 测量(ramsey/transient) |
 | `SinglePointFrequencyCalibration` | `sqc.calibration.frequency` | 单点 f₀₁ 调谐(closed_loop) |
+| `DampedSecantTracker` | `sqc.calibration.frequency_control` | 共享逐步割线控制器 |
+| `FrequencyEstimate` | `sqc.calibration.frequency_control` | 单次测频结果数据结构 |
+| `FrequencyStateMachine` | `sqc.workflows.frequency_state_machine` | 事件驱动频率标定状态机 |
+| `FrequencyCalibrationConfig` | `sqc.workflows.frequency_state_machine` | 协议阈值/预算/策略配置 |
+| `FrequencyCalibrationRuntime` | `sqc.workflows.frequency_runtime` | 事件循环编排 + 持久化 |
+| `SQCExecutor` | `sqc.workflows.frequency_backends` | 命令→QuTiP 测量执行器 |
 | `WaveformCalibration` | `sqc.calibration.waveform` | 波形标定（传输函数+预失真） |
 | `PredistortionDesigner` | `sqc.calibration.waveform` | 预失真设计器 |
 | `CalibrationScheduler` | `sqc.calibration.scheduler` | 标定控制室 |
 | `CryoscopeCalibration` | `sqc.reconstruction.cryoscope` | φ(h) 重建前置标定 |
 | `DelayRamseyCalibration` | `sqc.reconstruction.delay_ramsey` | φ(z) 重建前置标定 |
 | `Workflow` | `sqc.workflows.base` | 顶层流程 ABC |
+| `FrequencyCalibrationWorkflow` | `sqc.workflows.frequency_calibration` | 多阶段闭环频率标定 (legacy) |
+| `CalibrationStage` | `sqc.workflows.frequency_calibration` | 标定阶段描述 |
 | `PredistortionValidationWorkflow` | `sqc.workflows.predistortion_validation` | 预失真验证 |
 | `ZCrosstalkWorkflow` | `sqc.workflows.z_crosstalk` | Z 串扰提取 |
 | `SensingWorkflow` | `sqc.workflows.sensing` | 统一科研入口 (P6d) |
+| `FrequencyStateMachine` | `sqc.workflows.frequency_state_machine` | 事件驱动频率标定状态机 (V2) |
+| `FrequencyCalibrationRuntime` | `sqc.workflows.frequency_runtime` | 状态机运行时 + 持久化 |
+| `SQCExecutor` | `sqc.workflows.frequency_backends` | 命令→QuTiP 执行器 |
 | `WorkflowResult` | `sqc.workflows.sensing` | run() 返回值 |
 | `SweepResult` | `sqc.workflows.sensing` | sweep() 返回值 |
 | `CompareResult` | `sqc.workflows.sensing` | compare() 返回值 |
@@ -2525,7 +2677,7 @@ mesolve(H_list, psi0, t_array, c_ops, e_ops)
 | v2.13 | 2026-07-17 | **v1.0.0 发布准备**。新增 §A2「v1 未公开的能力（post-v1 路线图）」——按 D3/D4 隐藏(非删除)Z-crosstalk、transient 频率标定、CPMG、coupler/electronics、SensingWorkflow 11 stub,附深路径导入与恢复方式。文档头 `适用于 sqc v0.3.0`→`v1.0.0`。配套(代码见 commit 历史):瞬态核路由统一到 `KernelEstimator`(去 `get_kernel` 弃用告警,数值不变)、`ZCrosstalkWorkflow` 从 `workflows.__all__` 隐藏、前端 `SHOW_EXPERIMENTAL` 开关、echo/create_pulse/distortion 缺陷修复。纯文档增补,src/ 未变(R1)。 |
 | v2.12 | 2026-07-16 | **闭环反馈新增 `step_method="gradient"`**(§4.7.3)。阻尼割线法 (damped secant) 数值梯度 Newton 步,无需 V_a/V_b 预括号,仅需 V_seed 起点。新增 damping/clamp/best-point 三重抗噪: damping∈(0,1] 压过冲, max_bias_step 钳位, 追踪 |residual| 最小点回写。首步/Δe=0 时退化为固定探测步。`SinglePointFrequencyCalibration` 新增 V_seed/damping/first_bias_step/max_bias_step 字段; `_build_result` 新增 `extra` 可选参数。+纯增量分支, src/ 未变(R1)。 |
 | v2.11 | 2026-06-07 | **瞬态测频 order≥3 修复 + Route B 落地**(§4.7.3 v2.11 注)。(1) 修复 order≥3 三次 Newton 的**符号 bug**(此前返回 ω_d−Δ,误差≈−2Δ,比线性更差)——统一到 δω=−Δ 约定。(2) `_calibrate_g3_taylor` 的 `delta_max_ghz` 默认改 `None`=**自适应**(旧默认 0.08 使 G1 偏低~0.6×、G3 全错);新增 `FrequencyMeasurement.g3_delta_max`。(3) **Route B** `g3_source="kernel_full"`:完整非对角核三重积分 ∭k₃ dt³(`_calibrate_g3_kernel_full`),免 Δ 扫描,与拟合互校。(4) **移除** `diag_legacy`(错误对象,小~170×),未知值抛 ValueError。效果:有效区 order3-fit 比线性精度↑~10×。+5 单元测试。src/ 未变(R1)。 |
-| v2.10 | 2026-06-07 | **核函数 σ_t 旋钮 + Richardson 外推 + 非对角(sim)提取**(§4.6.2 Phase 12 增补)。诊断并修复 exp 高阶对角偏差:(1) `_extract_kn_omega` 的 FD mesolve 改用 `atol=1e-12, rtol=1e-10`,消除 noise/h³ 主导(高阶"不太对"主因);(2) 新增 `probe_sigma_t` 旋钮(默认 `None`→2·dt,零回归)+ `richardson`/`richardson_sigmas` σ_t→0 外推,G₃/G₃_sim 从 0.84→0.96;(3) `extract_off_diagonal=True`(仅 method='sim') 经 `_heisenberg_kernels_offdiag` 产出完整 n 维核 k₂(M,M)/k₃(M,M,M),order≤3;(4) `KernelResult.off_diagonal` 字段 + n 维 save/load;(5) exp+offdiag 抛 NotImplementedError,`estimate_full` order≥2 补回 `_validate_inputs`;(6) `TransientReconstruction` Wiener/Hammerstein 路径对 ndim>1 核抛 ValueError(指向 LM)。+8 新单元测试。src/ 未变(R1)。 |
+| v2.19 | 2026-08-10 | **频率标定事件驱动状态机 V2**。(1) 新增 `sqc/calibration/frequency_control.py`: `DampedSecantTracker` + 4 种数据结构（`FrequencyEstimate`, `TrackSnapshot`, `TrackProposal`, `TrackStepResult`）——从 `_closed_loop_gradient()` 提取的纯数学控制器，被旧 batch API 和新逐步接口共享。(2) 新增 `sqc/workflows/frequency_state_machine.py`: `FrequencyStateMachine` ——六状态（Acquire→Track→Verify→Lock + Reacquire + SafeStop）事件驱动协议，含 5 命令/9 事件/21 原因码/预算/快照回放。`FrequencyCalibrationConfig` 管理全部阈值（`epsilon_enter/final/hold`, `Delta_val`, monitor 迟滞参数）和预算策略。(3) 新增 `sqc/workflows/frequency_backends.py`: `SQCExecutor`（Ramsey/Transient/Monitor 后端）+ `FaultInjectionExecutor`（可控故障注入）。(4) 新增 `sqc/workflows/frequency_runtime.py`: `FrequencyCalibrationRuntime` ——事件循环编排 + `DampedSecantTracker` 集成 + journal/checkpoint + `save_run()`/`load_run()` 持久化。(5) 新增 27 tracker 单元测试 + 35 状态机单元测试 + 3 持久化单元测试 + 7 QuTiP 集成测试。总测试 486 全绿。旧 `FrequencyCalibrationWorkflow` / `SinglePointFrequencyCalibration` API 不变。详见 §4.7.6 和 §4.8.4。 |
 
 下一步阅读：
 - 完整设计背景:`idea/refactor/_refactor_plan.md`(内部开发文档,不随发行分发)
