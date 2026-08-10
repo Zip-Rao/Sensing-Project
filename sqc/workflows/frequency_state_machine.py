@@ -832,7 +832,9 @@ class FrequencyStateMachine:
                 ):
                     # Check specific failure modes for diagnostics
                     U = abs(error) + u
-                    if not (self.config.S_min <= abs(event.diagnostics.get("s_hat", 1.0)) <= self.config.S_max):
+                    s_hat_val = event.diagnostics.get("s_hat")
+                    s_hat_abs = abs(s_hat_val) if s_hat_val is not None else 1.0
+                    if not (self.config.S_min <= s_hat_abs <= self.config.S_max):
                         reason = ReasonCode.SENSITIVITY_INVALID
                     elif U > self.config.Delta_val:
                         reason = ReasonCode.LOCAL_RANGE_LOST
