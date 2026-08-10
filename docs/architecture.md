@@ -1607,8 +1607,15 @@ config = FrequencyCalibrationConfig(
 )
 runtime = FrequencyCalibrationRuntime(qubit=q, f_target=f_target, config=config)
 result = runtime.run()
-# result["state"] → "lock", result["run_status"] → "calibrated"
+# bounded run: result["state"] → "safe_stop",
+# result["run_status"] → "completed", result["safe_hold_confirmed"] → True
 ```
+
+`CALIBRATED` 表示首次通过 Verify，**不是 runtime 的终止条件**。runtime 会继续执行
+Lock 监测和到期 Ramsey 审计，直到命令、shots、solver calls、时间或
+`stop_after_lock_cycles` 预算结束。科学测量在执行前通过后端成本估计进行预算预检；
+进入 SafeStop 后，runtime 会在有限重试内实际下发 `SafeHold`，并在结果字段
+`safe_hold_confirmed` 中记录是否收到 `SafeHoldApplied`。
 
 **持久化**：`runtime.save_run(dir)` 写入 `config.json` / `commands.jsonl` / `transitions.jsonl` / `checkpoint.json` / `result.json`；`FrequencyCalibrationRuntime.load_run(dir, qubit)` 恢复并可从断点继续。
 

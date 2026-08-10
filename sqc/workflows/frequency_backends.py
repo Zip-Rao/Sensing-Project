@@ -105,6 +105,19 @@ class SQCExecutor:
                     reason=f"unknown command type: {type(cmd).__name__}",
                 )
 
+    def estimate_cost(self, cmd: Command) -> dict[str, int]:
+        """Estimate shots/solver calls before executing a command."""
+        if isinstance(cmd, AcquireFrequency):
+            meas = self._get_ramsey()
+            n = len(meas.tau_list) * (1 if meas.f_artificial is not None else 2)
+        elif isinstance(cmd, VerifyFrequency):
+            n = 2 * len(self._get_verify().tau_list)
+        elif isinstance(cmd, (TrackFrequency, MonitorFrequency)):
+            n = 2
+        else:
+            n = 0
+        return {"shots": n, "solver_calls": n}
+
     # ------------------------------------------------------------------
     # Per-command executors
     # ------------------------------------------------------------------
@@ -323,6 +336,10 @@ class FaultInjectionExecutor:
     def set_machine_state(self, state):
         """Inform the executor of the current machine state (called by runtime)."""
         self._machine_state = state
+
+    def estimate_cost(self, cmd: Command) -> dict[str, int]:
+        """Delegate preflight cost estimation to the wrapped executor."""
+        return self._inner.estimate_cost(cmd)
 
     def execute(self, cmd: Command) -> Event:
         """Execute with fault injection."""

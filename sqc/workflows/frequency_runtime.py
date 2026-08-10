@@ -36,6 +36,7 @@ from sqc.workflows.frequency_state_machine import (
     ReasonCode,
     RunStatus,
     SafeHold,
+    SafeHoldApplied,
     StateMachineSnapshot,
     TrackFrequency,
     VerifyFrequency,
@@ -104,15 +105,29 @@ class FrequencyCalibrationRuntime:
         self._machine.start()
         self._journal = []
 
-        safe_hold_attempted = False
+        safe_hold_confirmed = False
+        safe_hold_attempts = 0
         while (
             self._machine.run_status in (RunStatus.RUNNING, RunStatus.CALIBRATED)
-            or (self._machine.state == FrequencyState.SAFE_STOP and not safe_hold_attempted)
+            or (
+                self._machine.state == FrequencyState.SAFE_STOP
+                and not safe_hold_confirmed
+                and safe_hold_attempts <= self.config.max_technical_retries
+            )
         ):
             cmd = self._machine.next_command()
 
             # Pre-process: for Track commands, use the tracker to refine the proposal
             cmd = self._enrich_command(cmd)
+
+            if not isinstance(cmd, SafeHold):
+                estimate_cost = getattr(self.executor, "estimate_cost", None)
+                cost = estimate_cost(cmd) if callable(estimate_cost) else {}
+                if not self._machine.reserve_execution_budget(
+                    estimated_shots=cost.get("shots", 0),
+                    estimated_solver_calls=cost.get("solver_calls", 0),
+                ):
+                    cmd = self._machine.next_command()
 
             # Execute
             event = self.executor.execute(cmd)
@@ -124,8 +139,11 @@ class FrequencyCalibrationRuntime:
             # Terminal status is not enough: send the safe-bias command to the
             # executor and record its acknowledgement before leaving the loop.
             if isinstance(cmd, SafeHold):
-                safe_hold_attempted = True
-                break
+                safe_hold_attempts += 1
+                safe_hold_confirmed = isinstance(event, SafeHoldApplied)
+                if safe_hold_confirmed:
+                    break
+                continue
 
             # Post-process: update tracker after Track measurements
             self._post_process(cmd, event)
@@ -145,6 +163,7 @@ class FrequencyCalibrationRuntime:
             "n_commands": len(self._journal),
             "elapsed": elapsed,
             "checkpoints": len(self._checkpoints),
+            "safe_hold_confirmed": safe_hold_confirmed,
         }
 
     # ------------------------------------------------------------------

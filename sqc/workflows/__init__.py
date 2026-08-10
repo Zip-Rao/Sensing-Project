@@ -17,6 +17,15 @@ from .sensing import (
     NoiseReport,
     CVResult,
 )
+# V2 event-driven frequency calibration state machine (v2.19)
+from .frequency_state_machine import (
+    FrequencyCalibrationConfig,
+    FrequencyStateMachine,
+    FrequencyState,
+    RunStatus,
+    ReasonCode,
+)
+from .frequency_runtime import FrequencyCalibrationRuntime
 
 __all__ = [
     "Workflow",
@@ -32,4 +41,11 @@ __all__ = [
     "BenchmarkResult",
     "NoiseReport",
     "CVResult",
+    # V2 event-driven frequency calibration (v2.19)
+    "FrequencyCalibrationConfig",
+    "FrequencyStateMachine",
+    "FrequencyState",
+    "RunStatus",
+    "ReasonCode",
+    "FrequencyCalibrationRuntime",
 ]

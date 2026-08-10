@@ -205,6 +205,20 @@ class Budget:
             return ReasonCode.BUDGET_EXHAUSTED
         return None
 
+    def can_reserve(
+        self,
+        config: FrequencyCalibrationConfig,
+        *,
+        shots: int = 0,
+        solver_calls: int = 0,
+    ) -> bool:
+        """Return whether an estimated measurement cost fits the budget."""
+        return (
+            self.total_shots + max(0, int(shots)) <= config.max_shots
+            and self.solver_calls + max(0, int(solver_calls))
+            <= config.max_solver_calls
+        )
+
 
 # ===================================================================
 # Commands
@@ -711,6 +725,34 @@ class FrequencyStateMachine:
                 return MonitorFrequency(locked_bias=bias)
             case FrequencyState.SAFE_STOP:
                 return SafeHold(bias=0.0, reason=ReasonCode.CANCELLED)
+
+    def reserve_execution_budget(
+        self, *, estimated_shots: int = 0, estimated_solver_calls: int = 0,
+    ) -> bool:
+        """Gate a pending science command using its estimated execution cost.
+
+        The estimate is not consumed here; actual cost is recorded from the
+        resulting event.  A rejected reservation clears the pending science
+        command and moves the machine to SafeStop before any I/O occurs.
+        """
+        if self._budget.can_reserve(
+            self.config,
+            shots=estimated_shots,
+            solver_calls=estimated_solver_calls,
+        ):
+            return True
+
+        was_in_lock = self._state == FrequencyState.LOCK
+        self._clear_pending()
+        self._transition_to(
+            FrequencyState.SAFE_STOP, ReasonCode.BUDGET_EXHAUSTED,
+        )
+        self._run_status = (
+            RunStatus.COMPLETED
+            if was_in_lock or self._run_status == RunStatus.CALIBRATED
+            else RunStatus.FAILED
+        )
+        return False
 
     # ------------------------------------------------------------------
     # handle — the "input" side of the state machine
