@@ -1,0 +1,92 @@
+[
+  {
+    "kind": "budget",
+    "strategy": "ramsey_baseline",
+    "drive_mode": "track",
+    "n": 1,
+    "lock_rate": 0.0,
+    "solver_calls_mean": 400.0,
+    "solver_calls_std": 0.0
+  },
+  {
+    "kind": "budget",
+    "strategy": "short_pulse",
+    "drive_mode": "track",
+    "n": 1,
+    "lock_rate": 0.0,
+    "solver_calls_mean": 400.0,
+    "solver_calls_std": 0.0
+  },
+  {
+    "kind": "deterministic",
+    "strategy": "ramsey_baseline",
+    "drive_mode": "track",
+    "n": 3,
+    "lock_rate": 1.0,
+    "solver_calls_mean": 5628.666666666667,
+    "solver_calls_std": 923.7604307034012
+  },
+  {
+    "kind": "deterministic",
+    "strategy": "short_pulse",
+    "drive_mode": "track",
+    "n": 3,
+    "lock_rate": 1.0,
+    "solver_calls_mean": 3298.6666666666665,
+    "solver_calls_std": 556.5656594987993
+  },
+  {
+    "kind": "drive_ablation",
+    "strategy": "short_pulse",
+    "drive_mode": "fixed",
+    "n": 1,
+    "lock_rate": 0.0,
+    "solver_calls_mean": 564.0,
+    "solver_calls_std": 0.0
+  },
+  {
+    "kind": "drive_ablation",
+    "strategy": "short_pulse",
+    "drive_mode": "track",
+    "n": 1,
+    "lock_rate": 1.0,
+    "solver_calls_mean": 3620.0,
+    "solver_calls_std": 0.0
+  },
+  {
+    "kind": "finite_shot",
+    "strategy": "ramsey_baseline",
+    "drive_mode": "track",
+    "n": 12,
+    "lock_rate": 1.0,
+    "solver_calls_mean": 6228.666666666667,
+    "solver_calls_std": 230.94010767585033
+  },
+  {
+    "kind": "finite_shot",
+    "strategy": "short_pulse",
+    "drive_mode": "track",
+    "n": 12,
+    "lock_rate": 1.0,
+    "solver_calls_mean": 3285.0,
+    "solver_calls_std": 816.9105881863137
+  },
+  {
+    "kind": "process",
+    "strategy": "ramsey_baseline",
+    "drive_mode": "track",
+    "n": 8,
+    "lock_rate": 0.75,
+    "solver_calls_mean": 10521.5,
+    "solver_calls_std": 3267.8032376506394
+  },
+  {
+    "kind": "process",
+    "strategy": "short_pulse",
+    "drive_mode": "track",
+    "n": 8,
+    "lock_rate": 0.875,
+    "solver_calls_mean": 5850.5,
+    "solver_calls_std": 1336.569489401879
+  }
+]

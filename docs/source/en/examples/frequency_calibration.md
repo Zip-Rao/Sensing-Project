@@ -187,6 +187,134 @@ Acquire ──→ Track ──→ Verify ──→ Lock
             Reacquire ◄─────────────┘
 ```
 
+##### Read it as a continuously running closed-loop system
+
+The useful mental model is not a list of six states, but two cooperating loops.
+The outer **protocol loop** decides whether the available evidence supports
+continued local control, requires independent verification, or has lost enough
+context to require reacquisition. The inner **Track control loop** only computes
+the next control move from neighbouring residual and bias observations.
+
+`FrequencyStateMachine` owns the outer loop, `DampedSecantTracker` owns the
+inner loop, and `FrequencyCalibrationRuntime` dispatches commands,
+measurements, and events between them. The secant controller can therefore
+answer "how far should the next step move?" but cannot declare its measurement
+valid or the calibration complete. Conversely, the state machine makes protocol
+decisions without running QuTiP or talking to hardware.
+
+The state diagram describes the protocol, but the implementation is easier to
+understand by following one measurement round across the software layers:
+
+```text
+User / UI
+    │  configure, run, request_cancel
+    ▼
+FrequencyCalibrationRuntime ── next_command / handle ── FrequencyStateMachine
+    │                                  pure protocol decision
+    ├── propose / accept ── DampedSecantTracker
+    │                       pure Track control law
+    ├── execute ── SQCExecutor ── FrequencyMeasurement
+    │                                │
+    │                                ▼
+    │                         TransmonQubit / QuTiP / hardware
+    └── journal / checkpoint
+```
+
+The user starts at the runtime, not at the state machine. The runtime creates
+the machine, asks it for the next command, and coordinates the components that
+can fulfil that command. The machine itself contains no QuTiP or hardware I/O;
+it only answers two questions: *what operation is allowed now?* and *which
+state follows from the returned evidence?*
+
+At startup, the machine emits `AcquireFrequency`. `SQCExecutor` translates that
+protocol-level request into a wide-range Ramsey `FrequencyMeasurement`, which
+ultimately runs against a `TransmonQubit`, QuTiP simulation, or hardware
+adapter. The executor standardises the result as a `MeasurementSucceeded` or
+failure event. Only then does the event travel back through the runtime to the
+state-machine reducer, which chooses Track or Verify.
+
+###### Acquire: establish an absolute reference first
+
+Acquire does not tune the bias. Wide-range Ramsey establishes an absolute
+reference made of frequency, applied bias, and uncertainty. A reliable seed
+that already satisfies the candidate condition goes directly to Verify; a
+reliable seed that still needs correction is handed to Track. Invalid or
+ambiguous acquisitions are retried within limits instead of asking a local
+controller to operate on an unknown branch.
+
+###### Track: change bias only inside a trusted local region
+
+Track adds one extra layer. Before executing `TrackFrequency`, the runtime asks
+`DampedSecantTracker` for the next bias and predicted drive. The tracker is a
+pure numerical controller: it knows the current and previous residuals, but it
+does not know whether the protocol should Verify or Reacquire. After the local
+measurement returns, the machine first applies validity guards. A trustworthy
+candidate goes to Verify; a trustworthy non-candidate stays in Track; loss of
+local validity goes to Reacquire. This separation prevents a numerical
+controller from deciding whether its own measurement model remains valid.
+
+###### Verify: separate control from the success claim
+
+Verify changes the evidence source rather than the bias. The runtime holds the
+candidate bias fixed and the executor runs independent double-sweep Ramsey.
+This prevents the local estimator used by Track from both controlling the
+system and certifying its own convergence. A pass moves the protocol into
+long-running Lock; a reliable miss returns to Track; ambiguous evidence returns
+to Reacquire.
+
+###### Lock: move to the long-term monitoring time scale
+
+Entering Lock means that the candidate working point has been independently
+verified; it does not mean that the runtime exits. Lock follows the same layered
+route with a cheaper monitor and schedules independent Ramsey audits at
+`audit_interval`. It may request Verify or Reacquire, but cannot bypass the
+protocol and update bias itself: suspected small drift is confirmed by Verify,
+while a large jump or lost reference is reacquired.
+
+###### Reacquire: rebuild local knowledge after it becomes invalid
+
+Track, Verify, and Lock all depend on local knowledge such as the current
+branch, sensitivity, drive location, or locked reference. When that knowledge
+is no longer trustworthy, Reacquire clears the local state that must not be
+reused and performs another wide-range acquisition. A restored seed returns to
+Track or goes directly to Verify according to its distance from target. Only
+repeated acquisition failure or an exhausted attempt limit leads to SafeStop,
+so Reacquire is a recovery loop rather than a failure terminal.
+
+##### Runtime, safety envelope, and interruption recovery
+
+From the scheduler's point of view, every round has the same shape. The runtime
+checks cancellation, asks the machine for its pending command, lets the tracker
+complete bias and drive fields for Track, estimates and reserves cost before
+I/O, calls the executor, returns the event to the reducer, records the journal,
+and checkpoints according to policy.
+
+Budget checks, cancellation, journaling, and checkpoints surround this entire
+cycle rather than belonging to one scientific state. They are runtime
+concerns: they can stop a command before I/O, preserve the evidence that has
+already returned, and drive `SafeStop → SafeHold` without placing persistence
+or thread coordination inside the pure reducer.
+
+Calling `request_cancel()` only sets a thread-safe cooperative cancellation
+signal. The runtime converts it to `CancelRequested` at command boundaries and
+during monitor waits. If synchronous `executor.execute()` has already started,
+that call must return before cancellation can be applied. `KeyboardInterrupt`
+uses the same route by default. After entering SafeStop, the runtime still
+issues `SafeHold`; safe hold is recorded as complete only after acknowledgement.
+
+A checkpoint handles process interruption in the middle of a run. A pending
+command without a matching event retains its original `command_id` and is
+replayed under that ID after recovery. The protocol therefore offers
+at-least-once recovery semantics; a real hardware executor must still
+deduplicate side effects by `command_id` when repeated execution is unsafe.
+
+##### Configuration and interface reference
+
+The narrative above explains why the layers cooperate in this way. The state
+responsibilities, guards, thresholds, messages, and persistence fields below
+are retained as a compact reference for configuring experiments and diagnosing
+run records.
+
 **Six states, each with one job**:
 
 | State | Responsibility | Can change flux? |
@@ -211,6 +339,15 @@ Acquire ──→ Track ──→ Verify ──→ Lock
 4. **Analytic $f(\Phi)$ is a simulation oracle only**—it never feeds the
    transition reducer. All decisions are based on actual measurement results.
 
+Track applies validity guards in a fixed order: backend `out_of_range`, the
+optional detuning capture window `linear_range - guard_margin`, optional
+experimental `min_confidence`, secant sensitivity bounds `[S_min, S_max]`, and
+the probe-detuning validity bound `Delta_val`. Target residual is used only for
+candidate decisions and bias updates; it cannot substitute for probe detuning.
+The deterministic backend marks
+its zero statistical error as `uncertainty_source="deterministic_zero"`; this is
+a simulation assumption, not measured confidence.
+
 **Threshold hierarchy**—four levels control transition tightness:
 
 ```
@@ -219,9 +356,9 @@ epsilon_hold  <  epsilon_final  <  epsilon_enter  <  Delta_val
 physics bandwidth Verify pass       candidate entry   local validity window
 ```
 
-- **Candidate condition** (Track → Verify): $|\text{error}| + \text{uncertainty} \le \epsilon_\text{enter}$
-- **Verification condition** (Verify → Lock): $|\text{error}| + \text{uncertainty} \le \epsilon_\text{final}$, for $N_\text{verify}$ consecutive passes
-- **Local validity** (must we leave Track?): $|\text{error}| + \text{uncertainty} \le \Delta_\text{val}$
+- **Candidate condition** (Track → Verify): $|\widehat r| + z\sigma_r \le \epsilon_\text{enter}$
+- **Verification condition** (Verify → Lock): $|\widehat r| + z\sigma_r \le \epsilon_\text{final}$, for $N_\text{verify}$ consecutive passes
+- **Local validity** (must we leave Track?): $|\widehat\Delta| + z\sigma_\Delta \le \Delta_\text{val}$
 
 **Lock monitor hysteresis**—a critical design point that prevents noise-induced
 state chatter. The Lock state uses a low-cost transient monitor whose noise
@@ -240,16 +377,8 @@ monitor reading; genuine slow drift is caught after accumulating a grey-zone
 streak; catastrophic jumps trigger immediate re-acquisition without wasting
 verification attempts.
 
-**Command–event architecture**—the state machine does no I/O directly; it is
-decoupled from the measurement backend through commands and events:
-
-```text
-┌──────────────┐     command      ┌────────────┐     execute     ┌─────────────┐
-│ StateMachine │ ───────────────→ │  Runtime   │ ──────────────→ │ SQCExecutor │
-│  (pure logic) │                  │ (orchestr.)│                 │ (QuTiP backend)│
-│              │ ←─────────────── │            │ ←────────────── │             │
-└──────────────┘     event        └────────────┘    result       └─────────────┘
-```
+**Command–event contract**—the cross-layer path above is kept decoupled through
+the following stable messages:
 
 - **Commands** (machine → outside): `AcquireFrequency`, `TrackFrequency(bias, drive)`,
   `VerifyFrequency(frozen_bias, drive)`, `MonitorFrequency(locked_bias)`, `SafeHold(bias)`
@@ -257,25 +386,29 @@ decoupled from the measurement backend through commands and events:
   uncertainty, validity flags), `MeasurementTechnicalFailure`, `MeasurementRejected`,
   `TimerElapsed`, `InterlockTriggered`, `BudgetExhausted`, `CancelRequested`
 
-Every event carries a `command_id` matching the pending command, making the
-system idempotent—calling `next_command()` repeatedly returns the same command
-until a matching event arrives and the state advances.
+Every event carries a `command_id` matching the pending command. Calling
+`next_command()` repeatedly returns that same command until a matching event
+arrives. On checkpoint recovery the pending command is replayed with the same
+ID, so the executor—not merely the reducer—must deduplicate side effects by
+`command_id`.
 
 **Persistence & checkpoint recovery**: `FrequencyCalibrationRuntime` provides
-`save_run(dir)` and `load_run(dir, qubit)` methods that write run state to five
-files:
+`save_run(dir)` and `load_run(dir, qubit, executor=...)` methods that write run
+state to five files:
 
 | File | Content |
 |---|---|
 | `config.json` | Full protocol configuration |
-| `commands.jsonl` | Every command and its resulting event |
+| `commands.jsonl` | Per-cycle journal: command/event, states, measurement, cost, diagnostics, and reason |
 | `transitions.jsonl` | Every state transition (from / to / reason) |
 | `checkpoint.json` | Full state machine snapshot (resumable from here) |
 | `result.json` | Final result summary |
 
-This is essential for long-running experiments—after a power loss or abnormal
-exit, the run can resume from the last checkpoint without losing calibration
-progress.
+The checkpoint restores configuration, budget, tracker, Verify/Lock counters,
+retry state, transition history, and the pending command. Recovery is
+**at-least-once**: a pending hardware action may be submitted again, with its
+original ID. It is not a strict exactly-once guarantee across hardware or
+process failures.
 
 **Relationship to the old API**: both share the same `DampedSecantTracker`
 control law (damped-secant step formula); numerical behaviour is identical.
@@ -382,21 +515,31 @@ config = FrequencyCalibrationConfig(
     # -- thresholds (all angular frequency, rad·GHz) --
     epsilon_enter=2 * np.pi * 20e-3,      # 20 MHz  — condition to enter Verify
     epsilon_final=2 * np.pi * 2e-3,       # 2 MHz   — condition to pass Verify
-    Delta_val=2 * np.pi * 50e-3,          # 50 MHz  — local validity window
+    Delta_val=2 * np.pi * 50e-3,          # 50 MHz  — probe-detuning validity window
+    confidence_multiplier=1.0,             # deterministic; preselect z_(1-beta) for experiments
+    linear_range=2 * np.pi * 80e-3,       # backend's trusted local range
+    min_confidence=None,                   # set only if the backend reports it
 
     # -- verification policy --
     N_verify=2,                            # 2 consecutive passes to confirm
+    max_verify_attempts_per_episode=5,
+    max_verify_shots=10_000,
+    verify_track_max_residual=2 * np.pi * 20e-3,
 
     # -- Lock monitor hysteresis --
     epsilon_mon_clear=2 * np.pi * 5e-3,   # 5 MHz   — monitor says "clean"
     epsilon_mon_suspect=2 * np.pi * 10e-3,# 10 MHz  — monitor says "suspect"
     Delta_mon_reacquire=2 * np.pi * 30e-3,# 30 MHz  — large jump → reacquire
     N_mon_suspect=3,                       # 3 consecutive suspects → Verify
+    monitor_interval=1.0,                  # seconds between low-cost monitors
+    audit_interval=60.0,                   # seconds between Ramsey audits
+    require_periodic_audit=True,
 
     # -- budgets --
     max_commands=200,                      # total command limit
     max_reacquire_attempts=5,             # reacquisition limit
     max_wall_time=3600.0,                 # 1 hour wall-clock
+    stop_after_lock_cycles=20,             # bounded example; 0 means long-run
 
     # -- Track controller parameters --
     damping=0.8,                           # damping factor (< 1 suppresses overshoot)
@@ -405,12 +548,21 @@ config = FrequencyCalibrationConfig(
 )
 
 # ── Run ────────────────────────────────────────────────────────────────
-runtime = FrequencyCalibrationRuntime(qubit=qubit, f_target=f_target, config=config)
+runtime = FrequencyCalibrationRuntime(
+    qubit=qubit,
+    f_target=f_target,
+    config=config,
+    checkpoint_directory="calibration_run_001",
+)
 result = runtime.run()
 
 # ── Results ─────────────────────────────────────────────────────────────
-print(f"Final state: {result['state']}")            # "lock" / "safe_stop"
-print(f"Run status:  {result['run_status']}")       # "calibrated" / "completed" / "failed"
+print(f"Final state: {result['state']}")            # "safe_stop" in this bounded run
+print(f"Run status:  {result['run_status']}")       # "completed" after SafeStop
+print(f"Safe hold:   {result['safe_hold_confirmed']}")
+print(f"Hold target: {result['hold_target_met']} "
+      f"({result['hold_passes']}/{result['hold_samples']})")
+print(f"Interrupted: {result['interrupted']} {result['interrupt']}")
 print(f"Final freq:  {result['f_final']/(2*np.pi):.6f} GHz")
 print(f"Candidate Φ: {result['candidate_bias']:.6f} Φ₀")
 print(f"Commands: {result['n_commands']}, wall time: {result['elapsed']:.1f}s")
@@ -424,7 +576,9 @@ runtime.save_run("calibration_run_001")
 # Writes config.json / commands.jsonl / transitions.jsonl / checkpoint.json / result.json
 
 # ... hours later, resume from checkpoint ...
-# runtime2 = FrequencyCalibrationRuntime.load_run("calibration_run_001", qubit=qubit)
+# runtime2 = FrequencyCalibrationRuntime.load_run(
+#     "calibration_run_001", qubit=qubit, executor=idempotent_executor
+# )
 # runtime2.run()  # machine resumes from the last checkpoint
 ```
 
@@ -433,7 +587,26 @@ trace → persist. Each entry in `transition_log` records the source state,
 destination state, and the reason code that triggered the transition (e.g.
 `TARGET_CANDIDATE`, `DRIFT_SUSPECTED`, `REACQUIRE_LIMIT`), enabling post-hoc
 audit—why did we reacquire? How many consecutive suspect readings triggered
-the Verify? Every decision is traceable.
+the Verify? Journal rows additionally contain state before/after, bias, drive,
+frequency, residual, uncertainty, validity/ambiguity, shots, elapsed time,
+diagnostics, and transition reason.
+
+Entering Lock sets the lifecycle to `CALIBRATED`, but does not end `run()`.
+Lock keeps monitoring and routes scheduled Ramsey audits through Lock → Verify.
+In this bounded example, `stop_after_lock_cycles` eventually causes SafeStop;
+`safe_hold_confirmed` records the SafeHold acknowledgement.
+
+For UI/API cancellation, another thread only sets the shared signal:
+
+```python
+runtime.request_cancel(reason="operator_stop", source="ui")
+```
+
+The runtime checks it at command boundaries and during monitor waits, records
+`CancelRequested`, writes the configured emergency checkpoint, and executes
+SafeHold. `KeyboardInterrupt` is converted to the same path by default. This is
+cooperative cancellation: if `executor.execute()` is already running, the
+current synchronous measurement must return before cancellation is applied.
 
 ```{note}
 **Old API vs new API**: `FrequencyCalibrationWorkflow` is a one-shot pipeline
@@ -469,13 +642,15 @@ See {doc}`../building_blocks/workflows` for details.
   `g3_source` selecting the cubic-coefficient source: `"fit"` (odd-polynomial
   fit of $p_\text{diff}(\Delta)$, adaptive range) or `"kernel_full"`
   (off-diagonal kernel $\iiint k_3\,dt^3$).
-- **V2 state machine results**: `runtime.run()` returns `state` (final protocol
-  state, e.g. `"lock"`), `run_status` (run lifecycle, e.g. `"calibrated"`
-  means Lock was successfully entered), `f_final` (final frequency estimate),
+- **V2 state machine results**: `runtime.run()` returns `state` (for a bounded
+  completed run, `"safe_stop"`), `run_status` (`"completed"` after confirmed
+  SafeStop; `CALIBRATED` is the nonterminal first-entry-to-Lock milestone),
+  `safe_hold_confirmed`, `hold_target_met` (whether the latest Lock monitor met
+  `epsilon_hold`), `hold_passes`/`hold_samples`, `f_final` (final frequency estimate),
   `candidate_bias` (locked bias value), `transition_log` (complete transition
   trace—each entry has `from`/`to`/`reason`/`version`), `n_commands` (commands
-  consumed), and `elapsed` (wall-clock time). `transition_log` is the key to
-  post-hoc audit—every state change and its trigger reason is recorded.
+  consumed), `elapsed` (wall-clock time), and the full per-cycle `journal`.
+  `transition_log` and `journal` provide the post-hoc audit trail.
 - See {doc}`../building_blocks/calibration` for the full field definitions and
   method options of each calibration class; see
   {doc}`../building_blocks/workflows` for V2 state machine thresholds and

@@ -1584,6 +1584,10 @@ epsilon_hold < epsilon_final < epsilon_enter < Delta_val
   (物理目标)    (Verify 通过)   (候选进入)   (局部有效窗口)
 ```
 
+前三个阈值约束目标残差 `r = frequency - f_target`，`Delta_val` 则约束探针失谐
+`probe_detuning = frequency - applied_drive`。两者单位相同但物理角色不同，禁止用
+目标残差代替探针失谐做局部范围判断。
+
 **Lock 监视器迟滞**（防止噪声抖动）：
 
 | 条件 | 转移 |
@@ -1592,6 +1596,17 @@ epsilon_hold < epsilon_final < epsilon_enter < Delta_val
 | `epsilon_mon_clear < U_mon ≤ epsilon_mon_suspect` | 累计 suspect streak; 达 `N_mon_suspect` → Verify |
 | `epsilon_mon_suspect < U_mon < Delta_mon_reacquire` | 立即 Lock → Verify |
 | `U_mon ≥ Delta_mon_reacquire` 或 reference lost | Lock → Reacquire |
+
+**Track 局部有效性守卫**按固定优先级判定：后端明确的 `out_of_range`、
+局部 detuning 捕获窗 `linear_range - guard_margin`、可选实验置信度
+`min_confidence`、割线灵敏度范围 `[S_min, S_max]`，以及最终的
+`|probe_detuning| + confidence_multiplier * probe_detuning_uncertainty ≤ Delta_val`。
+缺少可靠 probe detuning 会拒绝测量。`linear_range=None` 和 `min_confidence=None` 表示在
+确定性仿真中禁用相应实验守卫；仿真后端以
+`uncertainty_source="deterministic_zero"` 明确标记零统计误差，不将其表述为
+实验置信度。测前预测守卫使用独立的预测失谐和传播不确定度；可通过
+`require_complete_prediction_guard` 强制拒绝缺少预测证据的命令。配置构造时会验证
+阈值层级、监测迟滞、预算和重试参数。
 
 **最小使用示例**：
 
@@ -1617,9 +1632,28 @@ Lock 监测和到期 Ramsey 审计，直到命令、shots、solver calls、时�
 进入 SafeStop 后，runtime 会在有限重试内实际下发 `SafeHold`，并在结果字段
 `safe_hold_confirmed` 中记录是否收到 `SafeHoldApplied`。
 
-**持久化**：`runtime.save_run(dir)` 写入 `config.json` / `commands.jsonl` / `transitions.jsonl` / `checkpoint.json` / `result.json`；`FrequencyCalibrationRuntime.load_run(dir, qubit)` 恢复并可从断点继续。
+**协作式中断**：`CancellationToken` 可由 UI/API 线程调用
+`runtime.request_cancel(reason, source)` 设置；runtime 在每个命令边界、预算预检后、
+硬件执行前和 monitor 等待期间检查该信号，并在线程内把它转换为
+`CancelRequested → SafeStop → SafeHold`。`monitor_interval` 使用可唤醒等待，
+`KeyboardInterrupt` 默认也转换到同一路径；设 `handle_keyboard_interrupt=False`
+可保留向上传播行为。若设置 `checkpoint_directory`，中断发生及 SafeHold 确认后都会
+best-effort 落盘。同步 `executor.execute()` 不能被 runtime 强制抢占；执行期间到达的
+请求会在该调用返回后生效，测量事件仍写入 journal，但不会再启动下一条科学命令。
 
-**测试覆盖**: 35 纯状态机单元测试（全部转移表 §11.1）+ 7 QuTiP 集成测试（命令→事件回路, Acquire→Verify→Lock, 故障注入, SafeStop）。
+**持久化**：`runtime.save_run(dir)` 写入 `config.json` / `commands.jsonl` /
+`transitions.jsonl` / `checkpoint.json` / `result.json`；
+`FrequencyCalibrationRuntime.load_run(dir, qubit, executor=...)` 恢复完整配置、
+budget、tracker、Verify/Lock streak、retry 和 pending command，并可直接调用
+`run()` 从断点继续。pending command 保留原 `command_id` 重新提交，因此 executor
+必须按该 ID 幂等；这提供可恢复的 at-least-once 执行，不宣称跨硬件故障的严格
+exactly-once。journal 为每个周期记录状态前后、偏置、drive、频率、残差、
+不确定度、valid/ambiguity、shots、耗时、diagnostics 和转换原因。
+
+**测试覆盖**：状态机、控制器、runtime、旧 workflow 兼容性和 QuTiP smoke
+相关套件当前为 145 passed。完整测试集当前为 576 passed、5 failed、2 xfailed；
+5 个失败均为本次状态机改造之外的既有 integration/regression baseline，不能据此宣称
+全仓测试全绿。
 
 #### 4.8.5 扩展点
 
@@ -2684,7 +2718,7 @@ mesolve(H_list, psi0, t_array, c_ops, e_ops)
 | v2.13 | 2026-07-17 | **v1.0.0 发布准备**。新增 §A2「v1 未公开的能力（post-v1 路线图）」——按 D3/D4 隐藏(非删除)Z-crosstalk、transient 频率标定、CPMG、coupler/electronics、SensingWorkflow 11 stub,附深路径导入与恢复方式。文档头 `适用于 sqc v0.3.0`→`v1.0.0`。配套(代码见 commit 历史):瞬态核路由统一到 `KernelEstimator`(去 `get_kernel` 弃用告警,数值不变)、`ZCrosstalkWorkflow` 从 `workflows.__all__` 隐藏、前端 `SHOW_EXPERIMENTAL` 开关、echo/create_pulse/distortion 缺陷修复。纯文档增补,src/ 未变(R1)。 |
 | v2.12 | 2026-07-16 | **闭环反馈新增 `step_method="gradient"`**(§4.7.3)。阻尼割线法 (damped secant) 数值梯度 Newton 步,无需 V_a/V_b 预括号,仅需 V_seed 起点。新增 damping/clamp/best-point 三重抗噪: damping∈(0,1] 压过冲, max_bias_step 钳位, 追踪 |residual| 最小点回写。首步/Δe=0 时退化为固定探测步。`SinglePointFrequencyCalibration` 新增 V_seed/damping/first_bias_step/max_bias_step 字段; `_build_result` 新增 `extra` 可选参数。+纯增量分支, src/ 未变(R1)。 |
 | v2.11 | 2026-06-07 | **瞬态测频 order≥3 修复 + Route B 落地**(§4.7.3 v2.11 注)。(1) 修复 order≥3 三次 Newton 的**符号 bug**(此前返回 ω_d−Δ,误差≈−2Δ,比线性更差)——统一到 δω=−Δ 约定。(2) `_calibrate_g3_taylor` 的 `delta_max_ghz` 默认改 `None`=**自适应**(旧默认 0.08 使 G1 偏低~0.6×、G3 全错);新增 `FrequencyMeasurement.g3_delta_max`。(3) **Route B** `g3_source="kernel_full"`:完整非对角核三重积分 ∭k₃ dt³(`_calibrate_g3_kernel_full`),免 Δ 扫描,与拟合互校。(4) **移除** `diag_legacy`(错误对象,小~170×),未知值抛 ValueError。效果:有效区 order3-fit 比线性精度↑~10×。+5 单元测试。src/ 未变(R1)。 |
-| v2.19 | 2026-08-10 | **频率标定事件驱动状态机 V2**。(1) 新增 `sqc/calibration/frequency_control.py`: `DampedSecantTracker` + 4 种数据结构（`FrequencyEstimate`, `TrackSnapshot`, `TrackProposal`, `TrackStepResult`）——从 `_closed_loop_gradient()` 提取的纯数学控制器，被旧 batch API 和新逐步接口共享。(2) 新增 `sqc/workflows/frequency_state_machine.py`: `FrequencyStateMachine` ——六状态（Acquire→Track→Verify→Lock + Reacquire + SafeStop）事件驱动协议，含 5 命令/9 事件/21 原因码/预算/快照回放。`FrequencyCalibrationConfig` 管理全部阈值（`epsilon_enter/final/hold`, `Delta_val`, monitor 迟滞参数）和预算策略。(3) 新增 `sqc/workflows/frequency_backends.py`: `SQCExecutor`（Ramsey/Transient/Monitor 后端）+ `FaultInjectionExecutor`（可控故障注入）。(4) 新增 `sqc/workflows/frequency_runtime.py`: `FrequencyCalibrationRuntime` ——事件循环编排 + `DampedSecantTracker` 集成 + journal/checkpoint + `save_run()`/`load_run()` 持久化。(5) 新增 27 tracker 单元测试 + 35 状态机单元测试 + 3 持久化单元测试 + 7 QuTiP 集成测试。总测试 486 全绿。旧 `FrequencyCalibrationWorkflow` / `SinglePointFrequencyCalibration` API 不变。详见 §4.7.6 和 §4.8.4。 |
+| v2.19 | 2026-08-10 | **频率标定事件驱动状态机 V2**。(1) 新增 `sqc/calibration/frequency_control.py`: `DampedSecantTracker` + 4 种数据结构（`FrequencyEstimate`, `TrackSnapshot`, `TrackProposal`, `TrackStepResult`）——从 `_closed_loop_gradient()` 提取的纯数学控制器，被旧 batch API 和新逐步接口共享。(2) 新增 `sqc/workflows/frequency_state_machine.py`: `FrequencyStateMachine` ——六状态（Acquire→Track→Verify→Lock + Reacquire + SafeStop）事件驱动协议，含 5 命令/事件/稳定原因码/预算/快照回放。`FrequencyCalibrationConfig` 管理阈值、局部有效性守卫、监测迟滞、验证限制和运行预算。(3) 新增 `sqc/workflows/frequency_backends.py`: `SQCExecutor`（Ramsey/Transient/Monitor 后端）+ `FaultInjectionExecutor`（可控故障注入）；确定性后端显式标记 `uncertainty_source="deterministic_zero"`。(4) 新增 `sqc/workflows/frequency_runtime.py`: `FrequencyCalibrationRuntime` ——事件循环编排 + `DampedSecantTracker` 集成 + 完整 journal/checkpoint + `save_run()`/`load_run()` 持久化；恢复采用 pending command 原 ID 重放的 at-least-once 语义，要求 executor 按 `command_id` 幂等；`CancellationToken`、`request_cancel()`、可唤醒 monitor 等待和 `KeyboardInterrupt` 转换提供协作式安全中断。(5) `CALIBRATED` 改为进入长期 Lock 的非终止里程碑，有限运行或中断经 SafeStop/SafeHold 确认退出。旧 `FrequencyCalibrationWorkflow` / `SinglePointFrequencyCalibration` API 不变。详见 §4.7.6 和 §4.8.4。 |
 
 下一步阅读：
 - 完整设计背景:`idea/refactor/_refactor_plan.md`(内部开发文档,不随发行分发)

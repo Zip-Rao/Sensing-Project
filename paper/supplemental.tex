@@ -10,6 +10,73 @@ superconducting-qubit frequency calibration''}
 \affiliation{Institute of Physics, Chinese Academy of Sciences, Beijing 100190, China}
 \affiliation{University of Chinese Academy of Sciences, Beijing 100049, China}
 \maketitle
+\renewcommand{\thefigure}{S\arabic{figure}}
+\setcounter{figure}{1}
+
+\section{Short-pulse response simulation}
+
+The deterministic response calculation uses a 10-ns, sine-squared $\pi/2$
+pulse with a 0.5-ns time step. Figure~\ref{fig:s2-response} separates the
+response-calibration and simulated held-out grids and compares the dissipative
+master-equation response with local response models. The shaded interval is a
+simulation-defined candidate interval, not a hardware validation range.
+
+\begin{figure}[!ht]
+ \includegraphics[width=0.72\textwidth]{fig2/figS2-response-simulation.pdf}
+ \caption{Deterministic short-pulse response evidence. The fitted and ideal
+ full-kernel cubic routes provide separate coefficient cross-checks; the model
+ fold bounds the continuous local inverse.}
+ \label{fig:s2-response}
+\end{figure}
+\clearpage
+
+\section{Analytic-truth frequency-recovery audit}
+
+Figure~\ref{fig:s3-frequency} maps the physically realizable candidate
+detunings to the local flux branch of the analytic transmon dispersion. The
+dispersion is withheld from all estimators and used only to define the
+simulation truth and plotting coordinate. The wider rotating-frame detuning
+grid in Fig.~\ref{fig:s2-response} is not relabeled as flux where that branch
+has no corresponding physical point.
+
+\begin{figure}[!ht]
+ \includegraphics[width=0.72\textwidth]{fig2/figS3-frequency-recovery-simulation.pdf}
+ \caption{Analytic-truth audit of local frequency recovery. The upper axis
+ compares the cubic-kernel estimate with withheld analytic truth; the lower
+ axis reports signed residuals for three estimators. The calculation is
+ deterministic with $\sigma=0$ by construction.}
+ \label{fig:s3-frequency}
+\end{figure}
+\clearpage
+
+\section{Solver-call cost evidence}
+
+\setcounter{figure}{5}
+
+Figure~\ref{fig:s6-cost} reports counted numerical solver calls. These counts
+are neither acquisition time nor hardware speed. Short-pulse marginal,
+eight-estimate amortized, and cold-start costs are kept separate.
+
+\begin{figure}[!ht]
+ \includegraphics[width=0.72\textwidth]{fig2/figS6-solver-cost-simulation.pdf}
+ \caption{Held-out simulated MAE versus counted solver calls for short-pulse
+ and representative Ramsey estimators.}
+ \label{fig:s6-cost}
+\end{figure}
+
+\section{Simulated held-out validation}
+
+Figure~\ref{fig:s7-validation} summarizes only the eight held-out simulation
+points inside the candidate interval. No confidence interval is assigned to
+these deterministic values.
+
+\begin{figure}[!ht]
+ \includegraphics[width=0.72\textwidth]{fig2/figS7-validation-simulation.pdf}
+ \caption{Bias, MAE, RMSE, and maximum absolute error on the simulated
+ held-out grid within the candidate interval.}
+ \label{fig:s7-validation}
+\end{figure}
+\clearpage
 
 \section{Frequency--flux response}
 

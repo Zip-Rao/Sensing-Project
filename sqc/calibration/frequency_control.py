@@ -12,7 +12,7 @@ enriching diagnostic state (linear-range guards, cost accounting).
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Callable, Optional
+from typing import Callable
 
 import numpy as np
 
@@ -69,18 +69,20 @@ class TrackSnapshot:
     caller can serialise this for checkpoint / replay.
     """
 
-    V: float                # current bias (Φ₀)
-    V_prev: float           # previous bias (Φ₀)
-    f: float | None         # current measured frequency (rad·GHz)
-    f_prev: float | None    # previous measured frequency
-    e: float | None          # residual = f − f_target (rad·GHz)
-    e_prev: float | None     # previous residual
-    f_target: float          # target frequency (rad·GHz)
-    best_V: float            # bias of the best point seen so far
-    best_abs_e: float        # |residual| at the best point
-    streak: int              # consecutive in-tolerance iterations
-    n_iter: int              # number of accepted measurements (≥ 1)
-    s_hat: float | None = None   # local sensitivity ∂f/∂V (secant est.)
+    V: float  # current bias (Φ₀)
+    V_prev: float  # previous bias (Φ₀)
+    f: float | None  # current measured frequency (rad·GHz)
+    f_prev: float | None  # previous measured frequency
+    e: float | None  # residual = f − f_target (rad·GHz)
+    e_prev: float | None  # previous residual
+    f_target: float  # target frequency (rad·GHz)
+    best_V: float  # bias of the best point seen so far
+    best_abs_e: float  # |residual| at the best point
+    streak: int  # consecutive in-tolerance iterations
+    n_iter: int  # number of accepted measurements (≥ 1)
+    s_hat: float | None = None  # local sensitivity ∂f/∂V (secant est.)
+    uncertainty: float = 0.0  # current 1-sigma frequency uncertainty
+    uncertainty_prev: float | None = None  # previous 1-sigma uncertainty
 
 
 @dataclass
@@ -91,10 +93,10 @@ class TrackProposal:
     point, perform the measurement, and pass the result to :meth:`accept`.
     """
 
-    V_next: float            # proposed bias for next measurement (Φ₀)
-    step: float              # bias step that will be applied (ΔΦ₀)
-    s_hat: float | None      # secant sensitivity estimate at this step
-    converged: bool          # True → no further steps needed
+    V_next: float  # proposed bias for next measurement (Φ₀)
+    step: float  # bias step that will be applied (ΔΦ₀)
+    s_hat: float | None  # secant sensitivity estimate at this step
+    converged: bool  # True → no further steps needed
     diagnostics: dict = field(default_factory=dict)
 
 
@@ -103,8 +105,8 @@ class TrackStepResult:
     """Result returned by :meth:`DampedSecantTracker.accept`."""
 
     snapshot: TrackSnapshot  # updated tracker state
-    is_best: bool            # this measurement is the best so far
-    stopped_by: str          # "tolerance" | "max_iter" | "predicate" | "running"
+    is_best: bool  # this measurement is the best so far
+    stopped_by: str  # "tolerance" | "max_iter" | "predicate" | "running"
 
 
 # ---------------------------------------------------------------------------
@@ -181,6 +183,8 @@ class DampedSecantTracker:
         self.max_bias_step = float(max_bias_step)
         self.V_lo = float(V_lo) if V_lo is not None else None
         self.V_hi = float(V_hi) if V_hi is not None else None
+        if self.V_lo is not None and self.V_hi is not None and self.V_lo > self.V_hi:
+            raise ValueError("V_lo must not exceed V_hi")
         self.converge_streak = max(1, int(converge_streak))
         self.max_iter = int(max_iter)
         self.epsilon_f = float(epsilon_f)
@@ -191,7 +195,9 @@ class DampedSecantTracker:
     # ------------------------------------------------------------------
 
     def initialize(
-        self, seed: FrequencyEstimate, V_seed: float,
+        self,
+        seed: FrequencyEstimate,
+        V_seed: float,
     ) -> TrackSnapshot:
         """Create the initial snapshot from the first measurement.
 
@@ -215,6 +221,8 @@ class DampedSecantTracker:
             streak=streak,
             n_iter=0,
             s_hat=None,
+            uncertainty=seed.uncertainty,
+            uncertainty_prev=None,
         )
 
     def propose(self, snapshot: TrackSnapshot) -> TrackProposal:
@@ -229,16 +237,20 @@ class DampedSecantTracker:
         # --- already converged? -----------------------------------------
         if snapshot.streak >= n_streak:
             return TrackProposal(
-                V_next=snapshot.V, step=0.0,
-                s_hat=snapshot.s_hat, converged=True,
+                V_next=snapshot.V,
+                step=0.0,
+                s_hat=snapshot.s_hat,
+                converged=True,
                 diagnostics={"reason": "already_converged"},
             )
 
         # --- budget exhausted? ------------------------------------------
         if snapshot.n_iter >= self.max_iter:
             return TrackProposal(
-                V_next=snapshot.V, step=0.0,
-                s_hat=snapshot.s_hat, converged=True,
+                V_next=snapshot.V,
+                step=0.0,
+                s_hat=snapshot.s_hat,
+                converged=True,
                 diagnostics={"reason": "max_iter"},
             )
 
@@ -252,7 +264,11 @@ class DampedSecantTracker:
             step = 0.0
         elif snapshot.n_iter == 0:
             # No gradient yet → fixed probe step.
-            step = self.first_bias_step * np.sign(e) if e is not None else self.first_bias_step
+            step = (
+                self.first_bias_step * np.sign(e)
+                if e is not None
+                else self.first_bias_step
+            )
         else:
             de = (
                 e - snapshot.e_prev
@@ -261,13 +277,17 @@ class DampedSecantTracker:
             )
             dV = snapshot.V - snapshot.V_prev
             if abs(de) > 1e-15:
-                grad_inv = dV / de                     # dB/de
-                step = self.damping * e * grad_inv     # damped secant
+                grad_inv = dV / de  # dB/de
+                step = self.damping * e * grad_inv  # damped secant
                 if abs(dV) > 1e-15:
-                    s_secant = de / dV                 # local ∂f/∂V
+                    s_secant = de / dV  # local ∂f/∂V
             else:
                 # Gradient undefined → reuse probe step.
-                step = self.first_bias_step * np.sign(e) if e is not None else self.first_bias_step
+                step = (
+                    self.first_bias_step * np.sign(e)
+                    if e is not None
+                    else self.first_bias_step
+                )
 
         # --- clamp step -------------------------------------------------
         step = float(np.clip(step, -self.max_bias_step, self.max_bias_step))
@@ -277,11 +297,16 @@ class DampedSecantTracker:
 
         # --- hard bounds ------------------------------------------------
         if self.V_lo is not None:
-            V_next = max(self.V_lo, min(self.V_hi, V_next))
+            V_next = max(self.V_lo, V_next)
+        if self.V_hi is not None:
+            V_next = min(self.V_hi, V_next)
 
         return TrackProposal(
-            V_next=V_next, step=step, s_hat=s_secant,
-            converged=False, diagnostics={},
+            V_next=V_next,
+            step=step,
+            s_hat=s_secant,
+            converged=False,
+            diagnostics={},
         )
 
     def accept(
@@ -337,6 +362,8 @@ class DampedSecantTracker:
             streak=streak,
             n_iter=n_iter,
             s_hat=proposal.s_hat,
+            uncertainty=estimate.uncertainty,
+            uncertainty_prev=snapshot.uncertainty,
         )
 
         # --- determine stop reason --------------------------------------
@@ -347,7 +374,10 @@ class DampedSecantTracker:
             stopped_by = "max_iter"
         elif self.stop_predicate is not None:
             state = self._build_predicate_state(
-                new_snapshot, proposal, is_best, extra_predicate_state,
+                new_snapshot,
+                proposal,
+                is_best,
+                extra_predicate_state,
             )
             stopped_by = "predicate" if self.stop_predicate(state) else "running"
         else:
@@ -383,8 +413,8 @@ class DampedSecantTracker:
             if (e_val is not None and e_prev_val is not None)
             else 0.0,
             "dV": float(snapshot.V - snapshot.V_prev),
-            "delta": 0.0,            # caller overrides via extra
-            "out_of_range": False,   # caller overrides via extra
+            "delta": 0.0,  # caller overrides via extra
+            "out_of_range": False,  # caller overrides via extra
             "best_abs_residual": float(snapshot.best_abs_e),
         }
         if extra:

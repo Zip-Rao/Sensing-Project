@@ -147,6 +147,12 @@ v2.19 新增的**事件驱动**六状态协议: Acquire → Track → Verify →
 - **Verify** 从进入冻结候选偏置到退出,Lock 同样不改偏置
 - **Lock** 监测到漂移不直接调偏置——小漂移去 Verify,大跳变去 Reacquire
 - 解析 $f(\Phi)$ 只做仿真 oracle,不进转移决策
+- Track 用 probe detuning 而不是目标残差检查 `Delta_val`，并拒绝缺失失谐、后端越界、
+  低于配置的置信度、异常割线灵敏度和局部有效性丢失
+- `CALIBRATED` 是非终止里程碑；Lock 会继续监测，直到配置预算或
+  `stop_after_lock_cycles` 通过 SafeStop 结束运行
+- `request_cancel()` 是线程安全的协作式取消：它可立即唤醒 monitor 等待，并在下一条
+  科学命令前停止；已经进入同步 executor 的调用必须返回后才能生效
 
 **使用方式**（通过 `FrequencyCalibrationRuntime` 编排）:
 
@@ -156,12 +162,24 @@ from sqc.workflows.frequency_state_machine import FrequencyCalibrationConfig
 
 config = FrequencyCalibrationConfig(
     epsilon_enter=2*np.pi*20e-3, epsilon_final=2*np.pi*2e-3,
-    N_verify=2, max_commands=30,
+    confidence_multiplier=1.0, N_verify=2, max_verify_shots=10_000,
+    monitor_interval=1.0, audit_interval=60.0, require_periodic_audit=True,
+    max_commands=30, stop_after_lock_cycles=3,
 )
 runtime = FrequencyCalibrationRuntime(qubit=q, f_target=f_target, config=config)
 result = runtime.run()
-# result["state"] → "lock", result["run_status"] → "calibrated"
+# 有界运行: state="safe_stop", run_status="completed"
+# result["safe_hold_confirmed"] 记录 SafeHold 是否得到确认
 ```
+
+`load_run(dir, qubit, executor=...)` 会恢复完整 checkpoint，并使用原 ID 重放 pending
+command。因此 executor 必须按 `command_id` 幂等；恢复语义是 at-least-once，而非硬件
+层严格 exactly-once。确定性后端会用 `uncertainty_source="deterministic_zero"` 明确
+标记零统计误差。
+
+需要用户控制运行时，可设置 `checkpoint_directory="calibration_run"`，再由 UI/API
+线程调用 `runtime.request_cancel("operator_stop", "ui")`。结果包含 `interrupted`、
+结构化 `interrupt` 元数据、`interrupt_checkpoint_saved` 和 `safe_hold_confirmed`。
 
 详见 {doc}`calibration` 中「频率标定状态机 V2」一节。
 

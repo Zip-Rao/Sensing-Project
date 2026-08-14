@@ -289,6 +289,10 @@ epsilon_hold < epsilon_final < epsilon_enter < Delta_val
   (物理目标)    (Verify 通过)   (候选进入)   (局部有效窗口)
 ```
 
+前三个阈值作用于目标残差 $r=\omega_{01}-\omega_{\mathrm{tar}}$；
+`Delta_val` 作用于探针失谐 $\Delta=\omega_{01}-\omega_d$。Track 的局部范围判据为
+$|\widehat\Delta|+z\sigma_\Delta\leq\Delta_\mathrm{val}$，不能用目标残差代替。
+
 **命令--事件架构**：
 
 ```python
@@ -298,13 +302,35 @@ from sqc.workflows.frequency_state_machine import FrequencyCalibrationConfig
 config = FrequencyCalibrationConfig(
     epsilon_enter=2 * np.pi * 20e-3,    # 20 MHz
     epsilon_final=2 * np.pi * 2e-3,     # 2 MHz
+    confidence_multiplier=1.0,           # 实验中预先指定 z_(1-beta)
     N_verify=2,
     max_commands=30,
+    stop_after_lock_cycles=3,
 )
 runtime = FrequencyCalibrationRuntime(qubit=q, f_target=f_target, config=config)
 result = runtime.run()
-# result["state"] → "lock", result["run_status"] → "calibrated"
+# 有界运行: result["state"] → "safe_stop"
+# result["run_status"] → "completed", result["safe_hold_confirmed"] → True
 ```
+
+`CALIBRATED` 只表示首次完成 Verify → Lock 转移，不是 runtime 的终止状态。
+Lock 监测和计划 Ramsey 审计会继续运行，直到命令、shots、solver calls、墙上时间或
+`stop_after_lock_cycles` 预算结束。科学测量的成本在执行前预留；随后 SafeStop 会在
+有限重试内下发 `SafeHold`，`safe_hold_confirmed` 表示是否收到 `SafeHoldApplied`。
+
+**协作式中断**：UI/API 线程调用 `runtime.request_cancel(reason, source)`，它只设置
+线程安全的 `CancellationToken`。runtime 在命令边界和可中断的 monitor 等待期间将其
+转换为 `CancelRequested → SafeStop → SafeHold`。`KeyboardInterrupt` 默认走同一路径；
+设置 `handle_keyboard_interrupt=False` 可继续向上传播。配置 `checkpoint_directory` 后，
+中断和最终 SafeHold 状态会 best-effort 落盘。同步 `executor.execute()` 不能被强制抢占；
+测量期间到达的取消请求会在调用返回后生效，并阻止下一条科学命令启动。
+
+**Track 有效性守卫**按固定顺序判断：后端 `out_of_range`、可选 detuning 窗
+`linear_range - guard_margin`、可选实验 `min_confidence`、割线灵敏度范围
+`[S_min, S_max]`，最后是 `U_loop <= Delta_val`。确定性仿真后端返回
+`uncertainty_source="deterministic_zero"`；这里的零是明确的建模假设，不是实验
+置信度。Verify 还受 `max_verify_attempts_per_episode` 和 `max_verify_shots` 独立限制；
+Lock 的节拍由 `monitor_interval` 和 `audit_interval` 设置。
 
 **Lock 监视器迟滞**（防止噪声抖动）：
 
@@ -315,7 +341,14 @@ result = runtime.run()
 | `epsilon_mon_suspect < U_mon < Delta_mon_reacquire` | 立即 Lock → Verify |
 | `U_mon ≥ Delta_mon_reacquire` 或 reference lost | Lock → Reacquire |
 
-**持久化**: `runtime.save_run(dir)` 写入 `config.json` / `commands.jsonl` / `transitions.jsonl` / `checkpoint.json` / `result.json`; `FrequencyCalibrationRuntime.load_run(dir, qubit)` 可从断点恢复继续运行。
+**持久化**：`runtime.save_run(dir)` 写入 `config.json` / `commands.jsonl` /
+`transitions.jsonl` / `checkpoint.json` / `result.json`；
+`FrequencyCalibrationRuntime.load_run(dir, qubit, executor=...)` 会恢复配置、budget、
+tracker、Verify/Lock 计数、retry 状态和 pending command，之后可直接调用 `run()`。
+pending command 使用原 `command_id` 重放，因此 executor 必须按命令 ID 幂等。恢复语义
+明确为 **at-least-once**，不宣称硬件层严格 exactly-once。journal 每行记录状态前后、
+偏置、drive frequency、测得频率、残差、不确定度、valid/ambiguity、shots、耗时、
+diagnostics 和转移原因。
 
 ### FrequencyCalibrationWorkflow（旧接口,保持兼容）
 

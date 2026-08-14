@@ -1,0 +1,11 @@
+{"version": 0, "from": "acquire", "to": "acquire", "reason": "SEED_RELIABLE", "note": "run started", "candidate_bias": null, "f_hat": null, "uncertainty": 0.0}
+{"version": 1, "from": "acquire", "to": "track", "reason": "SEED_RELIABLE", "note": "", "candidate_bias": 0.0, "f_hat": 23.752168938744685, "uncertainty": 3.023607586067538e-05}
+{"version": 2, "from": "track", "to": "track", "reason": "CORRECTION_REQUIRED", "note": "", "candidate_bias": 0.0, "f_hat": 23.752432537879525, "uncertainty": 0.001987585121125838}
+{"version": 3, "from": "track", "to": "track", "reason": "CORRECTION_REQUIRED", "note": "", "candidate_bias": -0.005, "f_hat": 23.72149462088615, "uncertainty": 0.0018716567408597594}
+{"version": 4, "from": "track", "to": "verify", "reason": "CANDIDATE_REACHED", "note": "", "candidate_bias": -0.009155309505030023, "f_hat": 23.69402585739242, "uncertainty": 0.0019862892828916706}
+{"version": 5, "from": "verify", "to": "track", "reason": "CORRECTION_REQUIRED", "note": "", "candidate_bias": -0.009155309505030023, "f_hat": 23.696198866985476, "uncertainty": 0.00021363788188942352}
+{"version": 6, "from": "track", "to": "verify", "reason": "CANDIDATE_REACHED", "note": "", "candidate_bias": -0.010054636730179417, "f_hat": 23.689845469203323, "uncertainty": 0.0019868623639108045}
+{"version": 7, "from": "verify", "to": "verify", "reason": "VERIFY_PASSED", "note": "", "candidate_bias": -0.010054636730179417, "f_hat": 23.690658432462882, "uncertainty": 0.00021423137685256486}
+{"version": 8, "from": "verify", "to": "lock", "reason": "VERIFY_PASSED", "note": "", "candidate_bias": -0.010054636730179417, "f_hat": 23.690149254633067, "uncertainty": 0.00023034926913676444}
+{"version": 9, "from": "lock", "to": "verify", "reason": "DRIFT_SUSPECTED", "note": "", "candidate_bias": -0.010054636730179417, "f_hat": 23.704423402335294, "uncertainty": 0.0252417599115387}
+{"version": 10, "from": "verify", "to": "safe_stop", "reason": "BUDGET_EXHAUSTED", "note": "", "candidate_bias": -0.010054636730179417, "f_hat": 23.704423402335294, "uncertainty": 0.0252417599115387}

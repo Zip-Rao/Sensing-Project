@@ -1,47 +1,7 @@
-\section{Closed-loop protocol with drive tracking}
-\label{sec:feedback}
-
-The control objective is to find a flux offset $V$ such that
-\begin{equation}
- r(V)=\omega_q(V)-\omega_{\mathrm{tar}}=0.
- \label{eq:root-problem}
-\end{equation}
-At iteration $n$, the transient discriminator returns
-$\widehat\omega_{q,n}=\omega_{d,n}+\widehat\Delta_n$.  The estimated feedback
-residual is $\widehat r_n=\widehat\omega_{q,n}-\omega_{\mathrm{tar}}$.  A
-damped gradient update changes the flux bias according to
-\begin{equation}
- V_{n+1}=\operatorname{clip}\left(
- V_n-\eta\frac{\widehat r_n}{\widehat S_n},
- V_{\min},V_{\max}\right),
- \label{eq:bias-update}
-\end{equation}
-where $\eta$ is a damping factor and $\widehat S_n$ is a local slope.  After
-two measurements, a model-free secant estimate is
-\begin{equation}
- \widehat S_n=\frac{\widehat\omega_{q,n}-\widehat\omega_{q,n-1}}
- {V_n-V_{n-1}}.
- \label{eq:secant-slope}
-\end{equation}
-
-The measurement reference is updated separately from the controlled bias.  We
-predict the qubit frequency at the next point using
-\begin{equation}
- \omega_{d,n+1}=\widehat\omega_{q,n}
- +\widehat S_n(V_{n+1}-V_n).
- \label{eq:drive-tracking}
-\end{equation}
-Equation~\eqref{eq:drive-tracking} serves only to keep
-$|\omega_q(V_{n+1})-\omega_{d,n+1}|$ within the local discriminator window.
-It does not change the optimization target in Eq.~\eqref{eq:root-problem}.  An
-initial frequency estimate seeds the first drive, and a bounded blind step
-provides the second point needed for Eq.~\eqref{eq:secant-slope}.  Subsequent
-updates use the measured secant slope, so the procedure does not require an
-analytic frequency--flux model.
-
-The complete protocol therefore has two coupled but distinct loops: the flux
-update reduces the target error, whereas the drive update reduces the
-measurement detuning.  A range guard can trigger a wide-capture Ramsey
-measurement if the local discriminator leaves its validated interval.  The
-numerical experiment below isolates the local tracking phase and starts from a
-frequency seed sufficient to keep the transient probe on its connected branch.
+% Legacy section retained as a path-level compatibility marker.
+%
+% Its active material duplicated Sec. III.C--III.D and used the superseded
+% Acquire--Track--Lock--Reacquire terminology. It is no longer included by
+% paper/main.tex. The complete pre-V2 source is preserved at:
+%
+% paper/archive/pre-v2-state-machine-2026-08-11/sections/04_feedback_protocol.tex

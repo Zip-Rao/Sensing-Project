@@ -6,6 +6,7 @@ Replaces Protocal.evolve case 4.
 Slides a Ramsey control pulse across a flux signal, measuring p_e
 at each delay. Computes the control kernel for deconvolution.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -57,9 +58,7 @@ class TransientSensingExperiment(Experiment):
     qubit: object  # TransmonQubit (duck typed)
     flux_signal: FluxSignal | None = None
     flux_signal_zero: FluxSignal | None = None
-    t_rabi: np.ndarray = field(
-        default_factory=lambda: CONFIG.pulse.t_rabi.copy()
-    )
+    t_rabi: np.ndarray = field(default_factory=lambda: CONFIG.pulse.t_rabi.copy())
     omega_d: float | None = None
     rotation_angle: float | None = np.pi / 2
     rabi_rate: float | None = None
@@ -83,7 +82,7 @@ class TransientSensingExperiment(Experiment):
             # Default test signal matches src/protocal.py case 4
             t_list = CONFIG.pulse.make_time(0, 200)
             self.flux_signal = FluxSignal(
-                type=3,
+                type=4,
                 t_list=t_list,
                 amplitude=0.01,
                 rise=10,
@@ -103,8 +102,11 @@ class TransientSensingExperiment(Experiment):
     def build_sequence(self):
         """Build the Ramsey control pulse (tau=0)."""
         return create_ramsey_pulse(
-            self.t_rabi, tau=0.0, omega_d=self.omega_d,
-            phase1=self.phase1, phase2=self.phase2,
+            self.t_rabi,
+            tau=0.0,
+            omega_d=self.omega_d,
+            phase1=self.phase1,
+            phase2=self.phase2,
             qubit=self.qubit,
             rotation_angle=self.rotation_angle,
             rabi_rate=self.rabi_rate,
@@ -127,7 +129,9 @@ class TransientSensingExperiment(Experiment):
         # Sliding measurement with flux signal
         runner = SlidingMeasurementRunner()
         result_sig = runner.run(
-            self.qubit, self._route_flux(self.flux_signal), self.control_pulse,
+            self.qubit,
+            self._route_flux(self.flux_signal),
+            self.control_pulse,
             scan_list=self.scan_list,
         )
         scan_list = result_sig.axes["scan"]
@@ -135,7 +139,9 @@ class TransientSensingExperiment(Experiment):
 
         # Sliding measurement with zero-flux reference
         result_base = runner.run(
-            self.qubit, self.flux_signal_zero, self.control_pulse,
+            self.qubit,
+            self.flux_signal_zero,
+            self.control_pulse,
             scan_list=scan_list,
         )
         p_e_base = result_base.data["p_e"]

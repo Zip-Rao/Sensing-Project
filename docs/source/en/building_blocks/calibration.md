@@ -329,6 +329,12 @@ epsilon_hold < epsilon_final < epsilon_enter < Delta_val
   (physics goal) (Verify pass)  (candidate)  (local window)
 ```
 
+The first three thresholds act on target residual
+$r=\omega_{01}-\omega_{\mathrm{tar}}$, whereas `Delta_val` acts on probe
+detuning $\Delta=\omega_{01}-\omega_d$. Track therefore checks
+$|\widehat\Delta|+z\sigma_\Delta\leq\Delta_\mathrm{val}$ and must not
+substitute target residual.
+
 **Command–event architecture**:
 
 ```python
@@ -338,13 +344,43 @@ from sqc.workflows.frequency_state_machine import FrequencyCalibrationConfig
 config = FrequencyCalibrationConfig(
     epsilon_enter=2 * np.pi * 20e-3,    # 20 MHz
     epsilon_final=2 * np.pi * 2e-3,     # 2 MHz
+    confidence_multiplier=1.0,           # preselect z_(1-beta) for experiments
     N_verify=2,
     max_commands=30,
+    stop_after_lock_cycles=3,
 )
 runtime = FrequencyCalibrationRuntime(qubit=q, f_target=f_target, config=config)
 result = runtime.run()
-# result["state"] → "lock", result["run_status"] → "calibrated"
+# bounded run: result["state"] → "safe_stop"
+# result["run_status"] → "completed", result["safe_hold_confirmed"] → True
 ```
+
+`CALIBRATED` marks the first successful Verify → Lock transition; it is not a
+terminal runtime status. Lock monitoring and scheduled Ramsey audits continue
+until a command, shot, solver-call, wall-time, or `stop_after_lock_cycles`
+budget ends the run. Science-command costs are reserved before execution.
+SafeStop then issues `SafeHold` with bounded retries, and
+`safe_hold_confirmed` reports whether `SafeHoldApplied` was received.
+
+**Cooperative interruption**: UI/API threads call
+`runtime.request_cancel(reason, source)`, which only sets a thread-safe
+`CancellationToken`. The runtime converts it to
+`CancelRequested → SafeStop → SafeHold` at command boundaries and during the
+interruptible monitor wait. `KeyboardInterrupt` follows the same path by
+default; set `handle_keyboard_interrupt=False` to propagate it. With
+`checkpoint_directory` configured, the interrupt and final SafeHold state are
+persisted best-effort. A synchronous `executor.execute()` cannot be forcibly
+pre-empted: cancellation received during a measurement takes effect when that
+call returns, before another science command starts.
+
+**Track validity guards** run in a fixed order: backend `out_of_range`, the
+optional detuning window `linear_range - guard_margin`, optional experimental
+`min_confidence`, secant sensitivity bounds `[S_min, S_max]`, and finally
+`U_loop <= Delta_val`. The deterministic simulation backend reports
+`uncertainty_source="deterministic_zero"`; zero there is a declared modelling
+assumption, not experimental confidence. Verify is separately bounded by
+`max_verify_attempts_per_episode` and `max_verify_shots`; Lock cadence is set by
+`monitor_interval` and `audit_interval`.
 
 **Lock monitor hysteresis** (prevents noise-induced state chatter):
 
@@ -357,8 +393,14 @@ result = runtime.run()
 
 **Persistence**: `runtime.save_run(dir)` writes `config.json` / `commands.jsonl` /
 `transitions.jsonl` / `checkpoint.json` / `result.json`;
-`FrequencyCalibrationRuntime.load_run(dir, qubit)` restores and resumes from
-the checkpoint.
+`FrequencyCalibrationRuntime.load_run(dir, qubit, executor=...)` restores the
+configuration, budget, tracker, Verify/Lock counters, retry state, and pending
+command, then `run()` resumes directly. A pending command is replayed with its
+original `command_id`, so executors must be idempotent by command ID. Recovery
+therefore has explicit **at-least-once** semantics; it does not claim strict
+hardware exactly-once execution. Each journal row records state before/after,
+bias, drive frequency, measured frequency, residual, uncertainty,
+valid/ambiguity flags, shots, elapsed time, diagnostics, and transition reason.
 
 ### FrequencyCalibrationWorkflow (legacy, kept for compatibility)
 

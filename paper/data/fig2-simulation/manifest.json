@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "generated_utc": "2026-08-13T05:17:57.477313+00:00",
+  "generation_command": "C:\\Users\\21034\\anaconda3\\envs\\qutip-env\\python.exe C:/Users/21034/Desktop/Workspace/Sensing project/Sensing-Project/paper/figures/fig2/fig2-simulation-build-data.py",
+  "dependency_order": [
+    "response.npz",
+    "estimator-errors.npz",
+    "validation-summary.npz",
+    "solver-cost.npz"
+  ],
+  "mutation_rule": "each stage writes only its own evidence product",
+  "random_seed": null,
+  "evidence": {
+    "config.json": {
+      "role": "frozen protocol and evidence conventions",
+      "source_script": null,
+      "sha256": "4b93a8a8a0517013801ce878beb87152c0ace757e9acb331c62ca2dd1cdc9ed2"
+    },
+    "response.npz": {
+      "role": "frozen raw response and fitted response model",
+      "source_script": "fig2a-response-generate.py",
+      "sha256": "6384cfe9fde867b1a23997a5c1996b9726804d4f7bc489198a012640b59ea3c2"
+    },
+    "estimator-errors.npz": {
+      "role": "derived estimator outputs and errors",
+      "source_script": "fig2b-error-generate.py",
+      "sha256": "87292e450ffdab1a53d12848ce444473220ecf79ff5ae6928be6dc55f1b07d66"
+    },
+    "validation-summary.npz": {
+      "role": "derived held-out summary statistics",
+      "source_script": "fig2c-summary-generate.py",
+      "sha256": "a13f0c211accfa552bd863bef93f2335803481928941397b278b9b515668f9b5"
+    },
+    "solver-cost.npz": {
+      "role": "derived solver-call benchmark",
+      "source_script": "fig2d-cost-generate.py",
+      "sha256": "12f616d6e4a4ec889993bd31d4398fc7fd0e9788dc829a71f9b77121a384ed58"
+    },
+    "solver-cost.csv": {
+      "role": "human-readable projection of solver-cost.npz",
+      "source_script": "fig2d-cost-generate.py",
+      "sha256": "dfda0495af221e39a6e55bae3e12deca378ba8642fad8dad83b6c1d91f9ce4c0"
+    }
+  }
+}

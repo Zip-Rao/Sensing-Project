@@ -146,6 +146,102 @@ Acquire ──→ Track ──→ Verify ──→ Lock
             Reacquire ◄─────────────┘
 ```
 
+##### 把它理解为持续运行的闭环系统
+
+理解这套架构时，重点不是记住六个状态，而是先区分两个相互配合的循环。外层是
+**协议循环**：它判断当前证据是否足以继续局部控制、需要独立验证，还是必须重新捕获；
+内层是 **Track 控制循环**：它只根据相邻工作点的残差和偏置计算下一步控制量。
+
+外层由 `FrequencyStateMachine` 管理，内层由 `DampedSecantTracker` 管理，
+`FrequencyCalibrationRuntime` 在两者之间调度命令、测量和事件。这样，割线算法只负责
+“下一步走多远”，不能自行宣布测量有效或标定成功；状态机只负责协议判断，不直接运行
+QuTiP 或访问硬件。
+
+状态图描述的是协议拓扑；要理解代码实现，更直接的方法是沿着一轮测量观察信息如何在
+各层之间往返：
+
+```text
+用户 / UI
+    │  配置、run、request_cancel
+    ▼
+FrequencyCalibrationRuntime ── next_command / handle ── FrequencyStateMachine
+    │                                  纯协议决策
+    ├── propose / accept ── DampedSecantTracker
+    │                       纯 Track 控制律
+    ├── execute ── SQCExecutor ── FrequencyMeasurement
+    │                                │
+    │                                ▼
+    │                         TransmonQubit / QuTiP / hardware
+    └── journal / checkpoint
+```
+
+用户从 runtime 进入系统，而不是直接操作状态机。runtime 创建状态机，向它询问下一条
+命令，再协调能够完成该命令的组件。状态机内部没有 QuTiP 或硬件 I/O；它只回答两个
+问题：当前允许执行什么操作，以及返回的证据应该把协议带到哪个状态。
+
+启动后，状态机首先发出 `AcquireFrequency`。`SQCExecutor` 把这个协议级请求翻译成
+宽范围 Ramsey `FrequencyMeasurement`，测量最终落到 `TransmonQubit`、QuTiP 仿真或
+硬件适配器。executor 再把结果标准化为 `MeasurementSucceeded` 或失败事件。事件经
+runtime 返回状态机 reducer 后，状态机才根据证据选择 Track 或 Verify。
+
+###### Acquire：先建立绝对参考
+
+Acquire 的目标不是调节偏置，而是用宽范围 Ramsey 建立当前频率、偏置和不确定度组成的
+绝对参考。种子可靠且已满足候选条件时，协议直接进入 Verify；可靠但仍需修正时，才把
+这个参考交给 Track。无效或歧义测量会有限重试，而不是让局部控制器在未知分支上工作。
+
+###### Track：在可信局部范围内改变偏置
+
+Track 比其他状态多一层控制计算。执行 `TrackFrequency` 前，runtime 先让
+`DampedSecantTracker` 提出下一偏置和预测 drive。tracker 是纯数值控制器：它知道当前
+与上一次残差，但不知道协议应该 Verify 还是 Reacquire。局部测量返回后，状态机先执行
+有效性守卫：可信且达到候选条件则进入 Verify；可信但未达到则继续 Track；局部模型
+失效则进入 Reacquire。这样数值控制器不能自行判断它依赖的测量模型是否仍然可信。
+
+###### Verify：把控制与成功判定隔开
+
+Verify 改变的是证据来源，而不是偏置。runtime 保持候选偏置冻结，executor 执行独立
+double-sweep Ramsey。这避免让 Track 使用的同一个局部估计器既控制系统又证明自己已经
+收敛。通过后进入长期 Lock；结果可靠但未达标时返回 Track；证据歧义时返回 Reacquire。
+
+###### Lock：切换到长期监测时间尺度
+
+进入 Lock 表示候选工作点已经被独立验证，并不表示 runtime 结束。Lock 沿同一分层路径
+运行低成本 monitor，并按 `audit_interval` 安排独立 Ramsey 审计。它只能请求 Verify 或
+Reacquire，不能绕过协议直接修改偏置：疑似小漂移先由 Verify 确认，明显跳变或参考丢失
+则重新捕获。
+
+###### Reacquire：恢复已经失效的局部知识
+
+Track、Verify 和 Lock 都依赖当前分支、局部灵敏度、drive 位置或锁定参考。任一参考不再
+可信时，Reacquire 清除不应继续沿用的局部状态并重新执行宽范围捕获。新种子恢复后，可按
+距离目标的情况回到 Track 或直接进入 Verify；只有连续重捕获失败或超过次数限制，才进入
+SafeStop。因此 Reacquire 是恢复闭环，不是失败终点。
+
+##### Runtime、安全包络与中断恢复
+
+从调度角度看，每一轮都遵循同一条路径：runtime 先检查取消信号，向状态机索取 pending
+command；若处于 Track，再让 tracker 完善偏置和 drive；随后在 I/O 前估算并预留成本，
+调用 executor，把返回事件交给 reducer，最后记录 journal 并按策略保存 checkpoint。
+
+预算、中断、journal 和 checkpoint 包围整个循环，而不属于某个科学状态。它们是
+runtime 的横切职责：可以在 I/O 前阻止新命令，保留已经返回的测量证据，并通过
+`SafeStop → SafeHold` 安全退出，而不把持久化或线程协调逻辑塞进纯 reducer。
+
+用户调用 `request_cancel()` 时只设置线程安全的协作式取消信号。runtime 在命令边界和
+monitor 等待期间将它转换为 `CancelRequested`；同步 `executor.execute()` 已经开始时，
+当前调用仍须返回后才能停止。`KeyboardInterrupt` 默认复用同一路径。进入 SafeStop 后，
+系统还会实际下发 `SafeHold`，收到确认事件后才把安全保持记为完成。
+
+checkpoint 则处理进程在运行中间退出的情况。尚未收到匹配事件的 pending command 会保留
+原 `command_id`，恢复后以同一 ID 重放。因此协议提供 at-least-once 恢复语义；真实硬件
+若要求避免重复副作用，executor 仍需按 `command_id` 去重。
+
+##### 配置与接口速查
+
+前面的叙事说明各层为什么这样协作；下面保留完整状态职责、守卫、阈值、消息和持久化字段，
+供配置实验与排查运行记录时直接查阅。
+
 **六个状态各司其职**：
 
 | 状态 | 职责 | 能改磁通吗？ |
@@ -169,6 +265,13 @@ Acquire ──→ Track ──→ Verify ──→ Lock
 4. **解析 $f(\Phi)$ 只做仿真 oracle**，不进转移决策——状态机不假设你知道频率-磁通
    关系，所有决策基于实际测量结果。
 
+Track 按固定顺序应用有效性守卫：后端 `out_of_range`、可选 detuning 捕获窗
+`linear_range - guard_margin`、可选实验 `min_confidence`、割线灵敏度范围
+`[S_min, S_max]`，以及探针失谐有效性界 `Delta_val`。目标残差只参与候选判断和
+偏置更新，不能代替 probe detuning。确定性后端用
+`uncertainty_source="deterministic_zero"` 标记零统计误差；这是仿真假设，不是测得的
+实验置信度。
+
 **阈值体系**——四个层次控制状态转移的松紧：
 
 ```
@@ -177,9 +280,9 @@ epsilon_hold  <  epsilon_final  <  epsilon_enter  <  Delta_val
 物理带宽目标     Verify 通过       候选进入阈值      局部有效窗口
 ```
 
-- **候选条件**（Track → Verify）：$|\text{error}| + \text{uncertainty} \le \epsilon_\text{enter}$
-- **验证条件**（Verify → Lock）：$|\text{error}| + \text{uncertainty} \le \epsilon_\text{final}$，且连续 $N_\text{verify}$ 次
-- **局部有效条件**（是否必须退出 Track）：$|\text{error}| + \text{uncertainty} \le \Delta_\text{val}$
+- **候选条件**（Track → Verify）：$|\widehat r| + z\sigma_r \le \epsilon_\text{enter}$
+- **验证条件**（Verify → Lock）：$|\widehat r| + z\sigma_r \le \epsilon_\text{final}$，且连续 $N_\text{verify}$ 次
+- **局部有效条件**（是否必须退出 Track）：$|\widehat\Delta| + z\sigma_\Delta \le \Delta_\text{val}$
 
 **Lock 的监视器迟滞**——这是防止噪声导致状态抖动的关键设计。Lock 状态使用低成本
 瞬态监测器，其噪声特性不同于 Verify 的独立 Ramsey，因此不能简单套用同一个阈值：
@@ -194,15 +297,7 @@ epsilon_hold  <  epsilon_final  <  epsilon_enter  <  Delta_val
 这样做的好处是：刚通过 Verify 的点不会因为监测器的单次噪声波动就退出 Lock；
 真正的缓慢漂移会在连续命中灰区后被捕获；大的突变直接触发重捕获，不浪费验证次数。
 
-**命令--事件架构**——状态机不直接做 I/O，而是通过命令和事件与外部执行器解耦：
-
-```text
-┌──────────────┐     command      ┌────────────┐     execute     ┌─────────────┐
-│ StateMachine │ ───────────────→ │  Runtime   │ ──────────────→ │ SQCExecutor │
-│  (纯逻辑)     │                  │ (编排层)    │                 │ (QuTiP 后端) │
-│              │ ←─────────────── │            │ ←────────────── │             │
-└──────────────┘     event        └────────────┘    result       └─────────────┘
-```
+**命令--事件契约**——上述跨层路径通过以下稳定消息保持解耦：
 
 - **命令**（状态机 → 外部）：`AcquireFrequency`、`TrackFrequency(bias, drive)`、
   `VerifyFrequency(frozen_bias, drive)`、`MonitorFrequency(locked_bias)`、`SafeHold(bias)`
@@ -210,22 +305,24 @@ epsilon_hold  <  epsilon_final  <  epsilon_enter  <  Delta_val
   `MeasurementTechnicalFailure`、`MeasurementRejected`、`TimerElapsed`、`InterlockTriggered`、
   `BudgetExhausted`、`CancelRequested`
 
-每条事件携带 `command_id` 以匹配命令，保证幂等——状态机反复调用 `next_command()` 返回
-同一命令，直到收到匹配事件后才转移到下一状态。
+每条事件携带 `command_id` 以匹配 pending command。反复调用 `next_command()` 会返回
+同一命令，直到收到匹配事件后才转移。checkpoint 恢复时 pending command 会使用相同 ID
+重放，因此必须由 executor 按 `command_id` 去重硬件副作用，不能只依赖 reducer。
 
 **持久化与断点恢复**：`FrequencyCalibrationRuntime` 提供 `save_run(dir)` 和
-`load_run(dir, qubit)` 方法，将运行状态写入五个文件：
+`load_run(dir, qubit, executor=...)` 方法，将运行状态写入五个文件：
 
 | 文件 | 内容 |
 |---|---|
 | `config.json` | 完整协议配置 |
-| `commands.jsonl` | 每条命令及其对应事件 |
+| `commands.jsonl` | 每周期 journal：命令/事件、状态、测量、成本、diagnostics 和原因 |
 | `transitions.jsonl` | 每次状态转移（from / to / reason） |
 | `checkpoint.json` | 状态机全量快照（可从此恢复） |
 | `result.json` | 最终结果摘要 |
 
-这对于长时间运行的实验至关重要——断电或异常退出后可以从 checkpoint 继续，不会丢失
-已经完成的标定进度。
+checkpoint 会恢复配置、budget、tracker、Verify/Lock 计数、retry 状态、转移历史和
+pending command。恢复语义为 **at-least-once**：尚未确认的硬件动作可能使用原 ID 再次
+提交；这不构成跨硬件或进程故障的严格 exactly-once 保证。
 
 **与旧接口的关系**：两者共享同一个 `DampedSecantTracker` 控制律（阻尼割线步进公式），
 数值行为一致。旧 `FrequencyCalibrationWorkflow` 的每个梯度阶段内部已委托给 tracker。
@@ -325,21 +422,31 @@ config = FrequencyCalibrationConfig(
     # -- 阈值（均为角频率，rad·GHz）--
     epsilon_enter=2 * np.pi * 20e-3,      # 20 MHz  — 候选进入 Verify 的条件
     epsilon_final=2 * np.pi * 2e-3,       # 2 MHz   — Verify 通过的条件
-    Delta_val=2 * np.pi * 50e-3,          # 50 MHz  — 局部有效窗口
+    Delta_val=2 * np.pi * 50e-3,          # 50 MHz  — 探针失谐有效窗口
+    confidence_multiplier=1.0,             # 确定性仿真；实验须预先指定 z_(1-beta)
+    linear_range=2 * np.pi * 80e-3,       # 后端可信的局部范围
+    min_confidence=None,                   # 仅在后端真实报告置信度时设置
 
     # -- 验证策略 --
     N_verify=2,                            # 需要连续 2 次通过才算验证成功
+    max_verify_attempts_per_episode=5,
+    max_verify_shots=10_000,
+    verify_track_max_residual=2 * np.pi * 20e-3,
 
     # -- Lock 监视器迟滞 --
     epsilon_mon_clear=2 * np.pi * 5e-3,   # 5 MHz   — 监视器认为"干净"
     epsilon_mon_suspect=2 * np.pi * 10e-3,# 10 MHz  — 监视器认为"可疑"
     Delta_mon_reacquire=2 * np.pi * 30e-3,# 30 MHz  — 大跳变，直接重捕获
     N_mon_suspect=3,                       # 连续可疑 3 次 → Verify
+    monitor_interval=1.0,                  # 低成本监测间隔（秒）
+    audit_interval=60.0,                   # Ramsey 审计间隔（秒）
+    require_periodic_audit=True,
 
     # -- 预算 --
     max_commands=200,                      # 总命令数上限
     max_reacquire_attempts=5,             # 重捕获次数上限
     max_wall_time=3600.0,                 # 1 小时墙上时间
+    stop_after_lock_cycles=20,             # 有界示例；0 表示长期运行
 
     # -- Track 控制器参数 --
     damping=0.8,                           # 阻尼因子（<1 抑制过冲）
@@ -348,12 +455,21 @@ config = FrequencyCalibrationConfig(
 )
 
 # ── 运行 ──────────────────────────────────────────────────────────────
-runtime = FrequencyCalibrationRuntime(qubit=qubit, f_target=f_target, config=config)
+runtime = FrequencyCalibrationRuntime(
+    qubit=qubit,
+    f_target=f_target,
+    config=config,
+    checkpoint_directory="calibration_run_001",
+)
 result = runtime.run()
 
 # ── 结果解读 ──────────────────────────────────────────────────────────
-print(f"终态: {result['state']}")               # "lock" / "safe_stop"
-print(f"运行状态: {result['run_status']}")       # "calibrated" / "completed" / "failed"
+print(f"终态: {result['state']}")               # 本有界运行中为 "safe_stop"
+print(f"运行状态: {result['run_status']}")       # SafeStop 后为 "completed"
+print(f"安全保持: {result['safe_hold_confirmed']}")
+print(f"保持目标: {result['hold_target_met']} "
+      f"({result['hold_passes']}/{result['hold_samples']})")
+print(f"是否中断: {result['interrupted']} {result['interrupt']}")
 print(f"最终频率: {result['f_final']/(2*np.pi):.6f} GHz")
 print(f"候选偏置: {result['candidate_bias']:.6f} Φ₀")
 print(f"命令数: {result['n_commands']}, 耗时: {result['elapsed']:.1f}s")
@@ -367,14 +483,31 @@ runtime.save_run("calibration_run_001")
 # 写入 config.json / commands.jsonl / transitions.jsonl / checkpoint.json / result.json
 
 # ... 数小时后，从断点继续 ...
-# runtime2 = FrequencyCalibrationRuntime.load_run("calibration_run_001", qubit=qubit)
+# runtime2 = FrequencyCalibrationRuntime.load_run(
+#     "calibration_run_001", qubit=qubit, executor=idempotent_executor
+# )
 # runtime2.run()  # 状态机从最后一个 checkpoint 恢复
 ```
 
 这段代码展示了 V2 接口的核心流程：配置阈值 → 启动运行 → 查看轨迹 → 持久化保存。
 `transition_log` 中每条记录包含状态转移的起止状态和触发原因码（如 `TARGET_CANDIDATE`、
 `DRIFT_SUSPECTED`、`REACQUIRE_LIMIT` 等），方便事后审计——为什么进入了 Reacquire？
-连续几次 suspect 触发了 Verify？所有决策都有记录可查。
+连续几次 suspect 触发了 Verify？journal 每行还包含状态前后、偏置、drive、频率、残差、
+不确定度、valid/ambiguity、shots、耗时、diagnostics 和转移原因。
+
+进入 Lock 会把 lifecycle 标为 `CALIBRATED`，但不会结束 `run()`。Lock 会继续监测，
+计划 Ramsey 审计也必须经过 Lock → Verify。本有界示例最终由
+`stop_after_lock_cycles` 触发 SafeStop，`safe_hold_confirmed` 记录 SafeHold 是否确认。
+
+UI/API 需要取消时，另一个线程只设置共享信号：
+
+```python
+runtime.request_cancel(reason="operator_stop", source="ui")
+```
+
+runtime 会在命令边界和 monitor 等待期间检查信号，记录 `CancelRequested`，写入配置的
+紧急 checkpoint，再执行 SafeHold。`KeyboardInterrupt` 默认也转换到同一路径。这是
+协作式取消：如果 `executor.execute()` 已经开始，当前同步测量必须返回后才能处理中断。
 
 ```{note}
 **旧接口 vs 新接口**：`FrequencyCalibrationWorkflow` 是一次性管线（stage1→stage2→...），
@@ -402,10 +535,12 @@ runtime.save_run("calibration_run_001")
 - `FrequencyMeasurement` 支持 `order=3` 三次 Newton 修正，通过 `g3_source`
   选择三次系数来源：`"fit"`（奇多项式拟合 $p_\text{diff}(\Delta)$，自适应范围）
   或 `"kernel_full"`（非对角核 $\iiint k_3\,dt^3$）。
-- **V2 状态机结果**：`runtime.run()` 返回 `state`（终态，如 `"lock"`）、
-  `run_status`（运行状态，如 `"calibrated"` 表示成功进入 Lock）、`f_final`（最终
+- **V2 状态机结果**：`runtime.run()` 返回 `state`（有界完成时为 `"safe_stop"`）、
+  `run_status`（确认 SafeStop 后为 `"completed"`；`CALIBRATED` 只是首次进入 Lock 的
+  非终止里程碑）、`safe_hold_confirmed`、`hold_target_met`（最近一次 Lock monitor
+  是否满足 `epsilon_hold`）、`hold_passes`/`hold_samples`、`f_final`（最终
   频率估计）、`candidate_bias`（锁定时的偏置值）、`transition_log`（完整转移轨迹，
   每条含 `from`/`to`/`reason`/`version`）、`n_commands`（消耗的命令数）、`elapsed`
-  （墙上时间）。`transition_log` 是事后审计的关键——全部状态转移和触发原因一目了然。
+  （墙上时间）和逐周期 `journal`。`transition_log` 与 `journal` 共同构成事后审计轨迹。
 - 各标定类的完整字段与方法选项见 {doc}`../building_blocks/calibration`；V2 状态机
   的阈值与配置见 {doc}`../building_blocks/workflows`。

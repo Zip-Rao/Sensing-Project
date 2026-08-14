@@ -1,0 +1,11 @@
+{"version": 0, "from": "acquire", "to": "acquire", "reason": "SEED_RELIABLE", "note": "run started", "candidate_bias": null, "f_hat": null, "uncertainty": 0.0}
+{"version": 1, "from": "acquire", "to": "track", "reason": "SEED_RELIABLE", "note": "", "candidate_bias": 0.0, "f_hat": 23.751971192357306, "uncertainty": 0.0}
+{"version": 2, "from": "track", "to": "track", "reason": "CORRECTION_REQUIRED", "note": "", "candidate_bias": 0.0, "f_hat": 23.75218732243732, "uncertainty": 0.0}
+{"version": 3, "from": "track", "to": "track", "reason": "CORRECTION_REQUIRED", "note": "", "candidate_bias": -0.005, "f_hat": 23.72286950253411, "uncertainty": 0.0}
+{"version": 4, "from": "track", "to": "verify", "reason": "CANDIDATE_REACHED", "note": "", "candidate_bias": -0.011287016913474042, "f_hat": 23.681585543515958, "uncertainty": 0.0}
+{"version": 5, "from": "verify", "to": "track", "reason": "CORRECTION_REQUIRED", "note": "", "candidate_bias": -0.011287016913474042, "f_hat": 23.68160673256325, "uncertainty": 0.0}
+{"version": 6, "from": "track", "to": "verify", "reason": "CANDIDATE_REACHED", "note": "", "candidate_bias": -0.011874249772881259, "f_hat": 23.677476966498794, "uncertainty": 0.0}
+{"version": 7, "from": "verify", "to": "verify", "reason": "VERIFY_PASSED", "note": "", "candidate_bias": -0.011874249772881259, "f_hat": 23.677481599086835, "uncertainty": 0.0}
+{"version": 8, "from": "verify", "to": "lock", "reason": "VERIFY_PASSED", "note": "", "candidate_bias": -0.011874249772881259, "f_hat": 23.677481599086835, "uncertainty": 0.0}
+{"version": 9, "from": "lock", "to": "lock", "reason": "MONITOR_CLEAR", "note": "", "candidate_bias": -0.011874249772881259, "f_hat": 23.677476979853196, "uncertainty": 0.0}
+{"version": 10, "from": "lock", "to": "safe_stop", "reason": "BUDGET_EXHAUSTED", "note": "", "candidate_bias": -0.011874249772881259, "f_hat": 23.677476979853196, "uncertainty": 0.0}

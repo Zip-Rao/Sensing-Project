@@ -1,0 +1,9 @@
+{"version": 0, "from": "acquire", "to": "acquire", "reason": "SEED_RELIABLE", "note": "run started", "candidate_bias": null, "f_hat": null, "uncertainty": 0.0}
+{"version": 1, "from": "acquire", "to": "track", "reason": "SEED_RELIABLE", "note": "", "candidate_bias": 0.0, "f_hat": 23.752203987719668, "uncertainty": 3.01422679804074e-05}
+{"version": 2, "from": "track", "to": "track", "reason": "CORRECTION_REQUIRED", "note": "", "candidate_bias": 0.0, "f_hat": 23.75053443090222, "uncertainty": 0.001987820292514384}
+{"version": 3, "from": "track", "to": "track", "reason": "CORRECTION_REQUIRED", "note": "", "candidate_bias": -0.005, "f_hat": 23.723862556371504, "uncertainty": 0.0019005896924848464}
+{"version": 4, "from": "track", "to": "verify", "reason": "CANDIDATE_REACHED", "note": "", "candidate_bias": -0.01017505293191318, "f_hat": 23.68833845806915, "uncertainty": 0.001980111523546832}
+{"version": 5, "from": "verify", "to": "verify", "reason": "VERIFY_PASSED", "note": "", "candidate_bias": -0.01017505293191318, "f_hat": 23.689275093992617, "uncertainty": 0.00022280456454975412}
+{"version": 6, "from": "verify", "to": "lock", "reason": "VERIFY_PASSED", "note": "", "candidate_bias": -0.01017505293191318, "f_hat": 23.689146907367025, "uncertainty": 0.0002229391055299383}
+{"version": 7, "from": "lock", "to": "verify", "reason": "DRIFT_SUSPECTED", "note": "", "candidate_bias": -0.01017505293191318, "f_hat": 23.689355465749053, "uncertainty": 0.02448810406864837}
+{"version": 8, "from": "verify", "to": "safe_stop", "reason": "BUDGET_EXHAUSTED", "note": "", "candidate_bias": -0.01017505293191318, "f_hat": 23.689355465749053, "uncertainty": 0.02448810406864837}

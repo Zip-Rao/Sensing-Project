@@ -172,6 +172,14 @@ SafeStop safety hold.
   jump → Reacquire
 - Analytic $f(\Phi)$ is a simulation oracle only — never feeds the transition
   reducer
+- Track checks `Delta_val` against probe detuning rather than target residual,
+  and rejects missing detuning, backend range violations, low configured
+  confidence, abnormal secant sensitivity, and loss of local validity
+- `CALIBRATED` is a nonterminal milestone; Lock monitoring continues until a
+  configured budget or `stop_after_lock_cycles` ends the run through SafeStop
+- `request_cancel()` is thread-safe and cooperative: it interrupts monitor
+  waits immediately and stops before the next science command; an in-flight
+  synchronous executor call must return before cancellation takes effect
 
 **Usage** (via `FrequencyCalibrationRuntime`):
 
@@ -181,12 +189,26 @@ from sqc.workflows.frequency_state_machine import FrequencyCalibrationConfig
 
 config = FrequencyCalibrationConfig(
     epsilon_enter=2*np.pi*20e-3, epsilon_final=2*np.pi*2e-3,
-    N_verify=2, max_commands=30,
+    confidence_multiplier=1.0, N_verify=2, max_verify_shots=10_000,
+    monitor_interval=1.0, audit_interval=60.0, require_periodic_audit=True,
+    max_commands=30, stop_after_lock_cycles=3,
 )
 runtime = FrequencyCalibrationRuntime(qubit=q, f_target=f_target, config=config)
 result = runtime.run()
-# result["state"] → "lock", result["run_status"] → "calibrated"
+# bounded run: state="safe_stop", run_status="completed"
+# result["safe_hold_confirmed"] reports SafeHold acknowledgement
 ```
+
+`load_run(dir, qubit, executor=...)` restores the full checkpoint and replays a
+pending command with its original ID. Executors must therefore be idempotent by
+`command_id`; recovery is at-least-once, not a strict hardware exactly-once
+guarantee. Deterministic backends explicitly label zero statistical uncertainty
+as `uncertainty_source="deterministic_zero"`.
+
+For a user-controlled run, pass `checkpoint_directory="calibration_run"` and
+call `runtime.request_cancel("operator_stop", "ui")` from the UI/API thread.
+The result includes `interrupted`, structured `interrupt` metadata,
+`interrupt_checkpoint_saved`, and `safe_hold_confirmed`.
 
 See {doc}`calibration` "Frequency calibration state machine V2" for details.
 

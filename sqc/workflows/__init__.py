@@ -1,7 +1,9 @@
 """sqc.workflows — High-level experimental workflows."""
+
 from .base import Workflow
 from .frequency_calibration import CalibrationStage, FrequencyCalibrationWorkflow
 from .predistortion_validation import PredistortionValidationWorkflow
+
 # NOTE (D3): ZCrosstalkWorkflow is hidden from the v1 public API. The
 # implementation remains in sqc/workflows/z_crosstalk.py and is importable via
 # its deep path (`from sqc.workflows.z_crosstalk import ZCrosstalkWorkflow`);
@@ -17,6 +19,7 @@ from .sensing import (
     NoiseReport,
     CVResult,
 )
+
 # V2 event-driven frequency calibration state machine (v2.19)
 from .frequency_state_machine import (
     FrequencyCalibrationConfig,
@@ -25,7 +28,12 @@ from .frequency_state_machine import (
     RunStatus,
     ReasonCode,
 )
-from .frequency_runtime import FrequencyCalibrationRuntime
+from .frequency_runtime import CancellationToken, FrequencyCalibrationRuntime
+from .frequency_backends import (
+    SQCExecutor,
+    FiniteShotSQCExecutor,
+    ProcessSimulationExecutor,
+)
 
 __all__ = [
     "Workflow",
@@ -48,4 +56,8 @@ __all__ = [
     "RunStatus",
     "ReasonCode",
     "FrequencyCalibrationRuntime",
+    "CancellationToken",
+    "SQCExecutor",
+    "FiniteShotSQCExecutor",
+    "ProcessSimulationExecutor",
 ]

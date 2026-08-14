@@ -22,6 +22,15 @@ from sqc.control.flux_signal import FluxSignal
 from sqc.control.sequence import create_ramsey_pulse
 
 
+@dataclass
+class FrequencyMeasurementDetails:
+    frequency: float
+    method: str
+    populations: dict[str, np.ndarray | float]
+    estimator: dict
+    circuits: int
+
+
 # ---------------------------------------------------------------------------
 # Internal helpers for Ramsey FFT fitting
 # ---------------------------------------------------------------------------
@@ -60,6 +69,7 @@ def _run_ramsey_sweep(
     t_rabi: np.ndarray,
     t_global: np.ndarray,
     f_art: float,
+    pulse_kwargs: dict | None = None,
 ) -> np.ndarray:
     """Run one Ramsey τ-sweep with artificial detuning *f_art* (GHz).
 
@@ -78,6 +88,7 @@ def _run_ramsey_sweep(
             omega_d=omega_d,
             phase1=0.0, phase2=phase2,
             qubit=qubit,
+            **(pulse_kwargs or {}),
         )
         H = (
             QobjEvo(qubit.H_list, tlist=qubit.mag_signal.t_list, order=1)
@@ -103,6 +114,8 @@ def _fit_ramsey_frequency(
     t_global: np.ndarray,
     flux: float = 0.0,
     f_artificial: float | None = 0.1,
+    pulse_kwargs: dict | None = None,
+    return_details: bool = False,
 ) -> float:
     """Run Ramsey at a given DC flux, return fitted f01 (signed) via FFT peak.
 
@@ -164,21 +177,30 @@ def _fit_ramsey_frequency(
     # -- single-sweep mode ------------------------------------------------
     if f_artificial is not None:
         p_e = _run_ramsey_sweep(
-            qubit, omega_d, tau_list, t_rabi, t_global, f_artificial,
+            qubit, omega_d, tau_list, t_rabi, t_global, f_artificial, pulse_kwargs,
         )
         f_meas = _fft_peak(p_e, dt_val)
         if f_meas is None:
             return float(omega_d)
         detuning_ghz = f_artificial - f_meas  # f_meas = |f_a - Δ| (n+I/2 convention)
-        return float(omega_d + 2.0 * np.pi * detuning_ghz)
+        frequency = float(omega_d + 2.0 * np.pi * detuning_ghz)
+        if return_details:
+            return FrequencyMeasurementDetails(
+                frequency=frequency,
+                method="ramsey",
+                populations={"plus": p_e},
+                estimator={"mode": "single_sweep", "f_artificial_ghz": f_artificial},
+                circuits=len(p_e),
+            )
+        return frequency
 
     # -- double-sweep mode (f_artificial is None) -------------------------
     _fa = 0.05  # internal f_a for double-sweep (GHz)
     p_plus = _run_ramsey_sweep(
-        qubit, omega_d, tau_list, t_rabi, t_global, +_fa,
+        qubit, omega_d, tau_list, t_rabi, t_global, +_fa, pulse_kwargs,
     )
     p_minus = _run_ramsey_sweep(
-        qubit, omega_d, tau_list, t_rabi, t_global, -_fa,
+        qubit, omega_d, tau_list, t_rabi, t_global, -_fa, pulse_kwargs,
     )
 
     f_p = _fft_peak(p_plus, dt_val)
@@ -193,7 +215,16 @@ def _fit_ramsey_frequency(
     else:
         detuning_ghz = (f_n ** 2 - f_p ** 2) / (4.0 * _fa)
 
-    return float(omega_d + 2.0 * np.pi * detuning_ghz)
+    frequency = float(omega_d + 2.0 * np.pi * detuning_ghz)
+    if return_details:
+        return FrequencyMeasurementDetails(
+            frequency=frequency,
+            method="ramsey",
+            populations={"plus": p_plus, "minus": p_minus},
+            estimator={"mode": "double_sweep", "f_artificial_ghz": _fa},
+            circuits=len(p_plus) + len(p_minus),
+        )
+    return frequency
 
 
 # ---------------------------------------------------------------------------
@@ -208,14 +239,17 @@ _g3_cache: dict[tuple, tuple[float, float]] = {}
 
 
 def _make_cache_key(
-    t_rabi: np.ndarray, omega_d: float, tag: object = "adaptive",
+    t_rabi: np.ndarray,
+    omega_d: float,
+    tag: object = "adaptive",
+    pulse_tag: object = "square-pi2",
 ) -> tuple:
     """Return a hashable cache key from the pulse time axis and drive frequency.
 
     ``tag`` distinguishes calibration variants (e.g. a manual ``delta_max``
     override vs the adaptive default) so they do not collide in the cache.
     """
-    return (hash(t_rabi.tobytes()), round(float(omega_d), 6), tag)
+    return (hash(t_rabi.tobytes()), round(float(omega_d), 6), tag, pulse_tag)
 
 
 # ---------------------------------------------------------------------------
@@ -229,6 +263,7 @@ def _fit_g3_at_delta_max(
     t_global: np.ndarray,
     n_scan: int,
     delta_max_ghz: float,
+    pulse_kwargs: dict | None = None,
 ) -> tuple[float, float]:
     """Single odd-polynomial fit of ``p_diff(Δ)`` over ``±delta_max_ghz``.
 
@@ -267,10 +302,12 @@ def _fit_g3_at_delta_max(
         ctrl_x = create_ramsey_pulse(
             t_rabi, tau, omega_d=omega_d,
             phase1=np.pi / 2, phase2=0.0, qubit=qubit,
+            **(pulse_kwargs or {}),
         )
         ctrl_mx = create_ramsey_pulse(
             t_rabi, tau, omega_d=omega_d,
             phase1=np.pi / 2, phase2=np.pi, qubit=qubit,
+            **(pulse_kwargs or {}),
         )
 
         H_base = QobjEvo(qubit.H_list, tlist=qubit.mag_signal.t_list, order=1)
@@ -303,6 +340,8 @@ def _calibrate_g3_taylor(
     t_global: np.ndarray,
     n_scan: int = 21,
     delta_max_ghz: float | None = None,
+    pulse_kwargs: dict | None = None,
+    pulse_tag: object = "square-pi2",
 ) -> tuple[float, float]:
     """Fit the odd-polynomial Taylor coefficients of ``p_diff(Δ)``.
 
@@ -326,7 +365,7 @@ def _calibrate_g3_taylor(
     import time
 
     tag = "adaptive" if delta_max_ghz is None else round(float(delta_max_ghz), 6)
-    cache_key = _make_cache_key(t_rabi, omega_d, tag)
+    cache_key = _make_cache_key(t_rabi, omega_d, tag, pulse_tag)
     if cache_key in _g3_cache:
         return _g3_cache[cache_key]
 
@@ -334,7 +373,7 @@ def _calibrate_g3_taylor(
 
     if delta_max_ghz is not None:
         result = _fit_g3_at_delta_max(
-            qubit, omega_d, t_rabi, t_global, n_scan, float(delta_max_ghz),
+            qubit, omega_d, t_rabi, t_global, n_scan, float(delta_max_ghz), pulse_kwargs,
         )
     else:
         # Adaptive: shrink the scan range until G1 stabilizes (i.e. the
@@ -345,7 +384,7 @@ def _calibrate_g3_taylor(
         result = None
         for dmax in candidates:
             G1, G3 = _fit_g3_at_delta_max(
-                qubit, omega_d, t_rabi, t_global, n_scan, dmax,
+                qubit, omega_d, t_rabi, t_global, n_scan, dmax, pulse_kwargs,
             )
             result = (G1, G3)
             if G1_prev is not None and abs(G1 - G1_prev) <= 0.015 * abs(G1):
@@ -371,6 +410,7 @@ def _calibrate_g3_kernel_full(
     qubit: object,
     omega_d: float,
     t_rabi: np.ndarray,
+    pulse_kwargs: dict | None = None,
 ) -> tuple[float, float]:
     """Compute ``(G1, G3)`` from the full off-diagonal Heisenberg kernel.
 
@@ -397,9 +437,11 @@ def _calibrate_g3_kernel_full(
 
     ctrl_x = create_ramsey_pulse(
         t_rabi, 0.0, omega_d=omega_d, phase1=np.pi / 2, phase2=0.0, qubit=qubit,
+        **(pulse_kwargs or {}),
     )
     ctrl_mx = create_ramsey_pulse(
         t_rabi, 0.0, omega_d=omega_d, phase1=np.pi / 2, phase2=np.pi, qubit=qubit,
+        **(pulse_kwargs or {}),
     )
     est = KernelEstimator(
         mode='omega', method='sim', order=3, extract_off_diagonal=True,
@@ -466,6 +508,9 @@ def _measure_frequency_transient(
     order: int = 1,
     g3_source: Literal["fit", "kernel_full"] = "fit",
     g3_delta_max: float | None = None,
+    pulse_kwargs: dict | None = None,
+    pulse_tag: object = "square-pi2",
+    return_details: bool = False,
 ) -> float:
     """Transient-based single-point frequency measurement.
 
@@ -523,12 +568,14 @@ def _measure_frequency_transient(
         omega_d=omega_d,
         phase1=np.pi / 2, phase2=0.0,
         qubit=qubit,
+        **(pulse_kwargs or {}),
     )
     ctrl_mx = create_ramsey_pulse(
         t_rabi, tau,
         omega_d=omega_d,
         phase1=np.pi / 2, phase2=np.pi,
         qubit=qubit,
+        **(pulse_kwargs or {}),
     )
 
     # -- run both measurements (use hamiltonian_on on t_global) ---------
@@ -597,13 +644,16 @@ def _measure_frequency_transient(
             # DETUNING (Δ) convention.  Convert to δω = −Δ by negating both.
             G1_fit, G3_taylor = _calibrate_g3_taylor(
                 qubit, omega_d, t_rabi, t_global, delta_max_ghz=g3_delta_max,
+                pulse_kwargs=pulse_kwargs, pulse_tag=pulse_tag,
             )
             G_lin = -G1_fit
             G3 = -G3_taylor
         elif g3_source == "kernel_full":
             # Route B: full off-diagonal triple integral, already in the
             # δω convention (raw sim-kernel integrals) — no flip.
-            G_lin, G3 = _calibrate_g3_kernel_full(qubit, omega_d, t_rabi)
+            G_lin, G3 = _calibrate_g3_kernel_full(
+                qubit, omega_d, t_rabi, pulse_kwargs=pulse_kwargs,
+            )
             # re-seat qubit after kernel side effects
             qubit.qubit_in_mag(Phi, frame=1, omega_d=omega_d)
         else:
@@ -618,7 +668,22 @@ def _measure_frequency_transient(
         if abs(G3) > 1e-10 and abs(G_lin) > 1e-12:
             delta_omega = _solve_cubic_detuning(p_diff, G_lin, G3)
 
-    return float(omega_d - delta_omega)
+    frequency = float(omega_d - delta_omega)
+    if return_details:
+        return FrequencyMeasurementDetails(
+            frequency=frequency,
+            method="transient",
+            populations={"plus_x": p_x, "minus_x": p_mx},
+            estimator={
+                "omega_d": float(omega_d),
+                "p_diff": p_diff,
+                "G1": G_lin if order >= 3 else G_freq,
+                "G3": G3 if order >= 3 else 0.0,
+                "order": order,
+            },
+            circuits=2,
+        )
+    return frequency
 
 
 # ===================================================================
@@ -780,8 +845,14 @@ class FrequencyMeasurement(Calibration):
     t_global: np.ndarray | None = None
     f_artificial: float | None = 0.1
     omega_d: float | None = None
+    rotation_angle: float | None = np.pi / 2
+    rabi_rate: float | None = None
+    envelope: object = "square"
+    envelope_sigma: float | None = None
 
     def __post_init__(self):
+        if self.rotation_angle is not None and self.rabi_rate is not None:
+            raise ValueError("rotation_angle and rabi_rate are mutually exclusive")
         if self.tau_list is None:
             self.tau_list = CONFIG.pulse.make_time(0, 200)
         if self.t_global is None:
@@ -829,6 +900,7 @@ class FrequencyMeasurement(Calibration):
                     self.qubit, omega_d, self.tau_list,
                     self.t_rabi, self.t_global,
                     flux=flux_val, f_artificial=self.f_artificial,
+                    pulse_kwargs=self._pulse_kwargs(),
                 )
             case "transient":
                 return _measure_frequency_transient(
@@ -837,7 +909,53 @@ class FrequencyMeasurement(Calibration):
                     flux=flux_val, order=self.order,
                     g3_source=self.g3_source,
                     g3_delta_max=self.g3_delta_max,
+                    pulse_kwargs=self._pulse_kwargs(),
+                    pulse_tag=self._pulse_tag(),
                 )
+
+    def measure_details(
+        self,
+        flux: float | None = None,
+        omega_d: float | None = None,
+    ) -> FrequencyMeasurementDetails:
+        flux_val = self.flux if flux is None else float(flux)
+        drive = (
+            omega_d if omega_d is not None
+            else self.omega_d if self.omega_d is not None
+            else self.qubit.frequency
+        )
+        if self.method == "ramsey":
+            return _fit_ramsey_frequency(
+                self.qubit, drive, self.tau_list, self.t_rabi, self.t_global,
+                flux=flux_val, f_artificial=self.f_artificial,
+                pulse_kwargs=self._pulse_kwargs(), return_details=True,
+            )
+        return _measure_frequency_transient(
+            self.qubit, drive, self.t_rabi, self.t_global,
+            flux=flux_val, order=self.order, g3_source=self.g3_source,
+            g3_delta_max=self.g3_delta_max, pulse_kwargs=self._pulse_kwargs(),
+            pulse_tag=self._pulse_tag(), return_details=True,
+        )
+
+    def _pulse_kwargs(self) -> dict:
+        return {
+            "rotation_angle": self.rotation_angle,
+            "rabi_rate": self.rabi_rate,
+            "envelope": self.envelope,
+            "envelope_sigma": self.envelope_sigma,
+        }
+
+    def _pulse_tag(self) -> tuple:
+        if isinstance(self.envelope, str):
+            envelope_tag = self.envelope.lower()
+        else:
+            envelope_tag = hash(np.asarray(self.envelope, dtype=float).tobytes())
+        return (
+            envelope_tag,
+            self.rotation_angle,
+            self.rabi_rate,
+            self.envelope_sigma,
+        )
 
     # ------------------------------------------------------------------
     def calibrate(self) -> CalibrationTable:
