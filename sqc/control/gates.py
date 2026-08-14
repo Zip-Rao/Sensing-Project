@@ -13,7 +13,7 @@ from typing import Optional
 
 import numpy as np
 from scipy.interpolate import interp1d
-from qutip import Qobj, destroy, propagator, qeye, tensor, mesolve, Options, basis
+from qutip import Qobj, destroy, propagator, qeye, tensor, mesolve, basis
 
 
 def ideal_iSWAP() -> Qobj:
@@ -362,7 +362,7 @@ def simulate_cz_from_flux(
 
         comp_columns = [0, 1, qubit2.n_levels, qubit2.n_levels + 1]
         for idx, psi0 in enumerate([psi00, psi01, psi10, psi11]):
-            result = mesolve(H_evo, psi0, t, [], [], options=Options(**opts))
+            result = mesolve(H_evo, psi0, t, c_ops=[], e_ops=[], options=opts)
             U_full[:, comp_columns[idx]] = result.states[-1].full().flatten()
 
             if idx == 3:  # |11⟩ — track conditional phase and leakage
@@ -386,7 +386,7 @@ def simulate_cz_from_flux(
                     traj_phase[k] = float(np.angle(bra11.overlap(state)))
     else:
         # propagator path: faster, no intermediate states
-        U_full = propagator(H, T, options=Options(**opts)).full()
+        U_full = propagator(H, T, options=opts).full()
         traj_phase = traj_leak = None
 
     # -- 4. Extract gate metrics -------------------------------------------

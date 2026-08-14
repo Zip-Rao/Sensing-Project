@@ -46,6 +46,15 @@ class RamseyExperiment(Experiment):
         First pi/2 pulse phase (rad). Default 0.
     phase2 : float
         Second pi/2 pulse phase (rad). Default 0.
+    rotation_angle : float or None
+        Integrated rotation angle of each pulse. Default pi/2.
+    rabi_rate : float or None
+        Fixed peak Rabi rate. Mutually exclusive with rotation_angle.
+    envelope : {'square', 'gaussian'} or array-like
+        Dimensionless control-pulse envelope. Default "square".
+    envelope_sigma : float or None
+        Gaussian standard deviation (ns). Defaults to one quarter of the
+        pulse duration.
     """
 
     qubit: object  # TransmonQubit (duck typed)
@@ -59,8 +68,14 @@ class RamseyExperiment(Experiment):
     t_global: np.ndarray = field(default_factory=lambda: CONFIG.pulse.t_global.copy())
     phase1: float = 0.0
     phase2: float = 0.0
+    rotation_angle: float | None = np.pi / 2
+    rabi_rate: float | None = None
+    envelope: object = "square"
+    envelope_sigma: float | None = None
 
     def __post_init__(self):
+        if self.rotation_angle is not None and self.rabi_rate is not None:
+            raise ValueError("rotation_angle and rabi_rate are mutually exclusive")
         if self.omega_d is None:
             self.omega_d = self.qubit.frequency
         if self.flux_signal is None:
@@ -115,6 +130,10 @@ class RamseyExperiment(Experiment):
                 phase1=self.phase1,
                 phase2=self.phase2,
                 qubit=self.qubit,
+                rotation_angle=self.rotation_angle,
+                rabi_rate=self.rabi_rate,
+                envelope=self.envelope,
+                envelope_sigma=self.envelope_sigma,
             )
 
             H = QobjEvo(
@@ -154,6 +173,10 @@ class RamseyExperiment(Experiment):
             config={
                 "phase1": self.phase1,
                 "phase2": self.phase2,
+                "rotation_angle": self.rotation_angle,
+                "rabi_rate": self.rabi_rate,
+                "envelope": self.envelope,
+                "envelope_sigma": self.envelope_sigma,
                 "t_rabi": self.t_rabi.copy(),
                 "t_global": self.t_global.copy(),
             },

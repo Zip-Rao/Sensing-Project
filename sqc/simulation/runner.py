@@ -88,7 +88,7 @@ class MesolveRunner(RunnerBase):
         opts = dict(self.options or {})
         opts.setdefault("store_states", store_states)
         H = QobjEvo(H_list, tlist=t_list, order=1)
-        result = mesolve(H, psi0, t_list, c_ops, e_ops, options=opts)
+        result = mesolve(H, psi0, t_list, c_ops=c_ops, e_ops=e_ops, options=opts)
         return ExperimentResult(
             data={
                 "expect": np.array(result.expect),
