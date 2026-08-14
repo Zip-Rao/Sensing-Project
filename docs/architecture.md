@@ -824,6 +824,18 @@ result = exp.run()
 # result.data["flux_samples"]  → 磁通信号快照
 ```
 
+控制脉冲包络可通过实验对象直接配置。例如，下面的参数让两个 π/2 脉冲采用
+标准差为 2 ns 的高斯包络；`rotation_angle` 与 `rabi_rate` 互斥：
+
+```python
+exp = RamseyExperiment(
+    qubit=q,
+    envelope="gaussian",
+    envelope_sigma=2.0,
+    rotation_angle=np.pi / 2,
+)
+```
+
 **默认参数**（v2.0 起从 `CONFIG.pulse` 派生）：
 - `t_rabi`: `CONFIG.pulse.t_rabi`（20 点，0..9.5 ns，dt=0.5 ns）
 - `tau_list`: `CONFIG.pulse.tau_list`（500 点，0..249.5 ns）
@@ -2719,6 +2731,7 @@ mesolve(H_list, psi0, t_array, c_ops, e_ops)
 | v2.12 | 2026-07-16 | **闭环反馈新增 `step_method="gradient"`**(§4.7.3)。阻尼割线法 (damped secant) 数值梯度 Newton 步,无需 V_a/V_b 预括号,仅需 V_seed 起点。新增 damping/clamp/best-point 三重抗噪: damping∈(0,1] 压过冲, max_bias_step 钳位, 追踪 |residual| 最小点回写。首步/Δe=0 时退化为固定探测步。`SinglePointFrequencyCalibration` 新增 V_seed/damping/first_bias_step/max_bias_step 字段; `_build_result` 新增 `extra` 可选参数。+纯增量分支, src/ 未变(R1)。 |
 | v2.11 | 2026-06-07 | **瞬态测频 order≥3 修复 + Route B 落地**(§4.7.3 v2.11 注)。(1) 修复 order≥3 三次 Newton 的**符号 bug**(此前返回 ω_d−Δ,误差≈−2Δ,比线性更差)——统一到 δω=−Δ 约定。(2) `_calibrate_g3_taylor` 的 `delta_max_ghz` 默认改 `None`=**自适应**(旧默认 0.08 使 G1 偏低~0.6×、G3 全错);新增 `FrequencyMeasurement.g3_delta_max`。(3) **Route B** `g3_source="kernel_full"`:完整非对角核三重积分 ∭k₃ dt³(`_calibrate_g3_kernel_full`),免 Δ 扫描,与拟合互校。(4) **移除** `diag_legacy`(错误对象,小~170×),未知值抛 ValueError。效果:有效区 order3-fit 比线性精度↑~10×。+5 单元测试。src/ 未变(R1)。 |
 | v2.19 | 2026-08-10 | **频率标定事件驱动状态机 V2**。(1) 新增 `sqc/calibration/frequency_control.py`: `DampedSecantTracker` + 4 种数据结构（`FrequencyEstimate`, `TrackSnapshot`, `TrackProposal`, `TrackStepResult`）——从 `_closed_loop_gradient()` 提取的纯数学控制器，被旧 batch API 和新逐步接口共享。(2) 新增 `sqc/workflows/frequency_state_machine.py`: `FrequencyStateMachine` ——六状态（Acquire→Track→Verify→Lock + Reacquire + SafeStop）事件驱动协议，含 5 命令/事件/稳定原因码/预算/快照回放。`FrequencyCalibrationConfig` 管理阈值、局部有效性守卫、监测迟滞、验证限制和运行预算。(3) 新增 `sqc/workflows/frequency_backends.py`: `SQCExecutor`（Ramsey/Transient/Monitor 后端）+ `FaultInjectionExecutor`（可控故障注入）；确定性后端显式标记 `uncertainty_source="deterministic_zero"`。(4) 新增 `sqc/workflows/frequency_runtime.py`: `FrequencyCalibrationRuntime` ——事件循环编排 + `DampedSecantTracker` 集成 + 完整 journal/checkpoint + `save_run()`/`load_run()` 持久化；恢复采用 pending command 原 ID 重放的 at-least-once 语义，要求 executor 按 `command_id` 幂等；`CancellationToken`、`request_cancel()`、可唤醒 monitor 等待和 `KeyboardInterrupt` 转换提供协作式安全中断。(5) `CALIBRATED` 改为进入长期 Lock 的非终止里程碑，有限运行或中断经 SafeStop/SafeHold 确认退出。旧 `FrequencyCalibrationWorkflow` / `SinglePointFrequencyCalibration` API 不变。详见 §4.7.6 和 §4.8.4。 |
+| v2.20 | 2026-08-14 | `RamseyExperiment` 新增 `rotation_angle`、`rabi_rate`、`envelope` 与 `envelope_sigma` 控制脉冲参数，并转发到 `create_ramsey_pulse`；默认方波 π/2 行为保持不变。新增高斯 Ramsey 条纹与频率验证用户示例。 |
 
 下一步阅读：
 - 完整设计背景:`idea/refactor/_refactor_plan.md`(内部开发文档,不随发行分发)

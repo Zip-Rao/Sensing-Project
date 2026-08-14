@@ -96,7 +96,7 @@ $\pi/2-\tau-\pi/2$ 序列,通过测自由演化期间累积的相位反映外磁
 
 **构造**
 
-`RamseyExperiment(qubit, flux_signal=None, omega_d=None, tau_list=None, t_global=None, phase1=π/2, phase2=0.0)`
+`RamseyExperiment(qubit, flux_signal=None, omega_d=None, tau_list=None, t_global=None, phase1=0.0, phase2=0.0, rotation_angle=π/2, rabi_rate=None, envelope="square", envelope_sigma=None)`
 
 **字段**
 
@@ -107,13 +107,20 @@ $\pi/2-\tau-\pi/2$ 序列,通过测自由演化期间累积的相位反映外磁
 | `omega_d` | float | 驱动频率(rad·GHz) | 比特甜点频率 |
 | `tau_list` | `np.ndarray` | 自由演化时间扫描(ns) | `CONFIG.pulse.tau_list` |
 | `t_global` | `np.ndarray` | 全局时间轴(ns) | `CONFIG.pulse.t_global` |
-| `phase1` | float | 第一个 $\pi/2$ 脉冲相位 | `π/2` |
+| `phase1` | float | 第一个 $\pi/2$ 脉冲相位 | `0.0` |
 | `phase2` | float | 第二个 $\pi/2$ 脉冲相位 | `0.0` |
+| `rotation_angle` | float 或 None | 每个控制脉冲的积分转角(rad) | $\pi/2$ |
+| `rabi_rate` | float 或 None | 固定峰值 Rabi 速率；与 `rotation_angle` 互斥 | `None` |
+| `envelope` | str 或 array | 方波、高斯或自定义控制包络 | `"square"` |
+| `envelope_sigma` | float 或 None | 高斯包络标准差(ns) | 脉冲时长的 $1/4$ |
 
 **方法**
 
 - `run() -> ExperimentResult`：先把磁通信号投影到全局时间轴、经 `qubit_in_mag`
   耦合进比特(旋转系),再逐 `tau` 构建 Ramsey 序列跑演化,收集末态 $p_e$。
+
+设置 `envelope="gaussian"` 可令两个控制脉冲采用高斯包络；实验类会把包络与
+转角参数直接转发给 `create_ramsey_pulse()`。
 
 **输出**
 

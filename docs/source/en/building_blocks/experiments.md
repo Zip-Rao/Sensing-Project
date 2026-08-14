@@ -114,7 +114,7 @@ frequency-calibration mainlines.
 
 **Construction**
 
-`RamseyExperiment(qubit, flux_signal=None, omega_d=None, tau_list=None, t_global=None, phase1=π/2, phase2=0.0)`
+`RamseyExperiment(qubit, flux_signal=None, omega_d=None, tau_list=None, t_global=None, phase1=0.0, phase2=0.0, rotation_angle=π/2, rabi_rate=None, envelope="square", envelope_sigma=None)`
 
 **Fields**
 
@@ -125,8 +125,12 @@ frequency-calibration mainlines.
 | `omega_d` | float | Drive frequency (rad·GHz) | Qubit sweet-spot frequency |
 | `tau_list` | `np.ndarray` | Free-evolution time sweep (ns) | `CONFIG.pulse.tau_list` |
 | `t_global` | `np.ndarray` | Global time axis (ns) | `CONFIG.pulse.t_global` |
-| `phase1` | float | First $\pi/2$ pulse phase | `π/2` |
+| `phase1` | float | First $\pi/2$ pulse phase | `0.0` |
 | `phase2` | float | Second $\pi/2$ pulse phase | `0.0` |
+| `rotation_angle` | float or None | Integrated angle of each control pulse (rad) | $\pi/2$ |
+| `rabi_rate` | float or None | Fixed peak Rabi rate; mutually exclusive with `rotation_angle` | `None` |
+| `envelope` | str or array | Square, Gaussian, or custom control envelope | `"square"` |
+| `envelope_sigma` | float or None | Gaussian standard deviation (ns) | One quarter of pulse duration |
 
 **Methods**
 
@@ -134,6 +138,10 @@ frequency-calibration mainlines.
   time axis and couples it into the qubit via `qubit_in_mag` (rotating frame),
   then builds a Ramsey sequence per `tau`, runs the evolution, and collects the
   final $p_e$.
+
+Set `envelope="gaussian"` to use Gaussian control envelopes for both pulses;
+the experiment forwards the envelope and rotation parameters directly to
+`create_ramsey_pulse()`.
 
 **Output**
 
