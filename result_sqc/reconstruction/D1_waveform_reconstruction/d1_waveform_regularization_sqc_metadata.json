@@ -1,0 +1,57 @@
+{
+  "figure": "D1",
+  "status": "formal report candidate",
+  "control": {
+    "envelope": "gaussian",
+    "rotation_angle_rad": 1.5707963267948966,
+    "gaussian_sigma_ns": 2.0,
+    "pulse_window_ns": 9.5,
+    "kernel_recomputed_for_each_signal": true
+  },
+  "source_caches": {
+    "double_peak": "result_sqc\\reconstruction\\D1_waveform_reconstruction\\d1_double_peak_gaussian_cache_sqc.npz",
+    "complex": "result_sqc\\reconstruction\\D1_waveform_reconstruction\\d1_complex_gaussian_cache_sqc.npz",
+    "step": "result_sqc\\reconstruction\\D1_waveform_reconstruction\\d1_step_gaussian_cache_sqc.npz"
+  },
+  "lambda_grid": [
+    0.1,
+    0.2,
+    0.5,
+    1.0,
+    2.0,
+    3.0,
+    5.0,
+    7.5,
+    10.0,
+    15.0,
+    20.0,
+    30.0,
+    50.0
+  ],
+  "display_lambdas": [
+    1.0,
+    5.0,
+    20.0,
+    50.0
+  ],
+  "top_wiener_lambda": 10.0,
+  "baseline_lambda": 5.0,
+  "step_min_nrmse_lambda": 20.0,
+  "step_min_nrmse": 0.033824828944149204,
+  "noise": {
+    "model": "independent binomial projection sampling on signal and reference arms",
+    "n_shots_per_arm_per_point": 10000,
+    "n_realizations": 64,
+    "base_seed": 20260805,
+    "representative_seed": 20260818,
+    "uncertainty_interval": "10th-90th percentile"
+  },
+  "notes": [
+    "All quantum dynamics and kernels use Gaussian pi/2 control pulses.",
+    "Top-row Wiener reconstructions are recomputed with lambda_W=10.",
+    "The step scan adds independent binomial projection noise to the signal and reference arms.",
+    "Noisy metrics report medians over 64 realizations; bands are 10th-90th percentiles.",
+    "The step-specific noisy NRMSE minimum is not claimed as a global optimum.",
+    "Top-row LM results are rerun with the same Gaussian control pulse."
+  ]
+}

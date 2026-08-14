@@ -25,6 +25,30 @@ def _get_sensitivity(qubit) -> float:
     )
 
 
+def _free_evolution_offset(measurement) -> float:
+    """Absolute-time offset of the free-evolution window start.
+
+    In a Ramsey sequence ``pi/2 - tau - pi/2`` the free evolution does
+    NOT begin at global t=0: it starts after the first pi/2 pulse, at
+    ``t = t_rabi[-1] - t_rabi[0]``.  Because ``B(tau) = (1/kappa)
+    dphi/dtau`` samples the flux at the *end* of that window, the value
+    reconstructed at free-precession time ``tau`` physically corresponds
+    to absolute signal time ``tau + offset``.  Ignoring this offset makes
+    the reconstructed waveform appear shifted earlier by one pi/2 pulse
+    duration.
+
+    The offset is read from ``measurement.config["t_rabi"]`` (populated
+    by RamseyExperiment).  Falls back to 0.0 when unavailable, preserving
+    legacy behaviour.
+    """
+    cfg = getattr(measurement, "config", None) or {}
+    t_rabi = cfg.get("t_rabi") if isinstance(cfg, dict) else None
+    if t_rabi is None or len(t_rabi) < 2:
+        return 0.0
+    t_rabi = np.asarray(t_rabi, dtype=float)
+    return float(t_rabi[-1] - t_rabi[0])
+
+
 @dataclass
 class RamseyReconstruction(Reconstruction):
     """Ramsey interferometry reconstruction.
@@ -44,7 +68,14 @@ class RamseyReconstruction(Reconstruction):
     k_span: int = 3
 
     def reconstruct(self, measurement, **kwargs) -> np.ndarray:
-        """Reconstruct B(τ) from Ramsey experiment data."""
+        """Reconstruct B(τ) from Ramsey experiment data.
+
+        Returns the reconstructed field array indexed by free-precession
+        time ``tau``.  Note the returned samples are aligned to the *end*
+        of each free-evolution window; to overlay against the true flux
+        signal on absolute time, use :meth:`time_axis` /
+        :meth:`reconstruct_with_time` (which apply the pi/2-pulse offset).
+        """
         match self.method:
             case "iq":
                 return self._reconstruct_iq(measurement)
@@ -52,6 +83,29 @@ class RamseyReconstruction(Reconstruction):
                 return self._reconstruct_unwrap(measurement)
             case _:
                 raise ValueError(f"Unknown method: {self.method}")
+
+    def time_axis(self, measurement) -> np.ndarray:
+        """Absolute signal-time axis for the reconstructed field.
+
+        Equals ``measurement.axes["tau"] + offset`` where ``offset`` is
+        the first pi/2 pulse duration (see :func:`_free_evolution_offset`).
+        This is the axis the reconstructed B should be plotted against to
+        line up with the true flux signal.
+        """
+        tau = np.asarray(measurement.axes["tau"], dtype=float)
+        return tau + _free_evolution_offset(measurement)
+
+    def reconstruct_with_time(self, measurement, **kwargs):
+        """Reconstruct B and return it together with the absolute-time axis.
+
+        Returns
+        -------
+        (t, B) : tuple[np.ndarray, np.ndarray]
+            ``t`` is the offset-corrected absolute signal time (ns) and
+            ``B`` the reconstructed field, same length.
+        """
+        B = self.reconstruct(measurement, **kwargs)
+        return self.time_axis(measurement), B
 
     # -- IQ ----------------------------------------------------------------
 

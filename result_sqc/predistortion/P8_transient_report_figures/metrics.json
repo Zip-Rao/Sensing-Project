@@ -1,0 +1,10 @@
+{
+  "e1_waveform_rmse_phi0": 0.00016763601948119206,
+  "e1_transient_gain": 0.3813846771778822,
+  "e2_nominal_infidelity_uncorrected": 0.08321613199191602,
+  "e2_nominal_infidelity_corrected": 0.0005948998060224531,
+  "e2_grid_shape": [
+    17,
+    17
+  ]
+}

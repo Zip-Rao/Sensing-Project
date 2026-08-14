@@ -1,0 +1,41 @@
+{
+  "figure": "D3",
+  "generated_utc": "2026-08-05T13:16:55.042095+00:00",
+  "git_commit": "6f27dd350974a5ca6a4b503614737f6fffe5891a",
+  "work_point_phi0": 0.9553166181245093,
+  "control": {
+    "envelope": "gaussian",
+    "rotation_angle_rad": 1.5707963267948966,
+    "pulse_window_ns": 10.0,
+    "envelope_sigma_ns": 2.0,
+    "cache_version": 2
+  },
+  "wiener_lambda": 5.0,
+  "lm_lambda": 100.0,
+  "lm_basis": "fourier",
+  "lm_n_basis": 100,
+  "lm_max_iter": 20,
+  "amplitudes": [
+    0.01,
+    0.02,
+    0.03,
+    0.04,
+    0.05,
+    0.06,
+    0.08,
+    0.1
+  ],
+  "lm_amplitudes": [
+    0.01,
+    0.04,
+    0.08,
+    0.1
+  ],
+  "amplitude_axis_note": "Figure uses realized peak flux_samples, not the type=4 parameter",
+  "model_error": "Relative L2 error of exact vs local-linear frequency shift",
+  "source_caches": [
+    "result_sqc/reconstruction/D3_nonlinearity_boundary/gaussian_amplitude_*_sqc.npz",
+    "result_sqc/reconstruction/D3_nonlinearity_boundary/gaussian_workpoint_scan_sqc.npz",
+    "result_sqc/reconstruction/D3_nonlinearity_boundary/lm_amplitude_*_sqc.npz"
+  ]
+}

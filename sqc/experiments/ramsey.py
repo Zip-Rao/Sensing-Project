@@ -7,6 +7,7 @@ Physical model: pi/2 - tau - pi/2 sequence measures accumulated
 phase during free evolution, which reflects qubit frequency shifts
 caused by external flux Phi(t).
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -32,7 +33,7 @@ class RamseyExperiment(Experiment):
     qubit : TransmonQubit
         Qubit object (src or sqc version).
     flux_signal : FluxSignal or None
-        Flux signal. If None, creates default sinusoidal signal.
+        Flux signal. If None, creates the legacy constant test signal.
     omega_d : float or None
         Drive frequency. Default qubit.frequency.
     t_rabi : np.ndarray
@@ -53,15 +54,9 @@ class RamseyExperiment(Experiment):
 
     # -- P9.B --
     control_line: object | None = None
-    t_rabi: np.ndarray = field(
-        default_factory=lambda: CONFIG.pulse.t_rabi.copy()
-    )
-    tau_list: np.ndarray = field(
-        default_factory=lambda: CONFIG.pulse.tau_list.copy()
-    )
-    t_global: np.ndarray = field(
-        default_factory=lambda: CONFIG.pulse.t_global.copy()
-    )
+    t_rabi: np.ndarray = field(default_factory=lambda: CONFIG.pulse.t_rabi.copy())
+    tau_list: np.ndarray = field(default_factory=lambda: CONFIG.pulse.tau_list.copy())
+    t_global: np.ndarray = field(default_factory=lambda: CONFIG.pulse.t_global.copy())
     phase1: float = 0.0
     phase2: float = 0.0
 
@@ -99,12 +94,12 @@ class RamseyExperiment(Experiment):
         flux_routed = self._route_flux(self.flux_signal)
         flux_samples_global = flux_routed.samples_on(t_global)
         flux_global = FluxSignal(
-            type=8, t_list=t_global, signal=flux_samples_global,
+            type=8,
+            t_list=t_global,
+            signal=flux_samples_global,
             trigger=0.0,
         )
-        self.qubit.qubit_in_mag(
-            flux_global, frame=1, omega_d=self.omega_d
-        )
+        self.qubit.qubit_in_mag(flux_global, frame=1, omega_d=self.omega_d)
 
         psi_e = basis(self.qubit.n_levels, 1)
         p_e_list = np.zeros(len(self.tau_list))
@@ -114,29 +109,30 @@ class RamseyExperiment(Experiment):
             # Each sub-pulse carries its own global trigger, so we no
             # longer need the ``ctrl.t_list -= ...`` offset hack.
             ctrl = create_ramsey_pulse(
-                self.t_rabi, tau,
+                self.t_rabi,
+                tau,
                 omega_d=self.omega_d,
                 phase1=self.phase1,
                 phase2=self.phase2,
                 qubit=self.qubit,
             )
 
-            H = (
-                QobjEvo(
-                    self.qubit.H_list,
-                    tlist=t_global,
-                    order=1,
-                )
-                + QobjEvo(
-                    ctrl.hamiltonian_on(t_global),
-                    tlist=t_global,
-                    order=1,
-                )
+            H = QobjEvo(
+                self.qubit.H_list,
+                tlist=t_global,
+                order=1,
+            ) + QobjEvo(
+                ctrl.hamiltonian_on(t_global),
+                tlist=t_global,
+                order=1,
             )
             # max_step prevents adaptive stepper from skipping over
             # narrow pi/2 pulse windows on the long t_global axis.
             result = mesolve(
-                H, self.qubit.state, t_global, [],
+                H,
+                self.qubit.state,
+                t_global,
+                [],
                 e_ops=[psi_e * psi_e.dag()],
                 options={"max_step": float(CONFIG.awg.dt)},
             )

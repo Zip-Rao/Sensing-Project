@@ -597,35 +597,41 @@ class _ProtocolDrivenMeasurement:
             )
         if self.dt is None:
             self.dt = float(CONFIG.awg.dt)
-        self._warn_flux_bias()
+        self._auto_flux_bias()
 
-    def _warn_flux_bias(self):
-        """Warn if the qubit flux bias is sub-optimal for the protocol."""
-        import warnings
+    def _auto_flux_bias(self):
+        """Auto-set the qubit flux bias to the protocol-appropriate value.
 
+        Cryoscope requires the sweet spot (flux≈0) where dω/dΦ≈0;
+        transient / delay_ramsey / pi_pulse require a high-sensitivity
+        bias where |dω/dΦ| is maximised (≈0.10–0.25 Φ₀ for typical
+        transmon parameters).
+        """
         flux = float(getattr(self.qubit, "flux", 0.0))
+
         if self.protocol == "cryoscope":
-            if abs(flux) > 1e-9:
-                warnings.warn(
-                    "Cryoscope works best at sweet spot "
-                    f"(flux=0). Current flux={flux:.4f}.",
-                    stacklevel=2,
-                )
+            target = 0.0
+            if abs(flux - target) > 1e-9:
+                if hasattr(self.qubit, "change_flux"):
+                    self.qubit.change_flux(target)
+                else:
+                    self.qubit.flux = target
         elif self.protocol in ("delay_ramsey", "transient", "pi_pulse"):
             try:
                 fluxes = np.linspace(0, 0.25, 101)
                 kappas = np.abs(
                     [self.qubit.frequency_sensitivity(f) for f in fluxes]
                 )
-                kappa_max = fluxes[int(np.argmax(kappas))]
+                target = float(fluxes[int(np.argmax(kappas))])
+                if abs(target) < 0.01:
+                    target = 0.1  # fallback for atypical params
             except Exception:
-                kappa_max = 0.1
-            if abs(flux) < 0.01 and abs(kappa_max) > 0.01:
-                warnings.warn(
-                    f"{self.protocol} works best at kappa-max flux bias "
-                    f"(~{kappa_max:.3f}). Current flux={flux:.4f}.",
-                    stacklevel=2,
-                )
+                target = 0.1
+            if abs(flux - target) > 1e-9:
+                if hasattr(self.qubit, "change_flux"):
+                    self.qubit.change_flux(target)
+                else:
+                    self.qubit.flux = target
 
     # -- public API -----------------------------------------------------------
 
@@ -670,7 +676,20 @@ class _ProtocolDrivenMeasurement:
 
         rec_kwargs = self._build_rec_kwargs(result)
         rec = RecCls(**rec_kwargs)
-        flux_R = rec.reconstruct(result)
+
+        # -- build reconstruct() kwargs (separate from constructor kwargs) --
+        reconstruct_kwargs: dict = {}
+        if self.protocol == "transient":
+            kernel = np.asarray(result.data.get("kernel", []))
+            if len(kernel) == 0:
+                raise ValueError(
+                    "Transient experiment result missing 'kernel'. "
+                    "The experiment must compute a control kernel for "
+                    "Wiener deconvolution."
+                )
+            reconstruct_kwargs["kernel"] = kernel
+
+        flux_R = rec.reconstruct(result, **reconstruct_kwargs)
 
         t_out = np.asarray(flux_R.t_list, dtype=float)
         s_out = np.asarray(flux_R.samples, dtype=float)

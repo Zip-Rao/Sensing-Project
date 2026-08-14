@@ -1,0 +1,16 @@
+{"version": 0, "from": "acquire", "to": "acquire", "reason": "SEED_RELIABLE", "note": "run started", "candidate_bias": null, "f_hat": null, "uncertainty": 0.0}
+{"version": 1, "from": "acquire", "to": "track", "reason": "SEED_RELIABLE", "note": "", "candidate_bias": 0.0, "f_hat": 23.752350418941937, "uncertainty": 3.0018040492274836e-05}
+{"version": 2, "from": "track", "to": "track", "reason": "CORRECTION_REQUIRED", "note": "", "candidate_bias": 0.0, "f_hat": 23.75311730413443, "uncertainty": 0.00022052518690349914}
+{"version": 3, "from": "track", "to": "track", "reason": "CORRECTION_REQUIRED", "note": "", "candidate_bias": -0.005, "f_hat": 23.72291052920674, "uncertainty": 0.00023059184282749547}
+{"version": 4, "from": "track", "to": "verify", "reason": "CANDIDATE_REACHED", "note": "", "candidate_bias": -0.009443382458141981, "f_hat": 23.695033754687614, "uncertainty": 0.0002235063464559921}
+{"version": 5, "from": "verify", "to": "track", "reason": "CORRECTION_REQUIRED", "note": "", "candidate_bias": -0.009443382458141981, "f_hat": 23.6948735970855, "uncertainty": 0.0002206577896972754}
+{"version": 6, "from": "track", "to": "verify", "reason": "CANDIDATE_REACHED", "note": "", "candidate_bias": -0.010143007306568868, "f_hat": 23.69496801510907, "uncertainty": 0.0002172179960947414}
+{"version": 7, "from": "verify", "to": "track", "reason": "CORRECTION_REQUIRED", "note": "", "candidate_bias": -0.010143007306568868, "f_hat": 23.695943436059526, "uncertainty": 0.00021662290312885092}
+{"version": 8, "from": "track", "to": "track", "reason": "CORRECTION_REQUIRED", "note": "", "candidate_bias": -0.006696426771135407, "f_hat": 23.71844206191011, "uncertainty": 0.00022414083187857027}
+{"version": 9, "from": "track", "to": "verify", "reason": "CANDIDATE_REACHED", "note": "", "candidate_bias": -0.010261063894717303, "f_hat": 23.695081511542053, "uncertainty": 0.00022732690332770433}
+{"version": 10, "from": "verify", "to": "track", "reason": "CORRECTION_REQUIRED", "note": "", "candidate_bias": -0.010261063894717303, "f_hat": 23.6949382723786, "uncertainty": 0.0002180197114696779}
+{"version": 11, "from": "track", "to": "verify", "reason": "CANDIDATE_REACHED", "note": "", "candidate_bias": -0.010938424615252506, "f_hat": 23.690045303658025, "uncertainty": 0.00021921545390433876}
+{"version": 12, "from": "verify", "to": "verify", "reason": "VERIFY_PASSED", "note": "", "candidate_bias": -0.010938424615252506, "f_hat": 23.690635071258146, "uncertainty": 0.00021384921852525625}
+{"version": 13, "from": "verify", "to": "lock", "reason": "VERIFY_PASSED", "note": "", "candidate_bias": -0.010938424615252506, "f_hat": 23.691186715880573, "uncertainty": 0.00023131744945371224}
+{"version": 14, "from": "lock", "to": "verify", "reason": "DRIFT_SUSPECTED", "note": "", "candidate_bias": -0.010938424615252506, "f_hat": 23.726203519999686, "uncertainty": 0.022960395292954724}
+{"version": 15, "from": "verify", "to": "safe_stop", "reason": "BUDGET_EXHAUSTED", "note": "", "candidate_bias": -0.010938424615252506, "f_hat": 23.726203519999686, "uncertainty": 0.022960395292954724}

@@ -1,7 +1,7 @@
 # 扩展平台
 
-三条内置管道是示例,不是边界。栈的每一层都暴露一个抽象基类;继承它,你的对象就能
-与平台其余部分组合。本页给出两个最常见的配方。
+三条内置管道是示例,不是边界。栈的每一层都暴露一个抽象基类;继承它,新对象即可
+与平台其余部分组合。本页给出两个最常见的用法。
 
 ## 添加新的实验协议
 
@@ -44,7 +44,7 @@ class MyProtocolExperiment(Experiment):
 ```
 
 {py:class}`~sqc.simulation.ExperimentResult` 携带 `data`、`axes`、`metadata`、
-`config` 字典 —— 这是每个实验返回的统一契约。
+`config` 字典,这是每个实验返回的统一契约。
 
 ## 添加新的重建算法
 
@@ -83,5 +83,5 @@ class MyAlgoReconstruction(Reconstruction):
 | calibration | {py:class}`~sqc.calibration.Calibration` | 新的标定流程 |
 | workflows | {py:class}`~sqc.workflows.Workflow` | 新的端到端管道 |
 
-遵循依赖规则({doc}`architecture`):你的子类可以 import 其下方的层,绝不可 import
+遵循依赖规则({doc}`architecture`):子类可以 import 其下方的层,绝不可 import
 上方的层。

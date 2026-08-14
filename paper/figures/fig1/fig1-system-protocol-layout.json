@@ -1,0 +1,14 @@
+{
+  "canvas_mm": [180.0, 106.0],
+  "layout": "two panels on the first row and one centered workflow panel below",
+  "panels": {
+    "a": {"source": "fig1a-v2-editable.svg", "x_mm": 0.0, "y_mm": 0.0, "width_mm": 90.0},
+    "b": {"source": "fig1b-v6-editable.svg", "x_mm": 98.0, "y_mm": 7.0, "width_mm": 80.0},
+    "c": {"source": "fig1d-v8-editable.svg", "x_mm": 24.0, "y_mm": 61.0, "width_mm": 132.0}
+  },
+  "notes": [
+    "Panel aspect ratios are preserved.",
+    "Panel labels are replaced by one uniform composite label layer.",
+    "No panel frames or section background blocks are added."
+  ]
+}

@@ -133,17 +133,31 @@ def create_ramsey_pulse(
     phase2=0.0,
     qubit=None,
     trigger=0.0,
+    rotation_angle=None,
+    rabi_rate=None,
+    envelope="square",
+    envelope_sigma=None,
 ):
-    """Build Ramsey sequence: pi/2 - tau - pi/2.
+    """Build a two-pulse Ramsey sequence with configurable rotations.
+
+    By default this reproduces the historical ``pi/2 - tau - pi/2``
+    square-pulse sequence.  Two amplitude modes are available:
+
+    - ``rotation_angle`` sets the integrated area of each pulse;
+    - ``rabi_rate`` fixes the peak Rabi rate and lets the pulse area follow
+      from the supplied time axis and envelope.
+
+    The two modes are mutually exclusive.  If neither is supplied,
+    ``rotation_angle=pi/2`` is used for backward compatibility.
 
     Each sub-pulse is assigned an absolute ``trigger`` (relative to
-    global t=0).  The first pi/2 starts at ``trigger``; the second
-    pi/2 starts at ``trigger + (t_rabi[-1] - t_rabi[0]) + tau``.
+    global t=0).  The first pulse starts at ``trigger``; the second starts at
+    ``trigger + (t_rabi[-1] - t_rabi[0]) + tau``.
 
     Parameters
     ----------
     t_rabi : array-like
-        Time axis for pi/2 pulse (ns).
+        Local time axis for each control pulse (ns).
     tau : float
         Free evolution time (ns).
     omega_d : float
@@ -156,24 +170,72 @@ def create_ramsey_pulse(
         Qubit for n_levels resolution. If None, defaults to 2-level.
     trigger : float
         Global start time of the sequence (ns).
+    rotation_angle : float or None
+        Target rotation angle of each pulse (rad).  ``None`` defaults to
+        ``pi/2`` when ``rabi_rate`` is also None.
+    rabi_rate : float or None
+        Peak Rabi rate.  When supplied, the achieved rotation angle is the
+        integral of the resulting envelope and ``rotation_angle`` must be
+        None.  This mode is useful for fixed-drive angle/duration scans.
+    envelope : {'square', 'gaussian'} or array-like
+        Dimensionless pulse shape.  A custom array must match ``t_rabi``.
+    envelope_sigma : float or None
+        Gaussian standard deviation (ns).  Defaults to one quarter of the
+        pulse duration and is ignored for other envelope types.
 
     Returns
     -------
     CompositePulse
     """
+    t_rabi = np.asarray(t_rabi, dtype=float)
+    if t_rabi.ndim != 1 or len(t_rabi) < 2:
+        raise ValueError("t_rabi must be a one-dimensional array with >=2 points")
+    if not np.all(np.diff(t_rabi) > 0):
+        raise ValueError("t_rabi must be strictly increasing")
+    if rotation_angle is not None and rabi_rate is not None:
+        raise ValueError("rotation_angle and rabi_rate are mutually exclusive")
+
+    duration = float(t_rabi[-1] - t_rabi[0])
+    if isinstance(envelope, str):
+        kind = envelope.lower()
+        if kind == "square":
+            profile = np.ones_like(t_rabi)
+        elif kind == "gaussian":
+            sigma = duration / 4.0 if envelope_sigma is None else float(envelope_sigma)
+            if sigma <= 0:
+                raise ValueError("envelope_sigma must be positive")
+            center = 0.5 * (t_rabi[0] + t_rabi[-1])
+            profile = np.exp(-0.5 * ((t_rabi - center) / sigma) ** 2)
+        else:
+            raise ValueError("envelope must be 'square', 'gaussian', or an array")
+    else:
+        profile = np.asarray(envelope, dtype=float)
+        if profile.shape != t_rabi.shape:
+            raise ValueError("custom envelope must have the same shape as t_rabi")
+        if not np.all(np.isfinite(profile)):
+            raise ValueError("custom envelope must contain only finite values")
+
+    if rabi_rate is None:
+        target_angle = np.pi / 2.0 if rotation_angle is None else float(rotation_angle)
+        area = float(np.trapezoid(profile, t_rabi))
+        if abs(area) < 1e-12:
+            raise ValueError("pulse envelope has zero area; cannot set rotation_angle")
+        samples = profile * (target_angle / area)
+    else:
+        peak = float(np.max(np.abs(profile)))
+        if peak < 1e-12:
+            raise ValueError("pulse envelope has zero peak; cannot set rabi_rate")
+        samples = profile * (float(rabi_rate) / peak)
+
     if tau != 0.0:
         Omega_0 = Signal(type=0, t_list=_gap(tau))
     else:
         Omega_0 = None
 
-    Omega_1 = Signal(
-        type=1,
-        t_list=t_rabi,
-        amplitude=(np.pi / 2.0) / (t_rabi[-1] - t_rabi[0]),
-    )
+    Omega_1 = Signal(type=8, t_list=t_rabi, signal=samples)
     cur = float(trigger)
     pulses = []
-    # First pi/2
+    # First sensing rotation
     pulses.append(
         Pulse(
             frame=1,
@@ -204,7 +266,7 @@ def create_ramsey_pulse(
             )
         )
         cur += tau
-    # Second pi/2
+    # Second sensing rotation
     pulses.append(
         Pulse(
             frame=1,

@@ -30,6 +30,12 @@ class RabiExperiment(Experiment):
         Rabi time axis (ns). Default arange(0, 40, dt).
     omega_d : float or None
         Drive frequency (rad*GHz). Default qubit.frequency.
+    omega_rabi : float
+        Constant Rabi frequency Omega (rad*GHz). The excited-state
+        population follows p_e = sin^2(Omega * t / 2), so a constant
+        Omega drives full Rabi oscillations across ``t_rabi`` (about
+        Omega * t_rabi[-1] / (2*pi) periods). Default 1.0, matching the
+        legacy ``Protocal.evolve`` case 0 (~6 periods over 40 ns).
     """
 
     qubit: object  # TransmonQubit (duck typed)
@@ -37,16 +43,21 @@ class RabiExperiment(Experiment):
         default_factory=lambda: CONFIG.pulse.make_time(0, 40)
     )
     omega_d: float | None = None
+    omega_rabi: float = 1.0
 
     def __post_init__(self):
         if self.omega_d is None:
             self.omega_d = self.qubit.frequency
 
     def build_sequence(self):
-        """Build Rabi pulse as a Pulse object (with trigger=0)."""
+        """Build Rabi pulse as a Pulse object (with trigger=0).
+
+        Uses a constant-amplitude envelope (amplitude = ``omega_rabi``)
+        so p_e sweeps through full oscillations rather than a single
+        pi/2 rotation.
+        """
         Omega = FluxSignal(
-            type=1, t_list=self.t_rabi,
-            amplitude=(np.pi / 2.0) / (self.t_rabi[-1] - self.t_rabi[0]),
+            type=1, t_list=self.t_rabi, amplitude=self.omega_rabi,
         )
         return Pulse(
             frame=1, omega_d=self.omega_d, phase=0.0,

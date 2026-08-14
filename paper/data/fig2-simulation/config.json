@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "scope": "simulation-only numerical evidence; not experimental evidence",
+  "model": {
+    "levels": 2,
+    "EC_over_h_GHz": 0.2,
+    "EJ_over_h_GHz": 10.0,
+    "T1_ns": 100000.0,
+    "T2_ns": 50000.0,
+    "reference_drive_GHz": 3.7802780210349702,
+    "reference_flux_Phi0": 0.9553166181245093
+  },
+  "pulse": {
+    "envelope": "sin2",
+    "custom_envelope_interface": "make_envelope(kind_or_array, t_rabi)",
+    "rotation_angle_rad": 1.5707963267948966,
+    "window_ns": 10.0,
+    "dt_ns": 0.5,
+    "dt_source": "sqc.config.CONFIG.awg.dt"
+  },
+  "grids_mhz": {
+    "calibration": [-24, -20, -16, -12, -8, -4, 0, 4, 8, 12, 16, 20, 24],
+    "held_out": [-22, -18, -14, -10, -6, -2, 2, 6, 10, 14, 18, 22],
+    "candidate_held_out": [-14, -10, -6, -2, 2, 6, 10, 14],
+    "dense": {"start": -28.0, "stop": 28.0, "step": 0.5}
+  },
+  "candidate_interval": {
+    "half_width_mhz": 14.0,
+    "role": "simulation-defined candidate interval",
+    "response_max_abs_population_error": 0.01,
+    "cubic_max_abs_frequency_error_mhz": 0.5,
+    "requires_finite_continuous_branch": true,
+    "must_not_cross_either_fold": true
+  },
+  "conventions": {
+    "detuning": "Delta = omega_q - omega_d",
+    "response": "p_d = (p_plusX - p_minusX) / 2, corrected by zero-detuning b0",
+    "frequency_unit": "MHz for Delta/(2*pi)",
+    "time_unit": "ns",
+    "sigma": 0.0,
+    "random_seed": null
+  },
+  "physics_boundary": {
+    "response": "dissipative mesolve with T1 and T2",
+    "full_kernel": "ideal sesolve through KernelEstimator",
+    "comparison": "ideal-kernel versus dissipative-response cross-check",
+    "flux_coordinate": "analytic transmon dispersion inverted on the local [0.5, 1] branch; used only for simulation truth and scoring, never estimator input; S3 is restricted to the physically realizable candidate interval because the wider rotating-frame detuning grid extends above the branch maximum"
+  },
+  "cost_boundary": "counted solver calls only; not acquisition time or hardware speed"
+}

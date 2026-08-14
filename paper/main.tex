@@ -1,0 +1,68 @@
+\documentclass[aps,pra,reprint,superscriptaddress,floatfix]{revtex4-2}
+
+\usepackage{amsmath,amssymb,bm}
+\usepackage{braket}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{hyperref}
+
+\graphicspath{{figures/}}
+\hypersetup{colorlinks=true,citecolor=blue,linkcolor=blue,urlcolor=blue}
+
+\newcommand{\dd}{\mathop{}\!\mathrm{d}}
+
+\begin{document}
+
+\title{Short-pulse sequences as local probes for superconducting-qubit frequency calibration}
+
+\author{Zhouyi Rao}
+% Confirm authorship, author order, corresponding email, and ORCID.
+\affiliation{Institute of Physics, Chinese Academy of Sciences, Beijing 100190, China}
+\affiliation{University of Chinese Academy of Sciences, Beijing 100049, China}
+
+\date{\today}
+
+\begin{abstract}
+    \centering
+    ABSTRACT PLACEHOLDER: The abstract will be finalized after the main text is confirmed.  It will summarize the motivation, method, and results of the work, and highlight the key contributions and implications for superconducting-qubit frequency calibration.
+% Qubit calibration normally extracts frequency information from dedicated
+% spectroscopic scans or free evolution between control pulses.  We investigate
+% whether a short-pulse sequence can instead contribute directly to calibration
+% through the detuning response accumulated during the pulses themselves.  As a
+% case study, two orthogonal, zero-delay Ramsey sequences form a local frequency
+% discriminator whose first- and third-order response kernels map population to
+% detuning.  The cubic correction requires the full three-time kernel rather than
+% its time-diagonal restriction.  The short-pulse probe is only locally
+% invertible, so its use in a feedback loop additionally requires the drive
+% reference to track the predicted qubit frequency and keep each measurement
+% inside the calibrated response window.  In a deterministic, seeded
+% local-tracking simulation for a 20-MHz target shift, the resulting protocol
+% reaches a 5.2-kHz analytically checked residual in six iterations and 984
+% counted solver calls, compared
+% with an 18.0-kHz residual and 4000 calls for a double-sweep Ramsey baseline.
+% These results establish a concrete regime in which short-pulse sequences can
+% participate in local calibration, while also identifying response folds and
+% reference tracking as the constraints that delimit that role.
+\end{abstract}
+
+\maketitle
+
+\input{sections/01_introduction}
+\input{sections/02_transient_discriminator}
+\input{sections/03_kernel_correction}
+\input{sections/05_numerical_results}
+\input{sections/06_discussion}
+\input{sections/07_conclusion}
+
+\begin{acknowledgments}
+The authors thank colleagues who contributed to discussions and experimental
+support.  Funding and facility acknowledgments will be added after authorship
+and grant attribution are confirmed.
+\end{acknowledgments}
+
+\appendix
+\input{sections/appendix_methods}
+
+\bibliography{references}
+
+\end{document}

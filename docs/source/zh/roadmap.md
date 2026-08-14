@@ -8,8 +8,15 @@ v1 有意提供一个聚焦、稳定的公共 API:三条科研管道(波形重�
 
 - **Z 串扰重建** —— 多比特磁通串扰的表征与补偿。在提升之前,正在解决瞬态重建核中的
   一个数值缩放问题。
-- **瞬态频率标定** —— 从未知瞬态信号进行单点 $f_{01}$ 标定(频率标定类上的
-  `method="transient"` 选项)。Ramsey 路径是受支持的 v1 主线。
+- **瞬态磁通响应标定** —— 从未知瞬态信号拟合 $\Delta\omega(\Phi)$ 色散曲线,即
+  `FluxResponseCalibration(method="transient")`。仅此一个方法抛
+  `NotImplementedError`。瞬态单点频率**测量**
+  (`FrequencyMeasurement`、`SinglePointFrequencyCalibration`,以及
+  `FrequencyCalibrationWorkflow`)已实现,属于 v1 公开 API。
+  `FrequencyCalibrationWorkflow` 支持通过 `stages=[CalibrationStage(...), ...]`
+  编排任意多段流水线(每段独立选测量法、步进器、容差与测量时间轴),瞬态→Ramsey
+  hybrid 为默认 2 段预设。gradient 段还支持 `advance_when` 谓词,可按残差阈值以外的
+  运行时信号自适应切换阶段。
 - **CPMG 协议** —— Carr–Purcell–Meiboom–Gill 动力学解耦传感。
 - **可调耦合器** —— 用于双比特门方案的 `TunableCoupler` 器件。
 - **电子学层** —— 显式的 AWG/ADC/LO 抽象(`hardware/electronics.py`)。
@@ -30,6 +37,8 @@ v1 有意提供一个聚焦、稳定的公共 API:三条科研管道(波形重�
 README 徽章、贡献指南,以及可引用的 Zenodo DOI。
 
 ```{note}
-通过瞬态协议({py:class}`~sqc.experiments.TransientSensingExperiment`)的波形*重建*
-是 **v1 核心特性**,已完全支持。仅瞬态*频率标定*被推迟 —— 请勿混淆二者。
+有两项瞬态能力不要混淆。瞬态波形*重建*
+({py:class}`~sqc.experiments.TransientSensingExperiment`)与瞬态单点频率*测量*都是
+v1 核心特性,已完全支持。仅上面那条瞬态*磁通响应标定*(从未知信号拟合
+$\Delta\omega(\Phi)$ 曲线)被推迟。
 ```

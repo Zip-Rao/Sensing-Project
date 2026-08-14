@@ -1280,7 +1280,64 @@ class KernelEstimator:
                     ks[2][i] = (-fm2 + 2*fm1 - 2*fp1 + fp2) / (2 * h**3)
             return ks
 
-        if not (self.richardson and N >= 2):
+        def _fd_kernels_at_hw() -> list:
+            """5-point FD stencil via hardware VZ (phase-shifted sub-pulses).
+
+            No sigma_t dependence — phase kicks are instantaneous.
+            """
+            ks = [np.zeros(len(t_samples)) for _ in range(N)]
+            for i, t_j in enumerate(t_samples):
+                p_vals = np.zeros(5)
+                for j, mult in enumerate([-2, -1, 0, 1, 2]):
+                    pulse_kicked = pulse.with_phase_kicks(
+                        [(t_j, mult * h)]
+                    )
+                    H_pulse_kicked = QobjEvo(
+                        pulse_kicked.hamiltonian_on(pulse_tlist),
+                        tlist=pulse_tlist, order=1,
+                    )
+                    result = mesolve(
+                        H_0 + H_pulse_kicked, qubit.state, pulse_tlist,
+                        [], e_ops=[psi_e * psi_e.dag()],
+                        options=_fd_opts,
+                    )
+                    p_vals[j] = result.expect[0][-1]
+                fm2, fm1, f0, fp1, fp2 = p_vals
+                if N >= 1:
+                    ks[0][i] = (fm2 - 8*fm1 + 8*fp1 - fp2) / (12 * h)
+                if N >= 2:
+                    ks[1][i] = (-fm2 + 16*fm1 - 30*f0 + 16*fp1 - fp2) / (12 * h**2)
+                if N >= 3:
+                    ks[2][i] = (-fm2 + 2*fm1 - 2*fp1 + fp2) / (2 * h**3)
+            return ks
+
+        # -- dispatch: math vs hardware VZ ---------------------------------
+        if self.virtual_z_impl == 'hardware':
+            if not isinstance(pulse, CompositePulse):
+                warnings.warn(
+                    "virtual_z_impl='hardware' on a single Pulse falls back "
+                    "to math implementation (σ_z impulse) for higher-order "
+                    "diagonal kernels."
+                )
+                if not (self.richardson and N >= 2):
+                    kernels = _fd_kernels_at(self._sigma_t())
+                else:
+                    sigmas = self._richardson_sigma_values()
+                    per_sigma = [_fd_kernels_at(st) for st in sigmas]
+                    kernels = self._richardson_extrapolate(sigmas, per_sigma)
+                    i_min = int(np.argmin(sigmas))
+                    kernels[0] = per_sigma[i_min][0]
+            else:
+                if self.richardson and N >= 2:
+                    warnings.warn(
+                        "Richardson extrapolation is not applicable to "
+                        "virtual_z_impl='hardware' (phase kicks are "
+                        "instantaneous, no probe width to extrapolate); "
+                        "ignoring richardson=True.",
+                        RuntimeWarning,
+                    )
+                kernels = _fd_kernels_at_hw()
+        elif not (self.richardson and N >= 2):
             # Single probe width (legacy / parameterized).
             kernels = _fd_kernels_at(self._sigma_t())
         else:
@@ -1524,6 +1581,38 @@ class KernelEstimator:
 
             return _offdiag_stencils(M, h, _pe)
 
+        # -- omega hardware inner: build + evaluate (no sigma_t knob) ------
+        def _compute_offdiag_omega_hardware():
+            """Return ``[k1, (k2), (k3)]`` via hardware VZ (phase-shifted
+            sub-pulses).  No sigma_t — phase kicks are instantaneous."""
+            h = h_omega
+            _pe_cache: dict[tuple, float] = {}
+
+            def _pe_kicks(kicks_tuple: tuple) -> float:
+                if kicks_tuple in _pe_cache:
+                    return _pe_cache[kicks_tuple]
+                kicks_list = [
+                    (t_samples[idx], mult * h) for idx, mult in kicks_tuple
+                ]
+                kicks_list.sort(key=lambda x: x[0])
+                pulse_kicked = pulse.with_phase_kicks(kicks_list)
+                H_pulse_kicked = QobjEvo(
+                    pulse_kicked.hamiltonian_on(pulse_tlist),
+                    tlist=pulse_tlist, order=1,
+                )
+                result = mesolve(
+                    H_0 + H_pulse_kicked, qubit.state, pulse_tlist, [],
+                    e_ops=[psi_e * psi_e.dag()],
+                    options=_fd_opts,
+                )
+                _pe_cache[kicks_tuple] = float(result.expect[0][-1])
+                return _pe_cache[kicks_tuple]
+
+            def _pe(*specs):
+                return _pe_kicks(tuple(sorted(specs, key=lambda x: x[0])))
+
+            return _offdiag_stencils(M, h, _pe)
+
         # -- flux inner: build + evaluate (no sigma_t knob) -----------------
         def _compute_offdiag_flux():
             """Return ``[k1, (k2), (k3)]`` via summed Gaussian flux kicks."""
@@ -1565,6 +1654,31 @@ class KernelEstimator:
         # -- run -----------------------------------------------------------------
         if self.mode == 'flux':
             kernels = _compute_offdiag_flux()
+        elif self.virtual_z_impl == 'hardware':
+            if not isinstance(pulse, CompositePulse):
+                warnings.warn(
+                    "virtual_z_impl='hardware' on a single Pulse falls back "
+                    "to math implementation (σ_z impulse) for off-diagonal "
+                    "extraction."
+                )
+                if not (self.richardson and N >= 2):
+                    kernels = _compute_offdiag_omega(self._sigma_t())
+                else:
+                    sigmas = self._richardson_sigma_values()
+                    per_sigma = [_compute_offdiag_omega(st) for st in sigmas]
+                    kernels = self._richardson_extrapolate(sigmas, per_sigma)
+                    i_min = int(np.argmin(sigmas))
+                    kernels[0] = per_sigma[i_min][0]
+            else:
+                if self.richardson and N >= 2:
+                    warnings.warn(
+                        "Richardson extrapolation is not applicable to "
+                        "virtual_z_impl='hardware' (phase kicks are "
+                        "instantaneous, no probe width to extrapolate); "
+                        "ignoring richardson=True.",
+                        RuntimeWarning,
+                    )
+                kernels = _compute_offdiag_omega_hardware()
         elif not (self.richardson and N >= 2):
             kernels = _compute_offdiag_omega(self._sigma_t())
         else:

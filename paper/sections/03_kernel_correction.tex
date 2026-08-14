@@ -1,0 +1,695 @@
+﻿\section{Short-pulse frequency inference and calibration}
+\label{sec:inference-calibration}
+
+We now specify the local \textsc{Track} branch introduced in Sec.~II.C.
+A usable tracking iteration must convert the differential population into a
+frequency estimate, move the physical working point toward
+$\omega_{\mathrm{tar}}$, and keep the next measurement within the validated
+response interval as the qubit frequency changes. We therefore derive the
+short-pulse differential response, construct its nonlinear local inverse
+together with an explicit validity boundary, use the resulting frequency
+estimate in a bounded flux-bias update, and update the drive reference to
+preserve the local measurement condition. Together, these elements specify how, and within what limits, short-pulse
+frequency information can be incorporated into closed-loop flux-bias
+calibration.
+
+
+\subsection{Short-pulse differential response}
+\label{sec:differential-response}
+
+To characterize how detuning is encoded in
+Eq.~\eqref{eq:pdiff}, we regard the differential population as a
+functional of a time-dependent detuning $\Delta(t)$. Following the general
+framework of linear and nonlinear response
+theory~\cite{kubo1957statistical,mukamel1995principles}, we expand the
+differential population around the resonant control evolution as
+%
+\begin{equation}
+\begin{aligned}
+p_{\mathrm d}[\Delta]
+={}&
+p_{\mathrm d}^{(0)}
++
+\sum_{m=1}^{\infty}
+\frac{1}{m!}
+\int_0^T\!\dd t_1\cdots\int_0^T\!\dd t_m
+\\
+&\quad\times
+k_m(t_1,\ldots,t_m)
+\prod_{j=1}^{m}\Delta(t_j).
+\end{aligned}
+\label{eq:differential-volterra}
+\end{equation}
+%
+Here $k_m(t_1,\ldots,t_m)$ is the symmetrized $m$th-order
+detuning-response kernel of the complete bipartite short-pulse probe. It
+quantifies the joint contribution of detuning at the times
+$t_1,\ldots,t_m$ to the final differential population, and $T$ is the total
+sequence duration. The response-function derivation, including time ordering
+and nested commutators, is given in the Supplemental Material.
+
+For scalar local frequency estimation, we restrict attention to the
+quasi-static regime in which detuning variations during a single short
+sequence are negligible, so that $\Delta(t)\simeq\Delta$. This approximation
+does not preclude drift between repetitions or feedback iterations.
+
+For the ideal $+X/-X$ probe defined in
+Eq.~\eqref{eq:bipartite-sequences}, detuning reversal interchanges the branch
+responses,
+$p_{+X}(-\Delta)=p_{-X}(\Delta)$. The differential combination therefore
+satisfies $p_{\mathrm d}(-\Delta)=-p_{\mathrm d}(\Delta)$. In particular,
+$p_{\mathrm d}^{(0)}=0$, and all even-order terms in
+Eq.~\eqref{eq:differential-volterra} vanish. The local response can thus be
+written as
+%
+\begin{equation}
+p_{\mathrm d}(\Delta)
+=
+G_1\Delta
++
+\frac{G_3}{3!}\Delta^3
++
+\mathcal O(\Delta^5),
+\label{eq:short-pulse-cubic-response}
+\end{equation}
+%
+where $G_1$ and $G_3$ are the first and third derivatives of
+$p_{\mathrm d}$ with respect to $\Delta$ at resonance. The coefficient
+$G_1$ determines the local sensitivity, while $G_3$ gives the leading
+nonlinear correction.
+
+For the experimental implementation, we separate the response measurements
+into calibration and validation data. From the response-calibration data, we
+obtain $G_1$ and $G_3$ through an offline, measurement-based kernel
+calibration. Calibrated Virtual-$Z$ phase insertions are applied at selected
+times within the two control branches, and finite differences of the
+resulting branch populations sample the detuning-response derivatives. In
+the quasi-static limit, the integrated coefficients are
+%
+\begin{equation}
+\begin{aligned}
+G_1
+&=
+\int_0^T k_1(t)\,\dd t,
+\\
+G_3
+&=
+\iiint_{[0,T]^3}
+k_3(t_1,t_2,t_3)\,
+\dd t_1\dd t_2\dd t_3 .
+\end{aligned}
+\label{eq:g1-g3}
+\end{equation}
+%
+The Virtual-$Z$ operations follow
+Ref.~\cite{mckay2017efficient}. The finite-difference construction and
+three-time sampling scheme used to obtain the response kernels are detailed
+in the Supplemental Material.
+
+Experimental imperfections may nevertheless produce a nonzero measured
+differential signal at resonance. We therefore define
+%
+\begin{equation}
+\widetilde p_{\mathrm d}
+=
+p_{\mathrm d}^{\mathrm{meas}}-b_0,
+\label{eq:corrected-differential-response}
+\end{equation}
+%
+where $b_0$ is the zero-detuning intercept estimated from the
+response-calibration data and held fixed thereafter. This operation corrects
+a differential-population offset; it does not shift the frequency reference.
+
+For comparison, an odd-polynomial fit to the corrected quasi-static response
+provides a separate check of the integrated coefficients but is not used to
+generate the coefficients supplied to the main feedback protocol. Once
+$G_1$, $G_3$, and $b_0$ have been fixed, separately acquired
+response-validation data are used to establish
+$\Delta_{\mathrm{val}}$ and to assess residual symmetry breaking through
+$p_{\mathrm{even}}(\Delta)
+=[\widetilde p_{\mathrm d}(\Delta)
++\widetilde p_{\mathrm d}(-\Delta)]/2$.
+The even component is treated as a diagnostic of model mismatch rather than
+absorbed into the ideal odd response model. This response validation is
+distinct from the independent frequency verification used to confirm
+calibration success in Sec.~II.C.
+
+% The acquisition and partitioning of the calibration and validation data,
+% together with the sampling schedule, coefficient-reuse range, recalibration
+% conditions, and associated cost accounting, are specified in
+% Appendix~\ref{app:methods}.
+
+% FIG. 2 PLACEHOLDER (panel a): Once the response panel is finalized, add:
+% ``The measured differential response, its local linear and cubic models,
+% and the resulting candidate operating interval are shown in
+% Fig.~\ref{fig:local-accuracy}(a).''
+
+\subsection{Local frequency estimator}
+\label{sec:local-estimator}
+
+The first-order frequency estimate follows from the local slope:
+%
+\begin{equation}
+\widehat\Delta^{(1)}
+=
+\frac{\widetilde p_{\mathrm d}}{G_1},
+\qquad
+\widehat\omega_{01}^{(1)}
+=
+\omega_d+\widehat\Delta^{(1)}.
+\label{eq:linear-frequency-estimator}
+\end{equation}
+%
+Its truncation bias increases as the probe moves away from resonance. This
+estimate provides the initial value for the cubic inversion and the
+first-order reference used to quantify nonlinear-estimation bias in
+Sec.~IV.
+
+The main local estimator retains the third-order response and solves
+%
+\begin{equation}
+G_1\widehat\Delta^{(3)}
++
+\frac{G_3}{6}
+\left(\widehat\Delta^{(3)}\right)^3
+=
+\widetilde p_{\mathrm d},
+\label{eq:cubic-frequency-estimator}
+\end{equation}
+%
+with
+$\widehat\omega_{01}^{(3)}
+=\omega_d+\widehat\Delta^{(3)}$.
+% Newton iteration is initialized with $\widehat\Delta^{(1)}$, and the
+% candidate solution is selected from the branch connected continuously to
+% $\Delta=0$.
+
+When $G_1G_3<0$, the cubic response has stationary points at
+%
+\begin{equation}
+\left|\Delta_{\mathrm{fold}}\right|
+=
+\sqrt{-\frac{2G_1}{G_3}}.
+\label{eq:response-fold}
+\end{equation}
+%
+Beyond these points, the cubic response is no longer one-to-one, and the same
+differential population can correspond to multiple detunings. The response
+fold is therefore a mathematical boundary of the truncated cubic model, not
+an experimentally established operating range.
+
+We define the validated local operating interval by
+%
+\begin{equation}
+|\Delta|
+\leq
+\Delta_{\mathrm{val}},
+\qquad
+\Delta_{\mathrm{val}}
+<
+|\Delta_{\mathrm{fold}}|
+\quad
+(G_1G_3<0).
+\label{eq:validated-interval}
+\end{equation}
+%
+The value of $\Delta_{\mathrm{val}}$ is established from the held-out
+response-validation data using predefined estimator-error and confidence
+criteria. It remains necessary when the cubic model has no real fold because
+model truncation, measurement noise, and experimental imperfections can
+restrict the usable response before a mathematical turnover occurs. Failure
+of numerical convergence, branch continuity, or the validated-range check
+rejects the estimate and triggers \textsc{Reacquire} rather than extrapolation
+of the local inverse.
+
+% FIG. 2 PLACEHOLDER (panels b and c): Once the experimental validation panels
+% are finalized, add: ``The recovered local frequency--flux relation and its
+% pointwise residual relative to an independent frequency reference are shown
+% in Fig.~\ref{fig:local-accuracy}(b), while repeated held-out measurements
+% determine the estimator statistics in Fig.~\ref{fig:local-accuracy}(c).''
+%
+% FIG. 2 PLACEHOLDER (panel d): Once the experimental single-measurement cost
+% comparison is finalized, add: ``The experimental accuracy--acquisition-cost
+% position of this local frequency measurement relative to representative
+% Ramsey settings is evaluated in Fig.~\ref{fig:local-accuracy}(d).''
+
+\subsection{Track initialization and flux-bias update}
+\label{sec:calibration-protocol}
+Within the workflow defined in Sec.~II.C, an \textsc{Acquire} or
+\textsc{Reacquire} measurement supplies the seed
+$(\Phi_{\mathrm{seed}},
+\widehat\omega_{01,\mathrm{seed}},
+\sigma_{\omega,\mathrm{seed}})$.
+For a seed routed to \textsc{Track}, the acquired bias--frequency pair serves
+as the first point of the secant initialization. It sets the initial drive
+reference
+$\omega_{d,\mathrm{seed}}
+=\widehat\omega_{01,\mathrm{seed}}$
+and the residual
+$\widehat r_{\mathrm{seed}}
+=\widehat\omega_{01,\mathrm{seed}}-\omega_{\mathrm{tar}}$.
+
+To obtain the second bias--frequency point required for the secant estimate,
+the controller proposes the bounded one-sided step
+%
+\begin{equation}
+\Phi_1^{\mathrm{prop}}
+=
+\Phi_{\mathrm{seed}}
+-
+\chi_\Phi
+\operatorname{sgn}(\widehat r_{\mathrm{seed}})
+\delta\Phi_{\mathrm{blind}},
+\label{eq:blind-step}
+\end{equation}
+%
+where
+$\chi_\Phi
+=\operatorname{sgn}(\partial\omega_{01}/\partial\Phi)
+\in\{-1,+1\}$
+is the known local monotonic direction. The applied value $\Phi_1$ is
+restricted to $[\Phi_{\min},\Phi_{\max}]$.
+Let $\Delta_{\mathrm{blind}}^{\max}$ be a validated upper bound on the
+frequency displacement produced by the applied blind step. The initialization
+is locally admissible only if
+%
+\begin{equation}
+z_{1-\beta}\sigma_{\Delta,\mathrm{seed}}
++
+\Delta_{\mathrm{blind}}^{\max}
+\leq
+\Delta_{\mathrm{val}},
+\label{eq:track-entry-condition}
+\end{equation}
+%
+where $\sigma_{\Delta,\mathrm{seed}}$ includes the uncertainty of the acquired
+frequency and the implemented seed reference. This condition reserves the
+detuning margin required for the first short-pulse measurement at $\Phi_1$.
+Before a secant sensitivity is available, the first short-pulse measurement
+at $\Phi_1$ uses
+$\omega_{d,1}=\widehat\omega_{01,\mathrm{seed}}$
+and returns $\widehat\omega_{01,1}$. Together with the scanned-Ramsey seed,
+this measurement provides the initial secant sensitivity; its uncertainty is
+propagated from both frequency estimates.
+
+Subsequent sensitivities are calculated from the two most recent
+\textsc{Track} estimates,
+%
+\begin{equation}
+\widehat S_{\Phi,n}
+=
+\frac{
+\widehat\omega_{01,n}
+-
+\widehat\omega_{01,n-1}
+}{
+\Phi_n-\Phi_{n-1}
+},
+\qquad n\geq2.
+\label{eq:secant-sensitivity}
+\end{equation}
+%
+
+%
+Thus, the controller estimates the local flux-to-frequency sensitivity
+without evaluating the quantitative transmon dispersion or its derivative.
+Only sensitivities with the prescribed sign, magnitude, and uncertainty are
+accepted; failure of these checks reports the local-invalid outcome defined
+in Sec.~II.C.
+
+At an accepted iteration, the controller forms
+$\widehat r_n
+=\widehat\omega_{01,n}-\omega_{\mathrm{tar}}$
+and applies the target-entry test in
+Eq.~\eqref{eq:target-entry-condition}. If the candidate is not routed to
+\textsc{Verify}, the next bias proposal is
+%
+\begin{equation}
+\Phi_{n+1}^{\mathrm{prop}}
+=
+\Phi_n
+-
+\eta
+\frac{\widehat r_n}{\widehat S_{\Phi,n}},
+\label{eq:flux-bias-update}
+\end{equation}
+%
+where $\eta\in(0,1]$ is the damping factor. The applied bias change is limited
+to $\delta\Phi_{\max}$ in magnitude, and the resulting bias is restricted to
+$[\Phi_{\min},\Phi_{\max}]$. The blind-step bound, uncertainty propagation,
+sensitivity thresholds, and limiting rules are specified in
+Appendix~\ref{app:methods}.
+
+Equation~\eqref{eq:flux-bias-update} changes the physical working point to
+reduce the residual relative to the fixed target. Maintaining the next
+short-pulse measurement within its validated detuning interval requires the
+separate drive-reference update developed below.
+% Section~II.C defines the complete transition contract. This subsection only
+% constructs the flux-bias proposal used within \textsc{Track}, starting from a
+% seed supplied by an \textsc{Acquire} or \textsc{Reacquire} measurement,
+% %
+% \begin{equation}
+% \left(
+% \Phi_{\mathrm{seed}},
+% \widehat\omega_{01,\mathrm{seed}},
+% \sigma_{\omega,\mathrm{seed}}
+% \right).
+% \label{eq:acquired-seed}
+% \end{equation}
+% %
+% The acquired frequency estimate is reused rather than repeated with the
+% short-pulse probe at the same bias. It initializes the local drive reference
+% as
+% $\omega_{d,\mathrm{seed}}
+% =\widehat\omega_{01,\mathrm{seed}}$ and gives the seed residual
+% %
+% \begin{equation}
+% \widehat r_{\mathrm{seed}}
+% =
+% \widehat\omega_{01,\mathrm{seed}}
+% -
+% \omega_{\mathrm{tar}}.
+% \label{eq:seed-residual}
+% \end{equation}
+% %
+% The routing rule in Sec.~II.C sends a seed that already satisfies
+% Eq.~\eqref{eq:target-entry-condition} to \textsc{Verify}. The construction
+% below therefore applies only when the seed instead initializes \textsc{Track}.
+
+% Because one bias--frequency pair does not determine a secant sensitivity, the
+% controller proposes a bounded one-sided step,
+% %
+% \begin{equation}
+% \Phi_1^{\mathrm{prop}}
+% =
+% \Phi_{\mathrm{seed}}
+% -
+% \chi_\Phi
+% \operatorname{sgn}(\widehat r_{\mathrm{seed}})
+% \delta\Phi_{\mathrm{blind}},
+% \label{eq:blind-step}
+% \end{equation}
+% %
+% where
+% $\chi_\Phi
+% =\operatorname{sgn}(\partial\omega_{01}/\partial\Phi)
+% \in\{-1,+1\}$
+% specifies the known local monotonic direction. The applied bias $\Phi_1$ is
+% restricted to the allowed interval $[\Phi_{\min},\Phi_{\max}]$.
+
+% Let $\Delta_{\mathrm{blind}}^{\max}$ denote an experimentally established
+% upper bound on the frequency displacement produced by the applied blind
+% step. The proposed initialization is locally admissible only if
+% %
+% \begin{equation}
+% z_{1-\beta}\sigma_{\Delta,\mathrm{seed}}
+% +
+% \Delta_{\mathrm{blind}}^{\max}
+% \leq
+% \Delta_{\mathrm{val}},
+% \label{eq:track-entry-condition}
+% \end{equation}
+% %
+% where $\sigma_{\Delta,\mathrm{seed}}$ includes the uncertainty of the acquired
+% frequency and the implemented seed reference. This condition reserves enough
+% detuning margin for the first short-pulse measurement after the blind step.
+% The determination of $\Delta_{\mathrm{blind}}^{\max}$ and the choice of
+% $\delta\Phi_{\mathrm{blind}}$ are described in
+% Appendix~\ref{app:methods}.
+
+% No measured sensitivity is available before this step, so the first
+% short-pulse probe at $\Phi_1$ uses
+% $\omega_{d,1}=\widehat\omega_{01,\mathrm{seed}}$. Its output supplies the
+% second frequency estimate $\widehat\omega_{01,1}$ and hence the initial
+% secant sensitivity
+% %
+% \begin{equation}
+% \widehat S_{\Phi,1}
+% =
+% \frac{
+% \widehat\omega_{01,1}
+% -
+% \widehat\omega_{01,\mathrm{seed}}
+% }{
+% \Phi_1-\Phi_{\mathrm{seed}}
+% }.
+% \label{eq:initial-secant-sensitivity}
+% \end{equation}
+% %
+% This initial slope combines the scanned-Ramsey seed with the short-pulse
+% estimate at $\Phi_1$. The uncertainty assigned to
+% $\widehat S_{\Phi,1}$ includes the uncertainties of both frequency estimates.
+
+% For subsequent iterations, the local sensitivity is estimated from the two
+% most recent \textsc{Track} measurements,
+% %
+% \begin{equation}
+% \widehat S_{\Phi,n}
+% =
+% \frac{
+% \widehat\omega_{01,n}
+% -
+% \widehat\omega_{01,n-1}
+% }{
+% \Phi_n-\Phi_{n-1}
+% },
+% \qquad n\geq2.
+% \label{eq:secant-sensitivity}
+% \end{equation}
+% %
+% This measurement-derived quantity approximates the local
+% flux-to-frequency sensitivity without supplying the controller with the
+% quantitative transmon dispersion or its derivative. A sensitivity estimate is
+% accepted only when its sign is consistent with $\chi_\Phi$ and its magnitude
+% and uncertainty satisfy the prescribed reliability thresholds. Failure of
+% this check reports a local-invalid outcome to the transition contract in
+% Sec.~II.C.
+
+% At each accepted \textsc{Track} iteration, the controller forms
+% %
+% \begin{equation}
+% \widehat r_n
+% =
+% \widehat\omega_{01,n}
+% -
+% \omega_{\mathrm{tar}}
+% \label{eq:estimated-feedback-residual}
+% \end{equation}
+% %
+% and tests Eq.~\eqref{eq:target-entry-condition}. If that condition is not
+% satisfied, the controller proposes the damped secant--Newton update
+% %
+% \begin{equation}
+% \Phi_{n+1}^{\mathrm{prop}}
+% =
+% \Phi_n
+% -
+% \eta
+% \frac{\widehat r_n}{\widehat S_{\Phi,n}},
+% \label{eq:flux-bias-update}
+% \end{equation}
+% %
+% where $\eta\in(0,1]$ is the damping factor. Before application, the commanded
+% bias change is capped at $\delta\Phi_{\max}$ in magnitude, and the resulting
+% bias is restricted to $[\Phi_{\min},\Phi_{\max}]$. The uncertainty
+% propagation, sensitivity thresholds, limiting convention, and controller
+% parameters are specified in Appendix~\ref{app:methods}.
+
+% The flux-bias update changes the physical working point and is intended to
+% reduce the residual relative to the fixed target. It does not by itself
+% ensure that the short-pulse probe remains within its validated detuning
+% interval. The drive-reference and range controller that enforces this second
+% requirement is constructed next.
+
+
+\subsection{Drive-reference tracking and range maintenance}
+\label{sec:drive-tracking}
+
+
+
+If the drive reference is held fixed after a flux-bias update, the next
+measurement detuning is
+$\Delta_{n+1}^{\mathrm{fixed}}
+=\omega_{01}(\Phi_{n+1})-\omega_{d,n}$.
+The short-pulse probe must then span the accumulated frequency displacement
+as the physical bias moves and can leave its validated interval even when the
+qubit approaches the target.
+
+During \textsc{Track}, we instead use the measured secant sensitivity to set
+the next drive reference,
+%
+\begin{equation}
+\omega_{d,n+1}
+=
+\widehat\omega_{01,n}
++
+\widehat S_{\Phi,n}
+\left(
+\Phi_{n+1}-\Phi_n
+\right).
+\label{eq:drive-tracking}
+\end{equation}
+%
+The right-hand side predicts the transition frequency at $\Phi_{n+1}$ using
+only measurements available through iteration $n$; it does not evaluate
+Eq.~\eqref{eq:transmon-dispersion}. Consequently, the next measurement
+detuning is the one-step prediction error rather than the accumulated
+frequency displacement.
+
+Let $\sigma_{\mathrm{pred},n+1}$ denote the propagated uncertainty of this
+frequency prediction, including the uncertainties of
+$\widehat\omega_{01,n}$, $\widehat S_{\Phi,n}$, and the applied bias step.
+Because Eq.~\eqref{eq:drive-tracking} centers the predicted detuning at zero,
+the next short-pulse measurement is admitted only if
+%
+\begin{equation}
+z_{1-\beta}\sigma_{\mathrm{pred},n+1}
++
+\Delta_{\mathrm{guard}}
+\leq
+\Delta_{\mathrm{val}},
+\label{eq:predicted-range-condition}
+\end{equation}
+%
+where $\Delta_{\mathrm{guard}}\geq0$ reserves a fixed margin for residual
+prediction and actuation errors not included in the propagated uncertainty.
+The initial blind step is governed instead by
+Eq.~\eqref{eq:track-entry-condition}.
+
+After an admitted measurement, the inferred detuning must satisfy
+%
+\begin{equation}
+|\widehat\Delta_{n+1}|
++
+z_{1-\beta}\sigma_{\Delta,n+1}
+\leq
+\Delta_{\mathrm{val}}.
+\label{eq:track-range-condition}
+\end{equation}
+%
+The premeasurement condition protects against an unreliable drive prediction,
+whereas the postmeasurement condition checks consistency with the validated
+short-pulse interval. Failure of either condition, inverse convergence or
+branch continuity, or the sensitivity check reports the local-invalid outcome
+defined in Sec.~II.C.
+
+When these checks are satisfied, the frequency estimate is passed to the next
+flux-bias update; satisfaction of
+Eq.~\eqref{eq:target-entry-condition} instead reports a target-entry outcome.
+The uncertainty propagation and the choice of
+$\Delta_{\mathrm{guard}}$ are specified in
+Appendix~\ref{app:methods}.
+
+Thus, Eq.~\eqref{eq:flux-bias-update} moves the physical working point,
+whereas Eq.~\eqref{eq:drive-tracking} only recenters the next measurement.
+The calibration residual remains referenced to the fixed
+$\omega_{\mathrm{tar}}$.
+
+% After the flux bias is updated, the detuning of the next measurement is
+% %
+% \begin{equation}
+% \Delta_{n+1}
+% =
+% \omega_{01}(\Phi_{n+1})
+% -
+% \omega_{d,n+1}.
+% \label{eq:next-step-detuning}
+% \end{equation}
+% %
+% If the microwave reference is held fixed,
+% $\omega_{d,n+1}=\omega_{d,n}$, this becomes
+% %
+% \begin{equation}
+% \Delta_{n+1}^{\mathrm{fixed}}
+% =
+% \omega_{01}(\Phi_{n+1})
+% -
+% \omega_{d,n}.
+% \label{eq:fixed-drive-detuning}
+% \end{equation}
+% %
+% A short-pulse probe referenced to a fixed drive is therefore forced to span
+% the accumulated frequency displacement as the physical bias moves. The
+% calibration trajectory can consequently leave the validated interval even
+% when each flux-bias update moves the qubit toward the target.
+
+% During \textsc{Track}, we instead predict the transition frequency at the
+% updated bias using the measured secant sensitivity and set
+% %
+% \begin{equation}
+% \omega_{d,n+1}
+% =
+% \widehat\omega_{01,n}
+% +
+% \widehat S_{\Phi,n}
+% \left(
+% \Phi_{n+1}-\Phi_n
+% \right).
+% \label{eq:drive-tracking}
+% \end{equation}
+% %
+% The right-hand side is the predicted transition frequency at
+% $\Phi_{n+1}$ based on measurements available through iteration $n$. This
+% update uses only estimates already produced by the loop and does not evaluate
+% Eq.~\eqref{eq:transmon-dispersion}. Substitution into
+% Eq.~\eqref{eq:next-step-detuning} shows that the next measurement detuning is
+% the one-step frequency-prediction error rather than the accumulated frequency
+% displacement. Drive tracking therefore reduces the risk of leaving the
+% validated interval when the local secant prediction remains reliable, but it
+% does not by itself guarantee range validity.
+
+% Let $\widehat\Delta_{\mathrm{pred},n+1}$ and
+% $\sigma_{\mathrm{pred},n+1}$ denote the predicted measurement detuning and its
+% uncertainty after Eq.~\eqref{eq:drive-tracking}. The latter includes the
+% uncertainties of the current frequency estimate, the secant sensitivity, and
+% the applied bias step. Before the next short-pulse probe is executed, the
+% prediction must satisfy
+% %
+% \begin{equation}
+% |\widehat\Delta_{\mathrm{pred},n+1}|
+% +
+% z_{1-\beta}
+% \sigma_{\mathrm{pred},n+1}
+% +\Delta_{\mathrm{guard}}
+% \leq
+% \Delta_{\mathrm{val}}.
+% \label{eq:predicted-range-condition}
+% \end{equation}
+% %
+% Here $\Delta_{\mathrm{guard}}\geq0$ reserves margin for model and actuation
+% error not represented in the propagated statistical uncertainty.
+% For the initial blind step, the corresponding admission test is
+% Eq.~\eqref{eq:track-entry-condition}. Failure of either premeasurement test
+% reports a local-invalid outcome before the local inverse is used;
+% Sec.~II.C specifies the resulting recovery transition.
+
+% After an admitted short-pulse measurement, the resulting estimate must also
+% satisfy
+% %
+% \begin{equation}
+% |\widehat\Delta_{n+1}|
+% +
+% z_{1-\beta}\sigma_{\Delta,n+1}
+% \leq
+% \Delta_{\mathrm{val}}.
+% \label{eq:track-range-condition}
+% \end{equation}
+% %
+% This postmeasurement condition checks the consistency of the measured
+% detuning with the response-validation interval. Failure of this condition,
+% numerical convergence, inverse-branch continuity, or the sensitivity check
+% rejects the local estimate and reports the same local-invalid outcome.
+
+% When the range and estimator checks remain satisfied, the resulting frequency
+% estimate is passed to the next flux-bias update. Satisfaction of
+% Eq.~\eqref{eq:target-entry-condition} instead reports a target-entry outcome.
+% Section~II.C alone specifies how these outcomes change state and how the
+% candidate is subsequently verified.
+
+% The flux-bias and drive-reference updates have different physical roles.
+% Equation~\eqref{eq:flux-bias-update} changes the qubit working point, whereas
+% Eq.~\eqref{eq:drive-tracking} changes only the reference of the next
+% measurement. The drive update neither redefines the target nor removes the
+% calibration residual, because every frequency estimate remains compared with
+% the fixed $\omega_{\mathrm{tar}}$. Together, the two updates implement the
+% local \textsc{Track} state defined in Sec.~II.C.

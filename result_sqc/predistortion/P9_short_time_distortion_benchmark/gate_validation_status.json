@@ -1,0 +1,11 @@
+{
+  "generated_utc": "2026-08-05T07:18:35.620234+00:00",
+  "entered_gate_validation": false,
+  "preregistered_gates": {
+    "G1": false,
+    "G2": false,
+    "G3": false
+  },
+  "reason": "Stopped before G4 as pre-registered: at least one of G1-G3 failed.",
+  "existing_reference": "P7 remains a Cryoscope-only full-Hamiltonian reference and is not evidence for transient-derived compensation."
+}

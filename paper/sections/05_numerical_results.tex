@@ -1,0 +1,119 @@
+\section{Results}
+\label{sec:results}
+
+% We simulate a two-level flux-tunable transmon with
+% $E_C/h=0.2$~GHz, $E_J/h=10$~GHz, $T_1=100~\mu$s, and
+% $T_2=50~\mu$s.  The reference flux is $\Phi_{\mathrm{opt}}=0.9553\Phi_0$,
+% the time step is $0.5$~ns, and each $\pi/2$ pulse occupies a 10-ns control
+% window.  The master equation is solved with QuTiP. Reported frequency errors
+% are recomputed from the analytic transmon dispersion, rather than taken from
+% the estimate used by the feedback controller. This provides deterministic
+% simulation ground truth, not an independent experimental measurement.
+
+% \subsection{Validity of the local estimator}
+
+% Figure~\ref{fig:local-accuracy} compares the linear inverse with two cubic
+% calibrations while the drive is fixed at the reference frequency. The full
+% kernel and odd-polynomial routes agree in the central region, providing an
+% independent check of the cubic coefficient.  The inferred turnover is
+% $|\Delta|\simeq17.6$~MHz.  Within the sampled points on this branch, the mean
+% absolute error is 1.27~MHz for the linear estimator, 0.94~MHz for the fitted
+% cubic estimator, and 0.97~MHz for the full-kernel estimator.  Near the fold,
+% the cubic correction can overshoot and the local inverse ceases to improve the
+% estimate.  The result defines an operating window; it does not justify using
+% the transient probe for wide-range capture.
+
+% \begin{figure*}[t!]
+%  \includegraphics[width=\textwidth]{transient_accuracy.pdf}
+%  \caption{Accuracy of the transient frequency discriminator as a function of
+%  true detuning. The upper panel shows signed measurement error and the lower
+%  panel its magnitude. The shaded interval marks the cubic branch bounded by
+%  the response turnover. The fixed-drive polynomial fit and full three-time
+%  kernel give consistent cubic corrections in the central region.}
+%  \label{fig:local-accuracy}
+% \end{figure*}
+
+% \subsection{Accuracy--cost tradeoff}
+
+% To separate estimator cost from fold failure, we next restrict the flux offsets
+% to $\pm0.01\Phi_0$, corresponding to $|\Delta|\lesssim12$~MHz.  Figure
+% ~\ref{fig:pareto} compares six strategies.  Double-sweep Ramsey reaches a
+% 6.3-kHz mean absolute error using 800 master-equation solves per frequency
+% measurement.  Single-sweep Ramsey configurations use 100--400 solves and give
+% 23--30-kHz errors.  The cubic transient estimator gives a 13.5-kHz error at an
+% amortized cost of 18 solves per point.  Its marginal cost is two solves after a
+% one-time 80-solve coefficient calibration.  In this fixed-drive benchmark, the
+% cubic transient point Pareto-dominates all three single-sweep Ramsey settings;
+% double-sweep Ramsey remains more accurate at substantially higher cost.
+
+% \begin{figure*}[t!]
+%  \includegraphics[width=\textwidth]{accuracy_cost.pdf}
+%  \caption{Accuracy--cost comparison inside the local transient window.
+%  (a) Mean absolute frequency error versus measured master-equation calls.
+%  (b) Error versus wall-clock time on the benchmark machine.  Dashed lines mark
+%  the nondominated frontier.  Transient cubic cost includes amortization of its
+%  one-time coefficient calibration over five flux points.}
+%  \label{fig:pareto}
+% \end{figure*}
+
+% \subsection{Closed-loop calibration}
+
+% We set the target frequency 20~MHz below the reference point and use the same
+% initial flux offset for all strategies.  Figure~\ref{fig:convergence} contrasts
+% three feedback loops.  A conventional double-sweep Ramsey loop converges in
+% five iterations.  A coarse transient stage followed by Ramsey refinement takes
+% seven and five iterations, respectively; the transient stage begins outside
+% its fold window and wanders before the handoff.  The drive-tracked transient
+% loop instead converges monotonically in six iterations without a Ramsey
+% refinement stage.
+
+% \begin{figure*}[t!]
+%  \includegraphics[width=\textwidth]{closed_loop_convergence.pdf}
+%  \caption{Closed-loop residual for a target shift of $-20$~MHz.  The
+%  coarse-to-fine workflow (green and blue regions) is compared with the
+%  drive-tracked full-kernel protocol (purple triangles) and a Ramsey-only
+%  baseline (red squares). Residuals are evaluated from the analytic
+%  frequency--flux relation and therefore do not constitute \textsc{Verify}
+%  measurements.}
+%  \label{fig:convergence}
+% \end{figure*}
+
+% Raw iteration count is not a fair cost metric because one Ramsey measurement
+% contains a delay scan.  We therefore instrument calls to both the master- and
+% Schrodinger-equation solvers and count each call with unit weight.  This is
+% conservative for the transient method because the state-vector solver used for
+% kernel evaluation is cheaper than the master-equation solver.  As shown in
+% Fig.~\ref{fig:closed-loop-cost}, the drive-tracked loop uses 984 counted calls
+% and reaches an analytically checked residual of 0.00519~MHz. Ramsey alone uses 4000 calls
+% and reaches 0.01797~MHz, giving a 4.1-fold reduction in counted cost.  The
+% coarse-to-fine workflow uses 5214 calls despite its 0.00214-MHz final residual;
+% at the common 0.016-MHz tolerance its speedup relative to Ramsey is only 0.8,
+% so it is more expensive rather than faster.
+
+% \begin{figure*}[t!]
+%  \includegraphics[width=\textwidth]{closed_loop_cost.pdf}
+%  \caption{Cost anatomy of closed-loop frequency calibration. (a) Analytic
+%  residual versus cumulative instrumented solver calls.  (b) Cost ratio relative
+%  to the Ramsey baseline at a common residual threshold.  (c) Total counted
+%  calls and analytically checked final residuals. The full-kernel transient
+%  route uses drive tracking; the hybrid route uses a fixed reference in its
+%  transient stage.}
+%  \label{fig:closed-loop-cost}
+% \end{figure*}
+
+% The mechanism is visible directly in the measured detuning.  After bootstrap,
+% drive tracking predicts the next transition frequency closely enough that the
+% probe detuning falls from sub-megahertz values to a few kilohertz while the
+% absolute target residual spans tens of megahertz.  The inexpensive probe thus
+% remains local even though the calibration travels over a nonlocal frequency
+% interval.  By contrast, keeping the drive fixed forces the probe itself to
+% span the full target displacement and crosses the turnover identified in
+% Fig.~\ref{fig:local-accuracy}.
+
+% These closed-loop data isolate the seeded \textsc{Track} mechanism. They do
+% not execute the complete \textsc{Acquire--Track--Verify--Lock} protocol, and
+% they contain neither finite-shot verification statistics nor long-term
+% monitoring records. In particular, the controller's consecutive local hits
+% are not reinterpreted as independent \textsc{Verify} outcomes. The full state
+% machine specifies how those measurements are to be acquired and separated,
+% but its hardware-level performance is outside the evidence reported here.

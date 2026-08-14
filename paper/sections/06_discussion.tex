@@ -1,0 +1,62 @@
+\section{Discussion}
+\label{sec:discussion}
+
+% The numerical results answer the motivating question conditionally: short
+% pulse sequences can contribute directly to frequency calibration, but they do
+% not automatically become general-purpose frequency estimators.  The present
+% two-branch sequence is a local probe, not a wide-range replacement for Ramsey
+% spectroscopy.  Its cubic response reduces local nonlinear bias but cannot
+% remove a response fold.  In closed loop, the useful range is preserved by
+% changing the measurement reference so that the short-pulse probe stays local;
+% merely assigning it to a coarse stage before an expensive fine estimator does
+% not guarantee a lower total cost.
+
+% This framing clarifies what it means for a pulse sequence to participate in
+% calibration.  The sequence must encode the parameter in an observable response,
+% that response must admit a calibrated inverse over a stated operating window,
+% and the surrounding protocol must keep subsequent measurements inside that
+% window.  In the present example, the qubit experiences constant detuning
+% throughout two finite pulses, so the third-order coefficient contains
+% unequal-time contributions.  A time-diagonal kernel is not the relevant
+% object.  An odd-polynomial scan can recover the same coefficient when centered
+% at the symmetry point, but that assumption is fragile under a moving drive.
+% Evaluating the full response kernel at the actual reference frequency makes
+% the short-pulse estimator and controller definitions consistent.
+
+% The cost comparison is intentionally based on instrumented solver calls rather
+% than a nominal workflow price.  The nominal price counts the two population
+% measurements but can omit the solver work required to recalibrate a response
+% coefficient when the drive changes.  Counting every solver invocation avoids a
+% large artificial speedup.  Wall-clock time supports the same ordering in the
+% present implementation, but it depends on hardware, caching, and solver choice
+% and is not a universal physical metric.
+
+% Several steps are needed before interpreting the protocol as an experimental
+% calibration advantage.  The current simulations use ideal control envelopes,
+% projective readout, a Markovian two-level model, and deterministic expectation
+% values. Their reported uncertainty is therefore zero by construction, not a
+% measured confidence interval. Shot noise, assignment error, drift during acquisition, pulse
+% distortion, leakage, and imperfect knowledge of the kernel will perturb both
+% the detuning estimate and the secant slope.  An experiment should report the
+% number of circuit repetitions and elapsed acquisition time, and it should
+% recompute the cost-to-reach curve at a common residual threshold.  A wide-range
+% capture or range-guard path is also required when no reliable initial frequency
+% seed is available.
+
+% These limitations suggest a practical hierarchy rather than a replacement
+% claim.  Spectroscopy or a Ramsey scan supplies acquisition and recovery.  Once
+% the transition frequency is known, short-pulse sequences can participate in
+% frequent local maintenance, here through a drive-tracked two-branch
+% discriminator.  Occasional wide-range measurements can reinitialize the local
+% loop after a range violation.  This division uses pulse-time information where
+% it is unambiguous while retaining established estimators for global capture.
+
+% The implemented state machine makes this hierarchy operational by separating
+% \textsc{Verify} from \textsc{Lock}. It freezes the candidate bias during
+% independent verification, sends monitor suspicion and periodic Ramsey audits
+% from \textsc{Lock} through \textsc{Verify}, and reserves direct reacquisition
+% for large jumps or loss of reference. These are protocol and software
+% capabilities, not evidence that long-term stability has been achieved. No
+% hardware time series is presently available from which to infer closed-loop
+% bandwidth, frequency-noise suppression, a power spectral density, or Allan
+% stability.

@@ -51,9 +51,11 @@ docs/source/
   "<qutip-env python>" -m sphinx -W --keep-going -b html source/zh build/html/zh
   ```
 - **构建两树(便捷):** `cd docs && make html`(Windows:`make.bat`)。
-- **notebook 副本:** tutorial 的 `Simulation_sqc.ipynb` 单一真源在**仓库根**;
-  Makefile/make.bat/CI 在构建前把它 copy 进 `en/` 和 `zh/`。副本已 gitignore。
-  手动单树构建前需先 `cp ../Simulation_sqc.ipynb source/en/`(zh 同理)。
+- **notebook 副本:** 文档 notebook `Simulation_sqc.ipynb` 的单一真源在
+  **`source/_shared/`**;Makefile/make.bat/CI 在构建前把它 copy 进 `en/` 和 `zh/`。
+  副本已 gitignore。手动单树构建前需先 `cp source/_shared/Simulation_sqc.ipynb source/en/`
+  (zh 同理)。**仓库根的 `Simulation_sqc.ipynb` 是独立的研究 notebook,与文档站无关。**
+  notebook 分三部分:第一部分(波形重建)已完成可跑;第二(频率标定)、第三(预失真)为骨架待补。
 - ⚠️ **Windows 上 notebook 渲染很慢(约 3–4 min/树,pandoc 逐 cell)**。只改文字页时,
   后台跑构建(`run_in_background`)再回收结果,别干等。CI(Linux)则很快。
 
@@ -132,7 +134,7 @@ docs/source/
 文档站**只呈现 v1 公开面**。以下内容存在于代码但**不得出现在**公开文档/API 页/前端:
 
 - `ZCrosstalkWorkflow`、Z 串扰重建
-- 瞬态**频率标定**(`method="transient"`)——注意:瞬态**波形重建**是 v1 核心特性,已支持,**别混淆**
+- 瞬态**磁通响应标定**(`FluxResponseCalibration(method="transient")`,即 Δω(Φ) 多项式拟合,Track B 1.2)—— 仍未实现(`NotImplementedError`),不入文档
 - CPMG 协议、`TunableCoupler`、显式电子学层
 - `SensingWorkflow` 上抛 `NotImplementedError` 的方法(save/load/diff/benchmark/…)
 

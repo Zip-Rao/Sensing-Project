@@ -14,9 +14,10 @@ if "%1" == "clean" (
 	goto end
 )
 
-REM Copy the root tutorial notebook into each language tree (gitignored copies).
-copy /y "..\Simulation_sqc.ipynb" "%SOURCEDIR%\en\Simulation_sqc.ipynb" >nul
-copy /y "..\Simulation_sqc.ipynb" "%SOURCEDIR%\zh\Simulation_sqc.ipynb" >nul
+REM Copy the docs notebook (single source under source\_shared) into each
+REM language tree (gitignored copies).
+copy /y "%SOURCEDIR%\_shared\Simulation_sqc.ipynb" "%SOURCEDIR%\en\Simulation_sqc.ipynb" >nul
+copy /y "%SOURCEDIR%\_shared\Simulation_sqc.ipynb" "%SOURCEDIR%\zh\Simulation_sqc.ipynb" >nul
 
 if "%1" == "en" goto builden
 if "%1" == "zh" goto buildzh

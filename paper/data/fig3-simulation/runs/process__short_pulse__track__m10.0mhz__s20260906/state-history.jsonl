@@ -1,0 +1,12 @@
+{"version": 0, "from": "acquire", "to": "acquire", "reason": "SEED_RELIABLE", "note": "run started", "candidate_bias": null, "f_hat": null, "uncertainty": 0.0}
+{"version": 1, "from": "acquire", "to": "track", "reason": "SEED_RELIABLE", "note": "", "candidate_bias": 0.0, "f_hat": 23.752350418941937, "uncertainty": 3.0018040492274836e-05}
+{"version": 2, "from": "track", "to": "track", "reason": "CORRECTION_REQUIRED", "note": "", "candidate_bias": 0.0, "f_hat": 23.749086180698825, "uncertainty": 0.0019866688252335265}
+{"version": 3, "from": "track", "to": "track", "reason": "CORRECTION_REQUIRED", "note": "", "candidate_bias": -0.005, "f_hat": 23.722423039755206, "uncertainty": 0.001898533704470105}
+{"version": 4, "from": "track", "to": "verify", "reason": "CANDIDATE_REACHED", "note": "", "candidate_bias": -0.00996079199012265, "f_hat": 23.691724603551773, "uncertainty": 0.001985416060158189}
+{"version": 5, "from": "verify", "to": "verify", "reason": "VERIFY_PASSED", "note": "", "candidate_bias": -0.00996079199012265, "f_hat": 23.691558951834114, "uncertainty": 0.0002188942441727125}
+{"version": 6, "from": "verify", "to": "track", "reason": "CORRECTION_REQUIRED", "note": "", "candidate_bias": -0.00996079199012265, "f_hat": 23.69661814241749, "uncertainty": 0.00021605654644584949}
+{"version": 7, "from": "track", "to": "verify", "reason": "CANDIDATE_REACHED", "note": "", "candidate_bias": -0.011077746737808182, "f_hat": 23.691527145408894, "uncertainty": 0.0019848064749707515}
+{"version": 8, "from": "verify", "to": "verify", "reason": "VERIFY_PASSED", "note": "", "candidate_bias": -0.011077746737808182, "f_hat": 23.6888273309073, "uncertainty": 0.00022450805191921591}
+{"version": 9, "from": "verify", "to": "lock", "reason": "VERIFY_PASSED", "note": "", "candidate_bias": -0.011077746737808182, "f_hat": 23.689641125333235, "uncertainty": 0.00021687551844961372}
+{"version": 10, "from": "lock", "to": "verify", "reason": "DRIFT_SUSPECTED", "note": "", "candidate_bias": -0.011077746737808182, "f_hat": 23.726233883368035, "uncertainty": 0.022906523869136795}
+{"version": 11, "from": "verify", "to": "safe_stop", "reason": "BUDGET_EXHAUSTED", "note": "", "candidate_bias": -0.011077746737808182, "f_hat": 23.726233883368035, "uncertainty": 0.022906523869136795}

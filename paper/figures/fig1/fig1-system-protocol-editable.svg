@@ -1,0 +1,542 @@
+<?xml version='1.0' encoding='utf-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape" xmlns:ns3="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd" xmlns:xlink="http://www.w3.org/1999/xlink" width="180.0mm" height="106.0mm" viewBox="0 0 180.0 106.0" version="1.1"><title>Fig. 1: system, probes, and calibration workflow</title><desc>Editable two-column assembly of panels (a)-(c). Panel groups are separate Inkscape layers.</desc><g id="background" inkscape:groupmode="layer" inkscape:label="Background"><rect x="0" y="0" width="180.0" height="106.0" fill="#ffffff" /></g><g id="p1-panel-1" inkscape:groupmode="layer" inkscape:label="Panel a - global dispersion" transform="translate(0.000000,0.000000) scale(0.360795454) translate(-0.000000,-0.000000)"><defs>
+  <style type="text/css">*{stroke-linejoin: round; stroke-linecap: butt}</style>
+ </defs>
+ <g id="p1-figure_1">
+  <g id="p1-patch_1">
+   <path d="M 0 158.740157  L 249.448819 158.740157  L 249.448819 0  L 0 0  z " style="fill: #ffffff" />
+  </g>
+  <g id="p1-axes_1">
+   <g id="p1-patch_2">
+    <path d="M 39.911811 130.166929  L 243.212598 130.166929  L 243.212598 9.524409  L 39.911811 9.524409  z " style="fill: #ffffff" />
+   </g>
+   <g id="p1-patch_3">
+    <path d="M 104.008031 28.700531  L 118.690866 28.700531  L 118.690866 20.155019  L 104.008031 20.155019  z " clip-path="url(#p1-p57f2b102c6)" style="fill: #f5d6a0; opacity: 0.28; stroke: #d98424; stroke-width: 0.7; stroke-linejoin: miter" />
+   </g>
+   <g id="p1-matplotlib.axis_1">
+    <g id="p1-xtick_1">
+     <g id="p1-line2d_1">
+      <defs>
+       <path id="p1-m67eef88e7e" d="M 0 0  L 0 2.6  " style="stroke: #000000; stroke-width: 0.55" />
+      </defs>
+      <g>
+       <use xlink:href="#p1-m67eef88e7e" x="56.853543" y="130.166929" style="stroke: #000000; stroke-width: 0.55" />
+      </g>
+     </g>
+     <g id="p1-text_1">
+      <text style="font-size: 6.5px; font-family: 'Times New Roman', 'Latin Modern Roman', 'DejaVu Serif', serif; text-anchor: middle" x="56.853543" y="140.780367" transform="rotate(-0 56.853543 140.780367)">0.85</text>
+     </g>
+    </g>
+    <g id="p1-xtick_2">
+     <g id="p1-line2d_2">
+      <g>
+       <use xlink:href="#p1-m67eef88e7e" x="85.089764" y="130.166929" style="stroke: #000000; stroke-width: 0.55" />
+      </g>
+     </g>
+     <g id="p1-text_2">
+      <text style="font-size: 6.5px; font-family: 'Times New Roman', 'Latin Modern Roman', 'DejaVu Serif', serif; text-anchor: middle" x="85.089764" y="140.780367" transform="rotate(-0 85.089764 140.780367)">0.90</text>
+     </g>
+    </g>
+    <g id="p1-xtick_3">
+     <g id="p1-line2d_3">
+      <g>
+       <use xlink:href="#p1-m67eef88e7e" x="113.325984" y="130.166929" style="stroke: #000000; stroke-width: 0.55" />
+      </g>
+     </g>
+     <g id="p1-text_3">
+      <text style="font-size: 6.5px; font-family: 'Times New Roman', 'Latin Modern Roman', 'DejaVu Serif', serif; text-anchor: middle" x="113.325984" y="140.780367" transform="rotate(-0 113.325984 140.780367)">0.95</text>
+     </g>
+    </g>
+    <g id="p1-xtick_4">
+     <g id="p1-line2d_4">
+      <g>
+       <use xlink:href="#p1-m67eef88e7e" x="141.562205" y="130.166929" style="stroke: #000000; stroke-width: 0.55" />
+      </g>
+     </g>
+     <g id="p1-text_4">
+      <text style="font-size: 6.5px; font-family: 'Times New Roman', 'Latin Modern Roman', 'DejaVu Serif', serif; text-anchor: middle" x="141.562205" y="140.780367" transform="rotate(-0 141.562205 140.780367)">1.00</text>
+     </g>
+    </g>
+    <g id="p1-xtick_5">
+     <g id="p1-line2d_5">
+      <g>
+       <use xlink:href="#p1-m67eef88e7e" x="169.798425" y="130.166929" style="stroke: #000000; stroke-width: 0.55" />
+      </g>
+     </g>
+     <g id="p1-text_5">
+      <text style="font-size: 6.5px; font-family: 'Times New Roman', 'Latin Modern Roman', 'DejaVu Serif', serif; text-anchor: middle" x="169.798425" y="140.780367" transform="rotate(-0 169.798425 140.780367)">1.05</text>
+     </g>
+    </g>
+    <g id="p1-xtick_6">
+     <g id="p1-line2d_6">
+      <g>
+       <use xlink:href="#p1-m67eef88e7e" x="198.034646" y="130.166929" style="stroke: #000000; stroke-width: 0.55" />
+      </g>
+     </g>
+     <g id="p1-text_6">
+      <text style="font-size: 6.5px; font-family: 'Times New Roman', 'Latin Modern Roman', 'DejaVu Serif', serif; text-anchor: middle" x="198.034646" y="140.780367" transform="rotate(-0 198.034646 140.780367)">1.10</text>
+     </g>
+    </g>
+    <g id="p1-xtick_7">
+     <g id="p1-line2d_7">
+      <g>
+       <use xlink:href="#p1-m67eef88e7e" x="226.270866" y="130.166929" style="stroke: #000000; stroke-width: 0.55" />
+      </g>
+     </g>
+     <g id="p1-text_7">
+      <text style="font-size: 6.5px; font-family: 'Times New Roman', 'Latin Modern Roman', 'DejaVu Serif', serif; text-anchor: middle" x="226.270866" y="140.780367" transform="rotate(-0 226.270866 140.780367)">1.15</text>
+     </g>
+    </g>
+    <g id="p1-text_8">
+     
+     <g transform="translate(119.386205 151.170257)">
+      <text>
+       <tspan x="0" y="-0.015625" style="font-size: 7.2px; font-family: 'Times New Roman'">F</tspan>
+       <tspan x="3.997345" y="-0.015625" style="font-size: 7.2px; font-family: 'Times New Roman'">l</tspan>
+       <tspan x="5.994263" y="-0.015625" style="font-size: 7.2px; font-family: 'Times New Roman'">u</tspan>
+       <tspan x="9.588013" y="-0.015625" style="font-size: 7.2px; font-family: 'Times New Roman'">x</tspan>
+       <tspan x="13.181763" y="-0.015625" style="font-size: 7.2px; font-family: 'Times New Roman'"> </tspan>
+       <tspan x="14.978638" y="-0.015625" style="font-size: 7.2px; font-family: 'Times New Roman'">b</tspan>
+       <tspan x="18.572388" y="-0.015625" style="font-size: 7.2px; font-family: 'Times New Roman'">i</tspan>
+       <tspan x="20.569305" y="-0.015625" style="font-size: 7.2px; font-family: 'Times New Roman'">a</tspan>
+       <tspan x="23.75946" y="-0.015625" style="font-size: 7.2px; font-family: 'Times New Roman'">s</tspan>
+       <tspan x="26.556549" y="-0.015625" style="font-size: 7.2px; font-family: 'Times New Roman'"> </tspan>
+       <tspan x="28.353424" y="-0.015625" style="font-size: 7.2px; font-family: 'STIXGeneral'">Φ</tspan>
+       <tspan x="33.837463" y="-0.015625" style="font-size: 7.2px; font-family: 'STIXGeneral'">/</tspan>
+       <tspan x="35.835571" y="-0.015625" style="font-size: 7.2px; font-family: 'STIXGeneral'">Φ</tspan>
+       <tspan x="41.430626" y="0.935937" style="font-size: 5.04px; font-family: 'STIXGeneral'">0</tspan>
+      </text>
+     </g>
+    </g>
+   </g>
+   <g id="p1-matplotlib.axis_2">
+    <g id="p1-ytick_1">
+     <g id="p1-line2d_8">
+      <defs>
+       <path id="p1-m0093da1fa6" d="M 0 0  L -2.6 0  " style="stroke: #000000; stroke-width: 0.55" />
+      </defs>
+      <g>
+       <use xlink:href="#p1-m0093da1fa6" x="39.911811" y="115.086614" style="stroke: #000000; stroke-width: 0.55" />
+      </g>
+     </g>
+     <g id="p1-text_9">
+      <text style="font-size: 6.5px; font-family: 'Times New Roman', 'Latin Modern Roman', 'DejaVu Serif', serif; text-anchor: end" x="33.811811" y="117.343333" transform="rotate(-0 33.811811 117.343333)">3.5</text>
+     </g>
+    </g>
+    <g id="p1-ytick_2">
+     <g id="p1-line2d_9">
+      <g>
+       <use xlink:href="#p1-m0093da1fa6" x="39.911811" y="81.574803" style="stroke: #000000; stroke-width: 0.55" />
+      </g>
+     </g>
+     <g id="p1-text_10">
+      <text style="font-size: 6.5px; font-family: 'Times New Roman', 'Latin Modern Roman', 'DejaVu Serif', serif; text-anchor: end" x="33.811811" y="83.831522" transform="rotate(-0 33.811811 83.831522)">3.6</text>
+     </g>
+    </g>
+    <g id="p1-ytick_3">
+     <g id="p1-line2d_10">
+      <g>
+       <use xlink:href="#p1-m0093da1fa6" x="39.911811" y="48.062992" style="stroke: #000000; stroke-width: 0.55" />
+      </g>
+     </g>
+     <g id="p1-text_11">
+      <text style="font-size: 6.5px; font-family: 'Times New Roman', 'Latin Modern Roman', 'DejaVu Serif', serif; text-anchor: end" x="33.811811" y="50.319711" transform="rotate(-0 33.811811 50.319711)">3.7</text>
+     </g>
+    </g>
+    <g id="p1-ytick_4">
+     <g id="p1-line2d_11">
+      <g>
+       <use xlink:href="#p1-m0093da1fa6" x="39.911811" y="14.551181" style="stroke: #000000; stroke-width: 0.55" />
+      </g>
+     </g>
+     <g id="p1-text_12">
+      <text style="font-size: 6.5px; font-family: 'Times New Roman', 'Latin Modern Roman', 'DejaVu Serif', serif; text-anchor: end" x="33.811811" y="16.8079" transform="rotate(-0 33.811811 16.8079)">3.8</text>
+     </g>
+    </g>
+    <g id="p1-text_13">
+     
+     <g transform="translate(20.102811 108.041669) rotate(-90)">
+      <text>
+       <tspan x="0" y="-0.015625" style="font-size: 7.2px; font-family: 'Times New Roman'">Q</tspan>
+       <tspan x="5.190582" y="-0.015625" style="font-size: 7.2px; font-family: 'Times New Roman'">u</tspan>
+       <tspan x="8.784332" y="-0.015625" style="font-size: 7.2px; font-family: 'Times New Roman'">b</tspan>
+       <tspan x="12.378082" y="-0.015625" style="font-size: 7.2px; font-family: 'Times New Roman'">i</tspan>
+       <tspan x="14.375" y="-0.015625" style="font-size: 7.2px; font-family: 'Times New Roman'">t</tspan>
+       <tspan x="16.371918" y="-0.015625" style="font-size: 7.2px; font-family: 'Times New Roman'"> </tspan>
+       <tspan x="18.168793" y="-0.015625" style="font-size: 7.2px; font-family: 'Times New Roman'">f</tspan>
+       <tspan x="20.562286" y="-0.015625" style="font-size: 7.2px; font-family: 'Times New Roman'">r</tspan>
+       <tspan x="22.95578" y="-0.015625" style="font-size: 7.2px; font-family: 'Times New Roman'">e</tspan>
+       <tspan x="26.145935" y="-0.015625" style="font-size: 7.2px; font-family: 'Times New Roman'">q</tspan>
+       <tspan x="29.739685" y="-0.015625" style="font-size: 7.2px; font-family: 'Times New Roman'">u</tspan>
+       <tspan x="33.333435" y="-0.015625" style="font-size: 7.2px; font-family: 'Times New Roman'">e</tspan>
+       <tspan x="36.52359" y="-0.015625" style="font-size: 7.2px; font-family: 'Times New Roman'">n</tspan>
+       <tspan x="40.11734" y="-0.015625" style="font-size: 7.2px; font-family: 'Times New Roman'">c</tspan>
+       <tspan x="43.307495" y="-0.015625" style="font-size: 7.2px; font-family: 'Times New Roman'">y</tspan>
+       <tspan x="46.901245" y="-0.015625" style="font-size: 7.2px; font-family: 'Times New Roman'"> </tspan>
+       <tspan x="56.044644" y="-0.015625" style="font-size: 7.2px; font-family: 'Times New Roman'"> </tspan>
+       <tspan x="57.841519" y="-0.015625" style="font-size: 7.2px; font-family: 'Times New Roman'">(</tspan>
+       <tspan x="60.235013" y="-0.015625" style="font-size: 7.2px; font-family: 'Times New Roman'">G</tspan>
+       <tspan x="65.425595" y="-0.015625" style="font-size: 7.2px; font-family: 'Times New Roman'">H</tspan>
+       <tspan x="70.616177" y="-0.015625" style="font-size: 7.2px; font-family: 'Times New Roman'">z</tspan>
+       <tspan x="73.806332" y="-0.015625" style="font-size: 7.2px; font-family: 'Times New Roman'">)</tspan>
+       <tspan x="48.69812" y="-0.015625" style="font-style: italic; font-size: 7.2px; font-family: 'STIXGeneral'">f</tspan>
+       <tspan x="50.696228" y="0.935937" style="font-size: 5.04px; font-family: 'STIXGeneral'">0</tspan>
+       <tspan x="53.211842" y="0.935937" style="font-size: 5.04px; font-family: 'STIXGeneral'">1</tspan>
+      </text>
+     </g>
+    </g>
+   </g>
+   <g id="p1-line2d_12">
+    <path d="M 39.911811 123.299444  L 44.79103 112.962326  L 49.670249 103.164391  L 54.142866 94.651964  L 58.615483 86.584222  L 63.088101 78.95768  L 67.560718 71.769152  L 72.033335 65.01573  L 76.505953 58.694764  L 80.571969 53.321668  L 84.637984 48.302327  L 88.704 43.635231  L 92.770016 39.319009  L 96.836031 35.352415  L 100.495446 32.080482  L 104.15486 29.090099  L 107.814274 26.380598  L 111.473688 23.951386  L 115.133102 21.801933  L 118.792517 19.931778  L 122.045329 18.503565  L 125.298142 17.295478  L 128.550954 16.307315  L 131.803767 15.538912  L 135.05658 14.990142  L 138.309392 14.660917  L 141.562205 14.551181  L 144.815017 14.660917  L 148.06783 14.990142  L 151.320643 15.538912  L 154.573455 16.307315  L 157.826268 17.295478  L 161.07908 18.503565  L 164.331893 19.931778  L 167.584706 21.580353  L 171.24412 23.698751  L 174.903534 26.096854  L 178.562948 28.775184  L 182.222362 31.734327  L 185.881776 34.974941  L 189.541191 38.497758  L 193.607206 42.743959  L 197.673222 47.340774  L 201.739238 52.28955  L 205.805254 57.591767  L 209.871269 63.249048  L 213.937285 69.263164  L 218.409902 76.293149  L 222.88252 83.76006  L 227.355137 91.666978  L 231.827754 100.017279  L 236.300372 108.814651  L 241.179591 118.926415  L 243.212598 123.299444  L 243.212598 123.299444  " clip-path="url(#p1-p57f2b102c6)" style="fill: none; stroke: #24272b; stroke-width: 1.25; stroke-linecap: square" />
+   </g>
+   <g id="p1-patch_4">
+    <path d="M 39.911811 130.166929  L 39.911811 9.524409  " style="fill: none; stroke: #000000; stroke-width: 0.65; stroke-linejoin: miter; stroke-linecap: square" />
+   </g>
+   <g id="p1-patch_5">
+    <path d="M 39.911811 130.166929  L 243.212598 130.166929  " style="fill: none; stroke: #000000; stroke-width: 0.65; stroke-linejoin: miter; stroke-linecap: square" />
+   </g>
+   <g id="p1-text_14">
+    <text style="font-size: 6.2px; font-family: 'Times New Roman', 'Latin Modern Roman', 'DejaVu Serif', serif; text-anchor: start; fill: #747a80" x="54.142866" y="21.068086" transform="rotate(-0 54.142866 21.068086)">withheld dispersion</text>
+   </g>
+   <g id="p1-text_15">
+    </g>
+   <g id="p1-axes_2">
+    <g id="p1-patch_6">
+     <path d="M 119.199118 114.483402  L 208.651465 114.483402  L 208.651465 68.639244  L 119.199118 68.639244  z " style="fill: #ffffff" />
+    </g>
+    <g id="p1-line2d_13">
+     <path d="M 119.199118 109.988876  L 208.651465 109.988876  " clip-path="url(#p1-pfebc7f96cd)" style="fill: none; stroke-dasharray: 1.8,1.2; stroke-dashoffset: 0; stroke: #b84a3a; stroke-width: 0.6" />
+    </g>
+    <g id="p1-line2d_14">
+     <path d="M 119.199118 117.187959  L 128.740702 110.756811  L 138.282285 104.601434  L 147.823869 98.721581  L 157.365453 93.117017  L 166.310687 88.112557  L 175.255922 83.349679  L 184.201157 78.828219  L 193.146391 74.548019  L 202.091626 70.508932  L 208.651465 67.700096  L 208.651465 67.700096  " clip-path="url(#p1-pfebc7f96cd)" style="fill: none; stroke: #24272b; stroke-width: 0.85; stroke-linecap: square" />
+    </g>
+    <g id="p1-patch_7">
+     <path d="M 119.199118 68.639244  L 104.008031 20.155019  " style="fill: #747a80; opacity: 0.28; stroke: #747a80; stroke-width: 0.55; stroke-linejoin: miter" />
+    </g>
+    <g id="p1-patch_8">
+     <path d="M 208.651465 68.639244  L 118.690866 20.155019  " style="fill: #747a80; opacity: 0.28; stroke: #747a80; stroke-width: 0.55; stroke-linejoin: miter" />
+    </g>
+    <g id="p1-matplotlib.axis_3">
+     <g id="p1-xtick_8">
+      <g id="p1-line2d_15">
+       <defs>
+        <path id="p1-mc745457d7b" d="M 0 0  L 0 1.8  " style="stroke: #000000; stroke-width: 0.45" />
+       </defs>
+       <g>
+        <use xlink:href="#p1-mc745457d7b" x="141.562205" y="114.483402" style="stroke: #000000; stroke-width: 0.45" />
+       </g>
+      </g>
+      <g id="p1-text_16">
+       <text style="font-size: 5px; font-family: 'Times New Roman', 'Latin Modern Roman', 'DejaVu Serif', serif; text-anchor: middle" x="141.562205" y="121.055277" transform="rotate(-0 141.562205 121.055277)">0.94</text>
+      </g>
+     </g>
+     <g id="p1-xtick_9">
+      <g id="p1-line2d_16">
+       <g>
+        <use xlink:href="#p1-mc745457d7b" x="175.966953" y="114.483402" style="stroke: #000000; stroke-width: 0.45" />
+       </g>
+      </g>
+      <g id="p1-text_17">
+       <text style="font-size: 5px; font-family: 'Times New Roman', 'Latin Modern Roman', 'DejaVu Serif', serif; text-anchor: middle" x="175.966953" y="121.055277" transform="rotate(-0 175.966953 121.055277)">0.95</text>
+      </g>
+     </g>
+    </g>
+    <g id="p1-matplotlib.axis_4">
+     <g id="p1-ytick_5">
+      <g id="p1-line2d_17">
+       <defs>
+        <path id="p1-m03e39874a0" d="M 0 0  L -1.8 0  " style="stroke: #000000; stroke-width: 0.45" />
+       </defs>
+       <g>
+        <use xlink:href="#p1-m03e39874a0" x="119.199118" y="110.488705" style="stroke: #000000; stroke-width: 0.45" />
+       </g>
+      </g>
+      <g id="p1-text_18">
+       <text style="font-size: 5px; font-family: 'Times New Roman', 'Latin Modern Roman', 'DejaVu Serif', serif; text-anchor: end" x="116.099118" y="112.224643" transform="rotate(-0 116.099118 112.224643)">3.76</text>
+      </g>
+     </g>
+     <g id="p1-ytick_6">
+      <g id="p1-line2d_18">
+       <g>
+        <use xlink:href="#p1-m03e39874a0" x="119.199118" y="74.532503" style="stroke: #000000; stroke-width: 0.45" />
+       </g>
+      </g>
+      <g id="p1-text_19">
+       <text style="font-size: 5px; font-family: 'Times New Roman', 'Latin Modern Roman', 'DejaVu Serif', serif; text-anchor: end" x="116.099118" y="76.268441" transform="rotate(-0 116.099118 76.268441)">3.78</text>
+      </g>
+     </g>
+    </g>
+    <g id="p1-patch_9">
+     <path d="M 119.199118 114.483402  L 119.199118 68.639244  " style="fill: none; stroke: #747a80; stroke-width: 0.55; stroke-linejoin: miter; stroke-linecap: square" />
+    </g>
+    <g id="p1-patch_10">
+     <path d="M 208.651465 114.483402  L 208.651465 68.639244  " style="fill: none; stroke: #747a80; stroke-width: 0.55; stroke-linejoin: miter; stroke-linecap: square" />
+    </g>
+    <g id="p1-patch_11">
+     <path d="M 119.199118 114.483402  L 208.651465 114.483402  " style="fill: none; stroke: #747a80; stroke-width: 0.55; stroke-linejoin: miter; stroke-linecap: square" />
+    </g>
+    <g id="p1-patch_12">
+     <path d="M 119.199118 68.639244  L 208.651465 68.639244  " style="fill: none; stroke: #747a80; stroke-width: 0.55; stroke-linejoin: miter; stroke-linecap: square" />
+    </g>
+    <g id="p1-line2d_19">
+     <path d="M 194.258644 74.032674  L 159.853896 91.700579  L 133.929289 107.375408  L 130.330392 109.712147  L 129.997508 109.930268  L 129.922382 109.97954  " clip-path="url(#p1-pfebc7f96cd)" style="fill: none; stroke: #2c6fa3; stroke-width: 0.85; stroke-linecap: square" />
+    </g>
+    <g id="p1-text_20">
+     <text style="font-size: 5.1px; font-family: 'Times New Roman', 'Latin Modern Roman', 'DejaVu Serif', serif; text-anchor: end; fill: #d98424" x="191.258644" y="81.573987" transform="rotate(-0 191.258644 81.573987)">seed</text>
+    </g>
+    <g id="p1-text_21">
+     
+     <g style="fill: #b84a3a" transform="translate(200.063632 110.871051)">
+      <text>
+       <tspan x="0" y="-0.546875" style="font-style: italic; font-size: 5.1px; font-family: 'STIXGeneral'; fill: #b84a3a">f</tspan>
+       <tspan x="1.416061" y="0.128125" style="font-size: 3.57px; font-family: 'STIXGeneral'; fill: #b84a3a">t</tspan>
+       <tspan x="2.407304" y="0.128125" style="font-size: 3.57px; font-family: 'STIXGeneral'; fill: #b84a3a">a</tspan>
+       <tspan x="3.990443" y="0.128125" style="font-size: 3.57px; font-family: 'STIXGeneral'; fill: #b84a3a">r</tspan>
+      </text>
+     </g>
+    </g>
+    <g id="p1-text_22">
+     <text style="font-size: 5.2px; font-family: 'Times New Roman', 'Latin Modern Roman', 'DejaVu Serif', serif; text-anchor: start; fill: #24272b" x="122.777212" y="75.459085" transform="rotate(-0 122.777212 75.459085)">local calibration</text>
+    </g>
+    <g id="p1-PathCollection_1">
+     <defs>
+      <path id="p1-m5c61a9405d" d="M 0 1.581139  C 0.419323 1.581139 0.821528 1.41454 1.118034 1.118034  C 1.41454 0.821528 1.581139 0.419323 1.581139 0  C 1.581139 -0.419323 1.41454 -0.821528 1.118034 -1.118034  C 0.821528 -1.41454 0.419323 -1.581139 0 -1.581139  C -0.419323 -1.581139 -0.821528 -1.41454 -1.118034 -1.118034  C -1.41454 -0.821528 -1.581139 -0.419323 -1.581139 0  C -1.581139 0.419323 -1.41454 0.821528 -1.118034 1.118034  C -0.821528 1.41454 -0.419323 1.581139 0 1.581139  z " style="stroke: #2c6fa3; stroke-width: 0.7" />
+     </defs>
+     <g clip-path="url(#p1-pfebc7f96cd)">
+      <use xlink:href="#p1-m5c61a9405d" x="194.258644" y="74.032674" style="fill: #ffffff; stroke: #2c6fa3; stroke-width: 0.7" />
+      <use xlink:href="#p1-m5c61a9405d" x="159.853896" y="91.700579" style="fill: #ffffff; stroke: #2c6fa3; stroke-width: 0.7" />
+      <use xlink:href="#p1-m5c61a9405d" x="133.929289" y="107.375408" style="fill: #ffffff; stroke: #2c6fa3; stroke-width: 0.7" />
+      <use xlink:href="#p1-m5c61a9405d" x="130.330392" y="109.712147" style="fill: #ffffff; stroke: #2c6fa3; stroke-width: 0.7" />
+      <use xlink:href="#p1-m5c61a9405d" x="129.997508" y="109.930268" style="fill: #ffffff; stroke: #2c6fa3; stroke-width: 0.7" />
+      <use xlink:href="#p1-m5c61a9405d" x="129.922382" y="109.97954" style="fill: #ffffff; stroke: #2c6fa3; stroke-width: 0.7" />
+     </g>
+    </g>
+    <g id="p1-PathCollection_2">
+     <defs>
+      <path id="p1-md4c6830e48" d="M 0 1.936492  C 0.513564 1.936492 1.006162 1.732451 1.369306 1.369306  C 1.732451 1.006162 1.936492 0.513564 1.936492 0  C 1.936492 -0.513564 1.732451 -1.006162 1.369306 -1.369306  C 1.006162 -1.732451 0.513564 -1.936492 0 -1.936492  C -0.513564 -1.936492 -1.006162 -1.732451 -1.369306 -1.369306  C -1.732451 -1.006162 -1.936492 -0.513564 -1.936492 0  C -1.936492 0.513564 -1.732451 1.006162 -1.369306 1.369306  C -1.006162 1.732451 -0.513564 1.936492 0 1.936492  z " style="stroke: #d98424" />
+     </defs>
+     <g clip-path="url(#p1-pfebc7f96cd)">
+      <use xlink:href="#p1-md4c6830e48" x="194.258644" y="74.032674" style="fill: #d98424; stroke: #d98424" />
+     </g>
+    </g>
+    <g id="p1-line2d_20">
+     <path d="M 129.908665 109.988876  " clip-path="url(#p1-pfebc7f96cd)" style="fill: none; stroke: #b84a3a; stroke-linecap: square" />
+     <defs>
+      <path id="p1-mf06e16a641" d="M 0 -2.6  L -0.583736 -0.803444  L -2.472747 -0.803444  L -0.944505 0.306888  L -1.528242 2.103444  L -0 0.993112  L 1.528242 2.103444  L 0.944505 0.306888  L 2.472747 -0.803444  L 0.583736 -0.803444  z " style="stroke: #b84a3a; stroke-linejoin: bevel" />
+     </defs>
+     <g clip-path="url(#p1-pfebc7f96cd)">
+      <use xlink:href="#p1-mf06e16a641" x="129.908665" y="109.988876" style="fill: #b84a3a; stroke: #b84a3a; stroke-linejoin: bevel" />
+     </g>
+    </g>
+    <g id="p1-patch_13">
+     <path d="M 158.141834 92.735746  Q 146.891217 99.53822 136.262485 105.964684  " style="fill: none; stroke: #2c6fa3; stroke-width: 0.65; stroke-linecap: round" />
+     <path d="M 138.71426 105.767703  L 136.262485 105.964684  L 137.575964 103.885076  z " style="fill: #2c6fa3; stroke: #2c6fa3; stroke-width: 0.65; stroke-linecap: round" />
+    </g>
+   </g>
+  </g>
+ </g>
+ <defs>
+  <clipPath id="p1-p57f2b102c6">
+   <rect x="39.911811" y="9.524409" width="203.300787" height="120.64252" />
+  </clipPath>
+  <clipPath id="p1-pfebc7f96cd">
+   <rect x="119.199118" y="68.639244" width="89.452346" height="45.844157" />
+  </clipPath>
+ </defs>
+</g><g id="p2-panel-2" inkscape:groupmode="layer" inkscape:label="Panel b - probe timing" transform="translate(98.000000,7.000000) scale(1.509433962) translate(-0.000000,-0.000000)"><defs>
+    <marker id="p2-time-arrow" markerWidth="0.95" markerHeight="0.52" refX="0.89" refY="0.26" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L0.95,0.26 L0,0.52 z" fill="#34383a" />
+    </marker>
+    <marker id="p2-dim-start" markerWidth="0.78" markerHeight="0.44" refX="0.07" refY="0.22" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0.72,0 L0,0.22 L0.72,0.44" fill="none" stroke="#6f757b" stroke-width="0.13" />
+    </marker>
+    <marker id="p2-dim-end" markerWidth="0.78" markerHeight="0.44" refX="0.71" refY="0.22" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L0.72,0.22 L0,0.44" fill="none" stroke="#6f757b" stroke-width="0.13" />
+    </marker>
+    <marker id="p2-leader-arrow" markerWidth="0.72" markerHeight="0.4" refX="0.65" refY="0.2" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L0.72,0.2 L0,0.4 z" fill="#656b71" />
+    </marker>
+
+    
+    <g id="p2-sin2-envelope">
+      <path d="M0,0 L0.333,-0.031 L1,-0.264 L1.667,-0.667 L2.333,-1.133 L3,-1.536 L3.667,-1.769 L4.333,-1.769 L5,-1.536 L5.667,-1.133 L6.333,-0.667 L7,-0.264 L7.667,-0.031 L8,0" fill="none" stroke="currentColor" stroke-width="0.16" stroke-linejoin="round" />
+      <path d="M0,0 L0.333,0.031 L1,0.264 L1.667,0.667 L2.333,1.133 L3,1.536 L3.667,1.769 L4.333,1.769 L5,1.536 L5.667,1.133 L6.333,0.667 L7,0.264 L7.667,0.031 L8,0" fill="none" stroke="currentColor" stroke-width="0.16" stroke-linejoin="round" />
+    </g>
+    
+    <path id="p2-sin2-carrier" d="M0,0 Q0.333,-0.062 0.667,0 Q1,0.528 1.333,0              Q1.667,-1.334 2,0 Q2.333,2.266 2.667,0              Q3,-3.072 3.333,0 Q3.667,3.538 4,0              Q4.333,-3.538 4.667,0 Q5,3.072 5.333,0              Q5.667,-2.266 6,0 Q6.333,1.334 6.667,0              Q7,-0.528 7.333,0 Q7.667,0.062 8,0" fill="none" stroke="currentColor" stroke-width="0.23" />
+    <path id="p2-sin2-carrier-q" d="M0,-0.031 Q0.333,0 0.667,0.117 Q1,0 1.333,-0.45              Q1.667,0 2,0.9 Q2.333,0 2.667,-1.35              Q3,0 3.333,1.68 Q3.667,0 4,-1.8              Q4.333,0 4.667,1.68 Q5,0 5.333,-1.35              Q5.667,0 6,0.9 Q6.333,0 6.667,-0.45              Q7,0 7.333,0.117 Q7.667,0 8,-0.031" fill="none" stroke="currentColor" stroke-width="0.21" />
+
+    <g id="p2-meter-symbol">
+      <rect x="0" y="0" width="4.5" height="4.3" rx="0.2" fill="#ffffff" stroke="#3f444a" stroke-width="0.23" />
+      <path d="M0.9,3.15 A1.35,1.35 0 0 1 3.6,3.15" fill="none" stroke="#3f444a" stroke-width="0.2" />
+      <path d="M2.25,2.98 L3.22,1.62" fill="none" stroke="#3f444a" stroke-width="0.2" stroke-linecap="round" />
+      <circle cx="2.25" cy="2.98" r="0.14" fill="#3f444a" />
+    </g>
+
+    <style>
+      .panel { font-family: "Times New Roman", "Latin Modern Roman", serif; font-size: 2.35px; font-weight: 700; fill: #17191c; }
+      .math { font-family: "Times New Roman", "Latin Modern Roman", serif; font-size: 1.58px; font-style: italic; fill: #25292e; }
+      .small { font-family: "Times New Roman", "Latin Modern Roman", serif; font-size: 1.22px; font-style: italic; fill: #555b61; }
+      .timeline { fill: none; stroke: #34383a; stroke-width: 0.2; marker-end: url(#p2-time-arrow); }
+      .guide { fill: none; stroke: #6f757b; stroke-width: 0.14; marker-start: url(#p2-dim-start); marker-end: url(#p2-dim-end); }
+      .scan-arrow { fill: none; stroke: #858b91; stroke-width: 0.15; marker-start: url(#p2-dim-start); marker-end: url(#p2-dim-end); }
+      .leader { fill: none; stroke: #656b71; stroke-width: 0.14; marker-end: url(#p2-leader-arrow); }
+      .phase { font-family: "Times New Roman", "Latin Modern Roman", serif; font-size: 1.15px; font-style: italic; fill: #62686e; }
+    </style>
+  </defs>
+
+  <g inkscape:groupmode="layer" inkscape:label="01 Background" id="p2-layer-background">
+    <rect width="53" height="26.5" fill="#ffffff" />
+    </g>
+
+  <g inkscape:groupmode="layer" inkscape:label="02 Circuit Lines" id="p2-layer-lines">
+    <path class="timeline" d="M4.3,5.8 H51.5" />
+    <path class="timeline" d="M4.3,12.5 H51.5" />
+    <path class="timeline" d="M4.3,20.2 H51.5" />
+    <path class="guide" d="M16.5,8.35 H29.5" />
+    <path class="guide" d="M16.5,15.05 H29.5" />
+    <path class="scan-arrow" d="M25.5,3.3 H29.5" />
+  </g>
+
+  <g inkscape:groupmode="layer" inkscape:label="03 Pulses" id="p2-layer-pulses">
+    
+    <g color="#4b5056" transform="translate(8.5,5.8)"><use xlink:href="#p2-sin2-envelope" /><use xlink:href="#p2-sin2-carrier" /></g>
+    <g color="#70767c" opacity="0.24" transform="translate(25.5,5.8)"><use xlink:href="#p2-sin2-envelope" /><use xlink:href="#p2-sin2-carrier" /></g>
+    <g color="#4b5056" transform="translate(29.5,5.8)"><use xlink:href="#p2-sin2-envelope" /><use xlink:href="#p2-sin2-carrier" /></g>
+
+    
+    <g color="#4b5056" transform="translate(8.5,12.5)"><use xlink:href="#p2-sin2-envelope" /><use xlink:href="#p2-sin2-carrier" /></g>
+    <g color="#4b5056" transform="translate(29.5,12.5)"><use xlink:href="#p2-sin2-envelope" /><use xlink:href="#p2-sin2-carrier" /></g>
+
+    
+    <g color="#4b5056" transform="translate(21.5,20.2)"><use xlink:href="#p2-sin2-envelope" /><use xlink:href="#p2-sin2-carrier" /></g>
+    <g color="#4b5056" transform="translate(29.5,20.2)"><use xlink:href="#p2-sin2-envelope" /><use xlink:href="#p2-sin2-carrier" /></g>
+  </g>
+
+  <g inkscape:groupmode="layer" inkscape:label="04 Measurement" id="p2-layer-measurement">
+    <use xlink:href="#p2-meter-symbol" transform="translate(43.5,3.65)" />
+    <use xlink:href="#p2-meter-symbol" transform="translate(43.5,10.35)" />
+    <use xlink:href="#p2-meter-symbol" transform="translate(43.5,18.05)" />
+  </g>
+
+  <g inkscape:groupmode="layer" inkscape:label="05 Labels" id="p2-layer-labels">
+    <text class="math" x="12.5" y="3.35" text-anchor="middle">R<tspan baseline-shift="sub" font-size="1.03">y</tspan>(π/2)</text>
+    <text class="math" x="33.5" y="3.35" text-anchor="middle">R<tspan baseline-shift="sub" font-size="1.03">φ</tspan>(π/2)</text>
+    <text class="small" x="27.5" y="2.85" text-anchor="middle">scan τ</text>
+    <text class="math" x="23" y="7.95" text-anchor="middle">τ<tspan baseline-shift="sub" font-size="1.03">j</tspan></text>
+
+    <text class="math" x="12.5" y="10.05" text-anchor="middle">R<tspan baseline-shift="sub" font-size="1.03">y</tspan>(π/2)</text>
+    <text class="math" x="33.5" y="10.05" text-anchor="middle">R<tspan baseline-shift="sub" font-size="1.03">φ</tspan>(π/2)</text>
+    <text class="math" x="23" y="14.65" text-anchor="middle">τ<tspan baseline-shift="sub" font-size="1.03">0</tspan></text>
+
+    <text class="math" x="25.5" y="17.75" text-anchor="middle">R<tspan baseline-shift="sub" font-size="1.03">y</tspan>(α)</text>
+    <text class="math" x="33.5" y="17.75" text-anchor="middle">R<tspan baseline-shift="sub" font-size="1.03">±x</tspan>(α)</text>
+    <text class="math" x="29.5" y="25.75" text-anchor="middle">τ=0</text>
+    <path class="leader" d="M29.5,24.55 V22.65" />
+    <text class="math" x="49.4" y="19.55" text-anchor="middle">p<tspan baseline-shift="sub" font-size="1.03">±X</tspan></text>
+  </g>
+</g><g id="p3-panel-3" inkscape:groupmode="layer" inkscape:label="Panel c - calibration workflow" transform="translate(24.000000,61.000000) scale(1.500000000) translate(-0.000000,-0.000000)"><ns3:namedview id="p3-namedview32" pagecolor="#ffffff" bordercolor="#000000" borderopacity="0.25" inkscape:showpageshadow="2" inkscape:pageopacity="0.0" inkscape:pagecheckerboard="0" inkscape:deskcolor="#d1d1d1" inkscape:document-units="mm" inkscape:zoom="3.0571989" inkscape:cx="162.40356" inkscape:cy="74.905168" inkscape:window-width="1536" inkscape:window-height="938" inkscape:window-x="-6" inkscape:window-y="-6" inkscape:window-maximized="1" inkscape:current-layer="layer-transitions" />
+  <defs id="p3-defs3">
+    <marker id="p3-arrow-forward" markerWidth="1.2" markerHeight="0.65" refX="1.12" refY="0.325" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L1.2,0.325 L0,0.65 z" fill="#30343a" id="p3-path1" />
+    </marker>
+    <marker id="p3-arrow-fallback" markerWidth="1.2" markerHeight="0.65" refX="1.12" refY="0.325" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L1.2,0.325 L0,0.65 z" fill="#555c62" id="p3-path2" />
+    </marker>
+    <marker id="p3-arrow-failure" markerWidth="1.2" markerHeight="0.65" refX="1.12" refY="0.325" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L1.2,0.325 L0,0.65 z" fill="#626970" id="p3-path3" />
+    </marker>
+    <style id="p3-style3">
+      .state { font-family: "Times New Roman", "Latin Modern Roman", serif; font-size: 2.15px; font-weight: 700; fill: #202327; letter-spacing: 0; }
+      .quantity { font-family: "Times New Roman", "Latin Modern Roman", serif; font-size: 1.55px; font-style: italic; fill: #4f555b; letter-spacing: 0; }
+      .condition { font-family: "Times New Roman", "Latin Modern Roman", serif; font-size: 1.17px; font-style: italic; fill: #30353a; letter-spacing: 0; }
+      .event { font-family: "Times New Roman", "Latin Modern Roman", serif; font-size: 1.14px; font-style: normal; fill: #4f555b; letter-spacing: 0; }
+      .legend { font-family: "Times New Roman", "Latin Modern Roman", serif; font-size: 1.02px; font-style: normal; fill: #30353a; letter-spacing: 0; }
+      .label-bg { fill: #ffffff; stroke: none; }
+      .panel { font-family: "Times New Roman", "Latin Modern Roman", serif; font-size: 2.2px; font-weight: 700; fill: #17191c; letter-spacing: 0; }
+      .node { fill: #ffffff; stroke: #3f444a; stroke-width: 0.30; }
+      .forward { fill: none; stroke: #30343a; stroke-width: 0.22; stroke-linecap: square; stroke-linejoin: round; marker-end: url(#p3-arrow-forward); }
+      .fallback { fill: none; stroke: #555c62; stroke-width: 0.21; stroke-dasharray: 1.15,0.65; stroke-linecap: butt; stroke-linejoin: round; marker-end: url(#p3-arrow-fallback); }
+      .failure { fill: none; stroke: #626970; stroke-width: 0.21; stroke-dasharray: 0.28,0.58; stroke-linecap: round; stroke-linejoin: round; marker-end: url(#p3-arrow-failure); }
+      .legend-forward { fill: none; stroke: #30343a; stroke-width: 0.22; marker-end: url(#p3-arrow-forward); }
+      .legend-fallback { fill: none; stroke: #555c62; stroke-width: 0.21; stroke-dasharray: 1.15,0.65; marker-end: url(#p3-arrow-fallback); }
+      .legend-failure { fill: none; stroke: #626970; stroke-width: 0.21; stroke-dasharray: 0.28,0.58; stroke-linecap: round; marker-end: url(#p3-arrow-failure); }
+    </style>
+  </defs>
+  <g inkscape:groupmode="layer" inkscape:label="01 Background" id="p3-layer-background">
+    <rect id="p3-page-background" width="88" height="30" fill="#ffffff" x="0" y="0" />
+    </g>
+  <g inkscape:groupmode="layer" inkscape:label="02 Transitions" id="p3-layer-transitions">
+    <circle id="p3-initial-state" cx="1.2" cy="11" r="0.38" fill="#30343a" />
+    <path id="p3-initial-to-acquire" class="forward" d="M1.85,11 H5" />
+    <path id="p3-acquire-to-track" class="forward" d="M18,11 H25" />
+    <path id="p3-track-to-verify" class="forward" d="M38,11 H45" />
+    <path id="p3-verify-to-lock" class="forward" d="M58,11 H65" />
+    <path id="p3-lock-to-terminal" class="forward" d="M78,11 H85.1" />
+    <circle id="p3-terminal-state-outer" cx="86" cy="11" r="0.50" fill="#ffffff" stroke="#30343a" stroke-width="0.22" />
+    <circle id="p3-terminal-state-inner" cx="86" cy="11" r="0.23" fill="#30343a" />
+    <path id="p3-acquire-to-verify" class="forward" d="M 16,7.8 V 3.8 H 47 V 7.8" ns3:nodetypes="cccc" />
+    <path id="p3-track-self-loop" class="forward" d="M36,7.8 V5.25 H27 V7.8" />
+    <path id="p3-lock-self-loop" class="forward" d="M76,7.8 V5.25 H67 V7.8" />
+    <path id="p3-verify-to-track" class="fallback" d="M 48,14.2 V 17.2 H 35 V 14.2" ns3:nodetypes="cccc" />
+    <path id="p3-lock-to-verify" class="fallback" d="M 68,14.2 V 17.2 H 55 V 14.2" ns3:nodetypes="cccc" />
+    <path id="p3-track-to-reacquire" class="failure" d="M 28.5,14.2 V 24.45 H 43.5" ns3:nodetypes="ccc" />
+    <path id="p3-verify-to-reacquire" class="failure" d="M51.5,14.2 V22.3" />
+    <path id="p3-lock-to-reacquire" class="failure" d="M 74.5,14.2 V 24.45 H 59.5" ns3:nodetypes="ccc" />
+    <path id="p3-reacquire-to-track" class="forward" d="M 43.5,26.8 H 26.5 V 14.2" ns3:nodetypes="ccc" />
+  </g>
+  <g inkscape:groupmode="layer" inkscape:label="03 State Boxes" id="p3-layer-state-boxes">
+    <rect id="p3-box-acquire" class="node" x="5" y="7.8" width="13" height="6.4" rx="0.3" />
+    <rect id="p3-box-track" class="node" x="25" y="7.8" width="13" height="6.4" rx="0.3" />
+    <rect id="p3-box-verify" class="node" x="45" y="7.8" width="13" height="6.4" rx="0.3" />
+    <rect id="p3-box-lock" class="node" x="65" y="7.8" width="13" height="6.4" rx="0.3" />
+    <rect id="p3-box-reacquire" class="node" x="43.5" y="22.3" width="16" height="6.2" rx="0.3" />
+  </g>
+  <g inkscape:groupmode="layer" inkscape:label="04 State Text" id="p3-layer-state-text">
+    <g id="p3-text-acquire">
+      <text class="state" x="11.5" y="10.65" text-anchor="middle" id="p3-text3">Acquire</text>
+      <text class="quantity" x="11.5" y="12.75" text-anchor="middle" id="p3-text4">U<tspan baseline-shift="sub" font-size="1.0px" font-style="normal" id="p3-tspan3">acq</tspan></text>
+    </g>
+    <g id="p3-text-track">
+      <text class="state" x="31.5" y="10.65" text-anchor="middle" id="p3-text5">Track</text>
+      <text class="quantity" x="31.5" y="12.75" text-anchor="middle" id="p3-text6">U<tspan baseline-shift="sub" font-size="1.0px" font-style="normal" id="p3-tspan5">tra</tspan></text>
+    </g>
+    <g id="p3-text-verify">
+      <text class="state" x="51.5" y="10.65" text-anchor="middle" id="p3-text7">Verify</text>
+      <text class="quantity" x="51.5" y="12.75" text-anchor="middle" id="p3-text8">U<tspan baseline-shift="sub" font-size="1.0px" font-style="normal" id="p3-tspan7">ver</tspan></text>
+    </g>
+    <g id="p3-text-lock">
+      <text class="state" x="71.5" y="10.65" text-anchor="middle" id="p3-text9">Lock</text>
+      <text class="quantity" x="71.5" y="12.75" text-anchor="middle" id="p3-text10">U<tspan baseline-shift="sub" font-size="1.0px" font-style="normal" id="p3-tspan9">loc</tspan></text>
+    </g>
+    <g id="p3-text-reacquire">
+      <text class="state" x="51.5" y="25.05" text-anchor="middle" id="p3-text11">Reacquire</text>
+      <text class="quantity" x="51.5" y="27.15" text-anchor="middle" id="p3-text12">U<tspan baseline-shift="sub" font-size="1.0px" font-style="normal" id="p3-tspan11">reacq</tspan></text>
+    </g>
+  </g>
+  <g inkscape:groupmode="layer" inkscape:label="05 Transition Conditions" id="p3-layer-transition-conditions">
+    <rect class="label-bg" x="57.1" y="15.15" width="8.8000002" height="1.75" rx="0.15000001" id="p3-rect13" />
+    <rect class="label-bg" x="37.1" y="15.15" width="8.8" height="1.75" rx="0.15" id="p3-rect14" />
+    <text id="p3-condition-acquire-verify" class="condition" x="31.5" y="3.1" text-anchor="middle">≤ ε<tspan baseline-shift="sub" font-size="0.78px" font-style="normal" id="p3-tspan16">enter</tspan></text>
+    <text id="p3-condition-acquire-track" class="condition" x="21.5" y="10.15" text-anchor="middle">&gt; ε<tspan baseline-shift="sub" font-size="0.78px" font-style="normal" id="p3-tspan18">enter</tspan></text>
+    <text id="p3-condition-track-loop" class="condition" x="31.5" y="6.75" text-anchor="middle">&gt; ε<tspan baseline-shift="sub" font-size="0.78px" font-style="normal" id="p3-tspan20">enter</tspan></text>
+    <text id="p3-condition-track-verify" class="condition" x="41.5" y="10.15" text-anchor="middle">≤ ε<tspan baseline-shift="sub" font-size="0.78px" font-style="normal" id="p3-tspan22">enter</tspan></text>
+    <text id="p3-condition-verify-lock" class="condition" x="61.5" y="10.15" text-anchor="middle">≤ ε<tspan baseline-shift="sub" font-size="0.78px" font-style="normal" id="p3-tspan24">final</tspan></text>
+    <text id="p3-condition-lock-loop" class="condition" x="71.5" y="6.75" text-anchor="middle">≤ ε<tspan baseline-shift="sub" font-size="0.78px" font-style="normal" id="p3-tspan26">hold</tspan></text>
+    <text id="p3-condition-verify-track" class="condition" x="41.5" y="16.55" text-anchor="middle">&gt; ε<tspan baseline-shift="sub" font-size="0.78px" font-style="normal" id="p3-tspan28">final</tspan></text>
+    <text id="p3-condition-lock-verify" class="condition" x="61.5" y="16.55" text-anchor="middle">&gt; ε<tspan baseline-shift="sub" font-size="0.78px" font-style="normal" id="p3-tspan30">hold</tspan></text>
+    <text id="p3-event-stop" class="event" x="82" y="10.15" text-anchor="middle">stop</text>
+    <text id="p3-event-track-failure" class="event" x="35.5" y="23.85" text-anchor="middle">invalid</text>
+    <text id="p3-event-verify-failure" class="event" x="52.4" y="20.4" text-anchor="start">ambiguous</text>
+    <text id="p3-event-lock-failure" class="event" x="67.5" y="23.85" text-anchor="middle">jump / ref. loss</text>
+    <text id="p3-event-seed-restored" class="event" x="35" y="26.25" text-anchor="middle" xml:space="preserve"><tspan x="35" y="26.25" id="p3-tspan1">valid seed</tspan></text>
+  </g>
+  <g inkscape:groupmode="layer" inkscape:label="06 Line Legend" id="p3-layer-line-legend">
+    <path class="legend-forward" d="M 4.5,23.1 H 8" id="p3-path30" />
+    <text class="legend" x="9.5" y="23.45" id="p3-text30">forward</text>
+    <path class="legend-fallback" d="M 4.5,25.1 H 8" id="p3-path31" />
+    <text class="legend" x="9.5" y="25.45" id="p3-text31">fallback</text>
+    <path class="legend-failure" d="M 4.5,27.1 H 8" id="p3-path32" />
+    <text class="legend" x="9.5" y="27.45" id="p3-text32">failure</text>
+  </g>
+</g><g id="panel-labels" inkscape:groupmode="layer" inkscape:label="Panel labels" font-family="&quot;Times New Roman&quot;, &quot;Latin Modern Roman&quot;, serif" font-size="3.2" font-weight="700" fill="#17191c"><text x="0.8" y="3.4">(a)</text><text x="98.8" y="9.8">(b)</text><text x="24.8" y="64.4">(c)</text></g></svg>

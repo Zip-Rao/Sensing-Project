@@ -1,0 +1,6 @@
+run_id,drive_mode,step,commanded_drive_mhz,applied_drive_mhz,residual_mhz,state_after
+drive_ablation__short_pulse__track__m10.0mhz__det,track,0,9.965602404994288,9.965602404994288,10.00000057557913,track
+drive_ablation__short_pulse__track__m10.0mhz__det,track,1,10.00000057557913,10.00000057557913,5.333924617305441,track
+drive_ablation__short_pulse__track__m10.0mhz__det,track,2,1.0667849234612012,1.0667849234612012,0.6332993349610551,verify
+drive_ablation__short_pulse__track__m10.0mhz__det,track,3,0.12714605561257702,0.12714605561257702,0.0994604771328544,verify
+drive_ablation__short_pulse__fixed__m10.0mhz__det,fixed,0,9.965602404994288,0.0,10.030841461615994,safe_stop

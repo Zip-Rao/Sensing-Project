@@ -12,9 +12,18 @@ until then.
 - **Z-crosstalk reconstruction** — multi-qubit flux crosstalk characterisation
   and compensation. A numerical scaling issue in the transient reconstruction
   kernel is being resolved before promotion.
-- **Transient frequency calibration** — single-point $f_{01}$ calibration from
-  an unknown transient signal (the `method="transient"` option on the frequency
-  calibration classes). The Ramsey-based path is the supported v1 mainline.
+- **Transient flux-response calibration** — fitting the $\Delta\omega(\Phi)$
+  dispersion curve from an unknown transient signal, i.e.
+  `FluxResponseCalibration(method="transient")`. This one method raises
+  `NotImplementedError`. Transient single-point frequency *measurement*
+  (`FrequencyMeasurement`, `SinglePointFrequencyCalibration`, and
+  `FrequencyCalibrationWorkflow`) is implemented and part of the v1 public API.
+  `FrequencyCalibrationWorkflow` accepts an arbitrary multi-stage pipeline via
+  `stages=[CalibrationStage(...), ...]` (each stage picks its own measurement
+  method, stepper, tolerance, and measurement axes); the transient→Ramsey
+  hybrid is the default 2-stage preset. Gradient stages additionally support an
+  `advance_when` predicate for adaptive stage switching on runtime signals a
+  residual threshold cannot express.
 - **CPMG protocol** — Carr–Purcell–Meiboom–Gill dynamical-decoupling sensing.
 - **Tunable coupler** — `TunableCoupler` device for two-qubit gate schemes.
 - **Electronics layer** — explicit AWG/ADC/LO abstractions
@@ -38,8 +47,9 @@ suite + CI, PyPI distribution, tagged GitHub releases, README badges, a
 contributing guide, and a citable Zenodo DOI.
 
 ```{note}
-Waveform *reconstruction* via the transient protocol
-({py:class}`~sqc.experiments.TransientSensingExperiment`) is a **core v1
-feature** and is fully supported. Only transient *frequency calibration* is
-deferred — do not confuse the two.
+Two transient capabilities should not be confused. Transient waveform
+*reconstruction* ({py:class}`~sqc.experiments.TransientSensingExperiment`) and
+transient single-point frequency *measurement* are both core v1 features and are
+fully supported. Only the transient *flux-response calibration* above — fitting
+the $\Delta\omega(\Phi)$ curve from an unknown signal — is deferred.
 ```
