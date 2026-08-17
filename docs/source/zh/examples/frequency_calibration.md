@@ -24,6 +24,13 @@ $$f_{01}(\Phi) \approx \frac{1}{2\pi}\left(\sqrt{8 E_J(\Phi)\, E_C} - E_C\right)
 和新增的事件驱动状态机（`FrequencyCalibrationRuntime` + `FrequencyStateMachine`）。
 以下按逻辑顺序展开各层职责，并在最后详述两者的区别与选型。
 
+```{admonition} 源码扩展阅读
+:class: tip
+如果你希望从实现层理解事件驱动状态机，可阅读
+{doc}`频率标定状态机源码导读 <frequency_state_machine_reading_guide>`。导读采用多遍阅读法，
+先解释 State、Command 和 Event，再沿一次完整运行深入测量后端、Track 控制器与 Runtime。
+```
+
 ## 管道架构
 
 ### 第一步：单点测频 — 标定层 (`FrequencyMeasurement`)
@@ -284,6 +291,11 @@ epsilon_hold  <  epsilon_final  <  epsilon_enter  <  Delta_val
 - **验证条件**（Verify → Lock）：$|\widehat r| + z\sigma_r \le \epsilon_\text{final}$，且连续 $N_\text{verify}$ 次
 - **局部有效条件**（是否必须退出 Track）：$|\widehat\Delta| + z\sigma_\Delta \le \Delta_\text{val}$
 
+Track 还可通过 `expected_sensitivity_sign` 显式给出当前单调分支的
+$\chi_\Phi=\operatorname{sign}(\partial f/\partial\Phi)$。首次探索步据此选择方向，后续
+割线若与该方向不一致，会在发出下一次测量前进入 Reacquire。设为 `None` 时保留旧的
+隐式正方向约定。
+
 **Lock 的监视器迟滞**——这是防止噪声导致状态抖动的关键设计。Lock 状态使用低成本
 瞬态监测器，其噪声特性不同于 Verify 的独立 Ramsey，因此不能简单套用同一个阈值：
 
@@ -296,11 +308,15 @@ epsilon_hold  <  epsilon_final  <  epsilon_enter  <  Delta_val
 
 这样做的好处是：刚通过 Verify 的点不会因为监测器的单次噪声波动就退出 Lock；
 真正的缓慢漂移会在连续命中灰区后被捕获；大的突变直接触发重捕获，不浪费验证次数。
+在解释上述目标残差之前，Lock monitor 还会独立检查探针失谐
+$|\widehat\Delta_\text{mon}|+z\sigma_{\Delta,\text{mon}}\le\Delta_\text{val}$，并核对实际
+偏置和驱动。越出局部可信范围时直接 Reacquire，执行值与命令不一致时进入 SafeStop；
+因此“小残差”不会掩盖一个已经失效的局部探针。
 
 **命令--事件契约**——上述跨层路径通过以下稳定消息保持解耦：
 
 - **命令**（状态机 → 外部）：`AcquireFrequency`、`TrackFrequency(bias, drive)`、
-  `VerifyFrequency(frozen_bias, drive)`、`MonitorFrequency(locked_bias)`、`SafeHold(bias)`
+  `VerifyFrequency(frozen_bias, drive)`、`MonitorFrequency(locked_bias, drive)`、`SafeHold(bias)`
 - **事件**（外部 → 状态机）：`MeasurementSucceeded`（携带频率、不确定度、有效性标志）、
   `MeasurementTechnicalFailure`、`MeasurementRejected`、`TimerElapsed`、`InterlockTriggered`、
   `BudgetExhausted`、`CancelRequested`
@@ -451,7 +467,9 @@ config = FrequencyCalibrationConfig(
     # -- Track 控制器参数 --
     damping=0.8,                           # 阻尼因子（<1 抑制过冲）
     first_bias_step=0.01,                  # 首次探测步长 (Φ₀)
+    expected_sensitivity_sign=-1,          # 当前单调分支 χ_Φ；未知时可设 None
     max_bias_step=0.02,                    # 每步最大偏置变化 (Φ₀)
+    require_monitor_local_validity=True,   # Lock 也必须报告可信探针失谐
 )
 
 # ── 运行 ──────────────────────────────────────────────────────────────

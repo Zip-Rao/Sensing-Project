@@ -444,6 +444,7 @@ class FrequencyCalibrationRuntime:
                 f_target=self.f_target,
                 damping=self.config.damping,
                 first_bias_step=self.config.first_bias_step,
+                expected_sensitivity_sign=self.config.expected_sensitivity_sign,
                 max_bias_step=self.config.max_bias_step,
                 converge_streak=1,  # tracker checks within-step; SM checks overall
                 max_iter=999,  # managed by SM
@@ -508,6 +509,10 @@ class FrequencyCalibrationRuntime:
                         "s_hat": proposal.s_hat,
                         "step": proposal.step,
                         "prediction_source": prediction_source,
+                        "sensitivity_direction_valid": proposal.diagnostics.get(
+                            "reason"
+                        )
+                        != "sensitivity_direction_mismatch",
                     },
                 )
 

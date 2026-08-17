@@ -356,8 +356,14 @@ class SQCExecutor:
         t0 = _time.time()
         try:
             meas = self._get_transient()
-            f = meas.measure(flux=cmd.locked_bias, omega_d=self.f_target)
+            drive = self.f_target if cmd.drive is None else cmd.drive
+            f = meas.measure(flux=cmd.locked_bias, omega_d=drive)
             elapsed = _time.time() - t0
+            detuning = f - drive
+            out_of_range = (
+                self.config.linear_range is not None
+                and abs(detuning) + self.config.guard_margin > self.config.linear_range
+            )
             return MeasurementSucceeded(
                 command_id=cmd.command_id,
                 frequency=f,
@@ -368,11 +374,16 @@ class SQCExecutor:
                 shots=0,
                 elapsed_time=elapsed,
                 applied_bias=cmd.locked_bias,
-                applied_drive=self.f_target,
+                applied_drive=drive,
+                probe_detuning=detuning,
+                probe_detuning_uncertainty=0.0,
                 diagnostics={
                     "solver_calls": 2,
                     "monitor_spec": cmd.monitor_spec,
                     "circuits": 2,
+                    "detuning": detuning,
+                    "out_of_range": out_of_range,
+                    "confidence": None,
                     "uncertainty_source": "deterministic_zero",
                 },
             )
@@ -582,7 +593,11 @@ class FiniteShotSQCExecutor(SQCExecutor):
     def _sample_transient(self, cmd, role: str) -> MeasurementSucceeded:
         meas = self._get_transient()
         bias = cmd.candidate_bias if isinstance(cmd, TrackFrequency) else cmd.locked_bias
-        drive = cmd.predicted_drive if isinstance(cmd, TrackFrequency) else self.f_target
+        drive = (
+            cmd.predicted_drive
+            if isinstance(cmd, TrackFrequency)
+            else self.f_target if cmd.drive is None else cmd.drive
+        )
         details = meas.measure_details(flux=bias, omega_d=drive)
         plus = float(self._sample_population(details.populations["plus_x"], role))
         minus = float(self._sample_population(details.populations["minus_x"], role))

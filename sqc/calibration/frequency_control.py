@@ -148,6 +148,11 @@ class DampedSecantTracker:
         Damping factor ∈ (0, 1] for the secant step.  Default 0.8.
     first_bias_step : float
         Probe step size (Φ₀) on the first iteration.  Default 0.01.
+    expected_sensitivity_sign : {-1, 1} or None
+        Known sign of the local sensitivity ``∂f/∂V``.  When configured,
+        blind/fallback steps follow this direction and secant estimates with
+        the opposite sign are rejected before another measurement is issued.
+        ``None`` preserves the legacy direction convention.
     max_bias_step : float
         Per-step clamp (Φ₀).  Default 0.02.
     V_lo, V_hi : float or None
@@ -176,10 +181,14 @@ class DampedSecantTracker:
         max_iter: int = 20,
         epsilon_f: float = 1e-4,
         stop_predicate: Callable[[dict], bool] | None = None,
+        expected_sensitivity_sign: int | None = None,
     ):
         self.f_target = float(f_target)
         self.damping = float(damping)
         self.first_bias_step = float(first_bias_step)
+        if expected_sensitivity_sign not in (None, -1, 1):
+            raise ValueError("expected_sensitivity_sign must be -1, 1, or None")
+        self.expected_sensitivity_sign = expected_sensitivity_sign
         self.max_bias_step = float(max_bias_step)
         self.V_lo = float(V_lo) if V_lo is not None else None
         self.V_hi = float(V_hi) if V_hi is not None else None
@@ -257,6 +266,11 @@ class DampedSecantTracker:
         e = snapshot.e
         s_secant: float | None = None
 
+        def probe_step() -> float:
+            residual_sign = np.sign(e) if e is not None else 1.0
+            sensitivity_sign = self.expected_sensitivity_sign or 1
+            return float(self.first_bias_step * sensitivity_sign * residual_sign)
+
         # --- compute step -----------------------------------------------
         if e is not None and abs(e) <= self.epsilon_f:
             # In tolerance: hold position (only reached when
@@ -264,11 +278,7 @@ class DampedSecantTracker:
             step = 0.0
         elif snapshot.n_iter == 0:
             # No gradient yet → fixed probe step.
-            step = (
-                self.first_bias_step * np.sign(e)
-                if e is not None
-                else self.first_bias_step
-            )
+            step = probe_step()
         else:
             de = (
                 e - snapshot.e_prev
@@ -283,11 +293,24 @@ class DampedSecantTracker:
                     s_secant = de / dV  # local ∂f/∂V
             else:
                 # Gradient undefined → reuse probe step.
-                step = (
-                    self.first_bias_step * np.sign(e)
-                    if e is not None
-                    else self.first_bias_step
-                )
+                step = probe_step()
+
+        direction_valid = (
+            s_secant is None
+            or self.expected_sensitivity_sign is None
+            or np.sign(s_secant) == self.expected_sensitivity_sign
+        )
+        if not direction_valid:
+            return TrackProposal(
+                V_next=snapshot.V,
+                step=0.0,
+                s_hat=s_secant,
+                converged=False,
+                diagnostics={
+                    "reason": "sensitivity_direction_mismatch",
+                    "expected_sensitivity_sign": self.expected_sensitivity_sign,
+                },
+            )
 
         # --- clamp step -------------------------------------------------
         step = float(np.clip(step, -self.max_bias_step, self.max_bias_step))

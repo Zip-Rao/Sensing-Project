@@ -172,7 +172,7 @@ The local-identifiability condition applies at a fixed bias, whereas a bias
 update can move the qubit outside the validated short-pulse range. We therefore
 embed the local probe in the
 \textsc{Acquire--Track--Verify--Lock} workflow shown in
-Fig.~\ref{fig:system-protocol}(d), supplemented by
+Fig.~\ref{fig:system-protocol}(c), supplemented by
 \textsc{Reacquire} and terminal \textsc{SafeStop} states. This architecture is
 motivated by automated qubit calibration and closed-loop frequency
 feedback~\cite{kelly2018physical,wittler_integrated_2021,
@@ -236,8 +236,12 @@ frequency reference or an error outside the local recovery range enters
 
 After successful verification, \textsc{Lock} holds the verified bias and uses
 periodic low-cost short-pulse measurements to monitor drift. Detected drift or
-a scheduled audit returns the protocol to \textsc{Verify}; a large frequency
-jump or loss of the local reference enters \textsc{Reacquire}.
+a scheduled audit returns the protocol to \textsc{Verify}. Before a monitor
+residual is used for routing, its applied bias and drive are checked and its
+probe detuning must satisfy the same local-validity condition in
+Eq.~\eqref{eq:track-range-condition}. A large frequency jump, a failed
+monitor-validity check, or loss of the local reference enters
+\textsc{Reacquire}.
 \textsc{Reacquire} repeats the wide-range acquisition and applies the same
 routing rule as \textsc{Acquire}. Cancellation, budget exhaustion, or a safety
 interlock enters \textsc{SafeStop}. Detailed thresholds and schedules are

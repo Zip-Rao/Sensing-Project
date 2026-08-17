@@ -160,6 +160,10 @@ class FrequencyCalibrationConfig:
     # ---- technical retries ----------------------------------------------
     max_technical_retries: int = 3
 
+    # ---- strict scientific guards (appended for positional compatibility) --
+    expected_sensitivity_sign: int | None = None
+    require_monitor_local_validity: bool = True
+
     def __post_init__(self):
         thresholds = (
             self.epsilon_hold,
@@ -215,6 +219,8 @@ class FrequencyCalibrationConfig:
             )
         if self.min_confidence is not None and not (0 <= self.min_confidence <= 1):
             raise ValueError("min_confidence must be in [0, 1]")
+        if self.expected_sensitivity_sign not in (None, -1, 1):
+            raise ValueError("expected_sensitivity_sign must be -1, 1, or None")
         if not (0 <= self.S_min < self.S_max):
             raise ValueError("require 0 <= S_min < S_max")
         if self.N_verify < 1 or self.N_mon_suspect < 1:
@@ -410,6 +416,7 @@ class MonitorFrequency:
     command_id: str = field(default_factory=lambda: str(_uuid.uuid4()))
     locked_bias: float = 0.0
     monitor_spec: dict = field(default_factory=dict)
+    drive: float | None = None
 
 
 @dataclass
@@ -747,6 +754,11 @@ def _track_guard_failure(
         s_hat = finite_float(raw_s_hat)
         if s_hat is None or not (config.S_min <= abs(s_hat) <= config.S_max):
             return ReasonCode.SENSITIVITY_INVALID
+        if (
+            config.expected_sensitivity_sign is not None
+            and _math.copysign(1, s_hat) != config.expected_sensitivity_sign
+        ):
+            return ReasonCode.SENSITIVITY_INVALID
 
     return None
 
@@ -756,6 +768,8 @@ def _track_command_guard_failure(
     config: FrequencyCalibrationConfig,
 ) -> ReasonCode | None:
     """Reject a Track proposal whose predicted probe detuning is unsafe."""
+    if command.tracker_spec.get("sensitivity_direction_valid") is False:
+        return ReasonCode.SENSITIVITY_INVALID
     if not command.prediction_guard_complete:
         return (
             ReasonCode.CONFIDENCE_INSUFFICIENT
@@ -781,6 +795,68 @@ def _track_command_guard_failure(
     if (
         config.linear_range is not None
         and predicted_bound + config.guard_margin > config.linear_range
+    ):
+        return ReasonCode.LOCAL_RANGE_LOST
+    return None
+
+
+def _monitor_guard_failure(
+    event: MeasurementSucceeded,
+    command: MonitorFrequency,
+    config: FrequencyCalibrationConfig,
+    f_target: float,
+) -> ReasonCode | None:
+    """Validate a low-cost Lock measurement before using its residual."""
+    if not config.require_monitor_local_validity:
+        return None
+    if (
+        not _math.isfinite(event.frequency)
+        or not _math.isfinite(event.uncertainty)
+        or event.uncertainty < 0
+    ):
+        return ReasonCode.CONFIDENCE_INSUFFICIENT
+
+    def finite_float(value) -> float | None:
+        try:
+            converted = float(value)
+        except (TypeError, ValueError):
+            return None
+        return converted if _math.isfinite(converted) else None
+
+    applied_bias = finite_float(event.applied_bias)
+    applied_drive = finite_float(event.applied_drive)
+    expected_drive = command.drive if command.drive is not None else f_target
+    if (
+        applied_bias is None
+        or applied_drive is None
+        or abs(applied_bias - command.locked_bias) > config.actuation_bias_tolerance
+        or abs(applied_drive - expected_drive) > config.actuation_drive_tolerance
+    ):
+        return ReasonCode.INTERLOCK
+    if event.diagnostics.get("out_of_range", False):
+        return ReasonCode.LOCAL_RANGE_LOST
+
+    detuning = finite_float(event.probe_detuning)
+    if detuning is None:
+        detuning = finite_float(
+            event.diagnostics.get("detuning", event.diagnostics.get("delta"))
+        )
+    detuning_uncertainty = event.probe_detuning_uncertainty
+    if detuning_uncertainty is None:
+        detuning_uncertainty = event.uncertainty
+    detuning_uncertainty = finite_float(detuning_uncertainty)
+    if detuning is None or detuning_uncertainty is None or detuning_uncertainty < 0:
+        return ReasonCode.CONFIDENCE_INSUFFICIENT
+
+    detuning_bound = abs(detuning) + _uncertainty_allowance(
+        detuning_uncertainty,
+        config,
+    )
+    if detuning_bound > config.Delta_val:
+        return ReasonCode.LOCAL_RANGE_LOST
+    if (
+        config.linear_range is not None
+        and detuning_bound + config.guard_margin > config.linear_range
     ):
         return ReasonCode.LOCAL_RANGE_LOST
     return None
@@ -1085,7 +1161,7 @@ class FrequencyStateMachine:
                     )
                 # Otherwise, issue monitor
                 bias = self._candidate_bias if self._candidate_bias is not None else 0.0
-                return MonitorFrequency(locked_bias=bias)
+                return MonitorFrequency(locked_bias=bias, drive=self.f_target)
             case FrequencyState.SAFE_STOP:
                 return SafeHold(bias=0.0, reason=ReasonCode.CANCELLED)
 
@@ -1423,6 +1499,27 @@ class FrequencyStateMachine:
                 frequency=f,
                 uncertainty=u,
             ):
+                pending = self._pending_command
+                if not isinstance(pending, MonitorFrequency):
+                    raise RuntimeError(
+                        "Lock event has no matching MonitorFrequency command"
+                    )
+                guard_failure = _monitor_guard_failure(
+                    event,
+                    pending,
+                    self.config,
+                    self.f_target,
+                )
+                if guard_failure == ReasonCode.INTERLOCK:
+                    self._transition_to(FrequencyState.SAFE_STOP, guard_failure)
+                    self._run_status = RunStatus.SAFE_STOPPED
+                    self._clear_pending()
+                    return
+                if guard_failure is not None:
+                    self._transition_to(FrequencyState.REACQUIRE, guard_failure)
+                    self._monitor_streak = 0
+                    self._clear_pending()
+                    return
                 error = f - self.f_target
                 self._f_hat = f
                 self._uncertainty = u
