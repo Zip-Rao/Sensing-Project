@@ -71,7 +71,7 @@ Event
 
 ## 第一遍：认识状态机的语言
 
-```{figure} frequency_state_machine_pass1.svg
+```{figure} frequency_state_machine_pass1.png
 :alt: 第一遍高亮寄存器、控制器及命令事件边界
 :width: 100%
 :align: center
@@ -1117,7 +1117,7 @@ command_id/version   防止迟到和重复事件
 
 ## 第二遍：追踪 Acquire → Track → Verify → Lock
 
-```{figure} frequency_state_machine_pass2.svg
+```{figure} frequency_state_machine_pass2.png
 :alt: 第二遍高亮正常状态提交环
 :width: 100%
 :align: center
@@ -2570,7 +2570,7 @@ state_after
 
 ## 第三遍：沿命令进入测量后端
 
-```{figure} frequency_state_machine_pass3.svg
+```{figure} frequency_state_machine_pass3.png
 :alt: 第三遍高亮测量后端数据通路
 :width: 100%
 :align: center
@@ -3882,7 +3882,7 @@ Lock monitor：
 
 ## 第四遍：Track 控制器如何跨轮形成闭环
 
-```{figure} frequency_state_machine_pass4.svg
+```{figure} frequency_state_machine_pass4.png
 :alt: 第四遍高亮 Track 割线反馈环
 :width: 100%
 :align: center
@@ -5192,7 +5192,7 @@ FrequencyStateMachine
 
 ## 第五遍：Runtime 如何组织持续运行
 
-```{figure} frequency_state_machine_pass5.svg
+```{figure} frequency_state_machine_pass5.png
 :alt: 第五遍高亮运行时预算调度和持久化路径
 :width: 100%
 :align: center
@@ -6963,7 +6963,7 @@ Cancellation → Runtime event loop ← Budget
 
 ## 第六遍：异常恢复与测试证据
 
-```{figure} frequency_state_machine_pass6.svg
+```{figure} frequency_state_machine_pass6.png
 :alt: 第六遍高亮异常恢复与证据路径
 :width: 100%
 :align: center
