@@ -32,6 +32,28 @@ Event
 下一状态与 ReasonCode
 ```
 
+```{figure} frequency_state_machine_datapath.svg
+:alt: 频率标定状态机的命令—事件数据通路
+:width: 100%
+:align: center
+
+频率标定状态机的 CPU 式数据通路。黑线传递命令或测量证据，蓝线传递控制字，红线表示异常路径，绿色虚线表示持久化与恢复。该图描述架构职责，不要求每个框对应一个 Python 类；六遍阅读只是在同一拓扑上依次激活不同路径。
+```
+
+## 如何沿这张图完成六遍阅读
+
+第一遍先建立接口边界。只看 **Register File**、**Control Unit**、**CMD REG**、**EVT REG** 和 **Commit Unit**：寄存器保存已提交事实，控制器发出命令，执行侧返回事件，提交单元负责把接受的结果写回。此时不进入测量、割线或异常细节。
+
+第二遍沿正常提交环走一圈：**Register File → Control Unit → Operand MUX → CMD REG → Issue Unit → Measurement Unit → EVT REG → Guard Comparator → Control Unit → Commit Unit → write-back**。Acquire、Track、Verify 和 Lock 是 `SR` 中的状态值，而不是四套串联执行器。
+
+第三遍只打开 **CMD REG → Issue Unit → Measurement Unit → EVT REG**。从已锁存且获准执行的命令出发，追踪不同 role 怎样选择 Ramsey 或局部 probe，并怎样把频率、不确定度、实际偏置、实际驱动、shots 和耗时封装成 Event。
+
+第四遍转向 `TR/ER → Secant ALU → Operand MUX` 反馈环。已接受的 Track 事件先提交到 Track/Estimate 寄存器，割线单元再从跨轮记忆计算下一轮 bias/drive proposal。这样可以同时看清“证据提交”和“下一步控制量计算”是两件事。
+
+第五遍把主环放回持续运行环境。重点看 `BR`、**Issue Unit** 和 **Commit Unit** 如何处理预算、中断、调度与 identity，再沿绿色虚线理解 **Journal Memory** 如何保存历史、成本和 checkpoint；底部 write-back bus 表示一次接受事件的原子提交边界。
+
+第六遍最后沿 **Guard Comparator → Control Unit / Exception Unit** 检查异常语义。事件无效、硬件失败、预算耗尽或用户取消怎样成为 fault class，何时 retry、Reacquire 或 SafeStop，以及 checkpoint 怎样恢复寄存器上下文。随后再用测试验证这些路径是否具有代码证据。
+
 第一遍先认识这几个词；第二遍让它们跑起来；第三、四遍分别打开 `Executor` 和 Track 控制器；第五遍再把整个循环放回 Runtime；第六遍最后检查正常路径之外的恢复语义和测试证据。
 
 ## 阅读地图
@@ -48,6 +70,16 @@ Event
 建议顺序阅读。若已有状态机基础，可以快速浏览第一遍，但不要跳过 `command_id`、`state_version`、目标残差与 probe detuning 的区分；这些概念会贯穿后五遍。
 
 ## 第一遍：认识状态机的语言
+
+```{figure} frequency_state_machine_pass1.svg
+:alt: 第一遍高亮寄存器、控制器及命令事件边界
+:width: 100%
+:align: center
+
+第一遍的激活路径：先识别寄存器中的协议词汇，再认识 Control Unit、Command、Event 与 Commit 的责任边界；其余功能单元暂时作为灰色黑箱。
+```
+
+在这张抽象图里，`CalibrationState` 和当前科学估计属于 **Register File**；`next_command()` / `handle(event)` 属于 **Control Unit** 的协议职责；Command 与 Event 分别跨过 `CMD REG` 和 `EVT REG` 边界；`ReasonCode` 最终进入 `LR · Last result`。这些是阅读类和字段时的定位坐标，而不是新的运行时类。
 
 第一遍我们暂时不追踪具体状态转换，也不看 QuTiP、割线算法或 Runtime，只读 frequency_state_machine.py 的“词汇表”。
 
@@ -1084,6 +1116,16 @@ command_id/version   防止迟到和重复事件
 
 
 ## 第二遍：追踪 Acquire → Track → Verify → Lock
+
+```{figure} frequency_state_machine_pass2.svg
+:alt: 第二遍高亮正常状态提交环
+:width: 100%
+:align: center
+
+第二遍的激活路径：从已提交上下文生成一条 Command，经测量得到 Event，再由 Guard、Control 和 Commit 决定下一状态并原子写回。
+```
+
+这条环路就是软件中的一轮协议推进。`SR` 保存 Acquire、Track、Verify 或 Lock；Control Unit 根据当前 `SR` 选择命令；Guard Comparator 把证据变成条件码；Control Unit 决定 `next state + reason`；Commit Unit 才拥有写回 `SR/ER/LR` 的权限。
 
 第二遍我们追踪一次完整的正常运行：
 
@@ -2528,6 +2570,16 @@ state_after
 
 ## 第三遍：沿命令进入测量后端
 
+```{figure} frequency_state_machine_pass3.svg
+:alt: 第三遍高亮测量后端数据通路
+:width: 100%
+:align: center
+
+第三遍的激活路径：Command 从执行边界进入 Issue 与 Measurement Unit，测量结果被封装成 Event；其他模块仅说明输入来自哪里、结果将去哪里。
+```
+
+图中的 **Measurement Unit** 对应 Executor 与 Backend 的职责集合，而不是单个类。`CMD REG` 强调 Backend 接收的是已经确定 role、bias、drive 和 identity 的命令；`EVT REG` 强调 Backend 返回证据，不直接写状态寄存器，也不自行决定 Acquire、Track、Verify 或 Lock 的转移。
+
 第三遍的目标是打开第二遍里暂时视为黑箱的部分：
 
 ```python
@@ -3830,6 +3882,16 @@ Lock monitor：
 
 ## 第四遍：Track 控制器如何跨轮形成闭环
 
+```{figure} frequency_state_machine_pass4.svg
+:alt: 第四遍高亮 Track 割线反馈环
+:width: 100%
+:align: center
+
+第四遍的激活路径：接受的 Track 证据写入 `TR/ER`，Secant ALU 读取跨轮记忆生成 proposal，再由 Operand MUX 组成下一条 Track 命令。
+```
+
+这里的 `TR · Track` 对应 `TrackerSnapshot` 的已接受历史，`ER · Estimate` 提供当前频率与控制点，**Secant ALU** 对应 `DampedSecantTracker.propose()` 的纯计算，Operand MUX 对应 Runtime 把 proposal、drive tracking 和命令字段组合起来的过程。ALU 输出只是 proposal，仍须经过测量、守卫与提交。
+
 第四遍聚焦 Track 控制器。前三遍已经知道：
 
 ```text
@@ -5129,6 +5191,16 @@ FrequencyStateMachine
 5. 状态机拥有协议决策权，tracker 只拥有“下一步建议权”。
 
 ## 第五遍：Runtime 如何组织持续运行
+
+```{figure} frequency_state_machine_pass5.svg
+:alt: 第五遍高亮运行时预算调度和持久化路径
+:width: 100%
+:align: center
+
+第五遍的激活路径：预算和计时进入 Issue Unit，运行结果经 Commit 写回，同时追加到 Journal Memory；checkpoint 允许恢复已提交上下文。
+```
+
+在图中，`BR · Budget` 是动态计数器，Config 中的上限属于 `CR · Config ROM`；**Issue Unit** 对应 Runtime 的测前取消、预算预留、调度和 identity 检查；**Journal Memory** 对应增长型历史、成本账本与 checkpoint，而不是普通“日志寄存器”。这一区分正好解释 Config budget 与运行时 `Budget` 对象为何不是同一个东西。
 
 第五遍打开的是整个系统的“运行中枢”：
 
@@ -6890,6 +6962,16 @@ Cancellation → Runtime event loop ← Budget
 10. Lock 是持续运行状态，因此 Runtime 必须有取消、时间预算或有限 Lock cycle 才能保证同步调用最终返回。
 
 ## 第六遍：异常恢复与测试证据
+
+```{figure} frequency_state_machine_pass6.svg
+:alt: 第六遍高亮异常恢复与证据路径
+:width: 100%
+:align: center
+
+第六遍的激活路径：Guard Comparator 产生条件码或故障类别，Control Unit 选择协议回退，Exception Unit 执行技术恢复或安全动作，Journal/checkpoint 保存可审计证据。
+```
+
+抽象图刻意把三件事分开：Guard Comparator 只分类证据，Control Unit 决定 retry、Reacquire 或 SafeStop，Exception Unit 才承担 SafeHold 等外部动作。陈旧或重复 Event 由 `CMD/EVT REG` 中的 identity 与 `LR` 中的最近结果共同识别；恢复后仍必须回到 Control Unit，不能绕过提交边界直接修改状态。
 
 第六遍不再沿正常的：
 

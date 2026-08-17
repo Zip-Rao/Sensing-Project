@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="900" viewBox="0 0 1800 900">
+  <defs><clipPath id="active"><rect x="490" y="325" width="930" height="190" rx="14"/><rect x="1048" y="318" width="275" height="205" rx="14"/><path d="M650 420H1460" fill="none" stroke="#000" stroke-width="34"/></clipPath></defs>
+  <rect width="1800" height="900" fill="#fff"/><image href="frequency_state_machine_datapath.svg" width="1800" height="900" opacity="0.17"/><image href="frequency_state_machine_datapath.svg" width="1800" height="900" clip-path="url(#active)"/>
+  <rect x="58" y="92" width="310" height="34" rx="17" fill="#2b6ca3"/><text x="213" y="115" text-anchor="middle" font-family="Arial,Microsoft YaHei,sans-serif" font-size="15" font-weight="700" fill="#fff">PASS 3 · MEASUREMENT BACKEND</text>
+</svg>
