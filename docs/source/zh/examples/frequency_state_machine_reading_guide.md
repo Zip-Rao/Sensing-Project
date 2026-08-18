@@ -40,6 +40,8 @@ Event
 频率标定状态机的 CPU 式数据通路。黑线传递命令、测量证据和有序写回，蓝线传递控制与状态码，红线表示生命周期事件，绿色虚线表示持久化与恢复。该图描述架构职责，不要求每个框对应一个 Python 类；六遍阅读只是在同一拓扑上依次激活不同路径。
 ```
 
+六张 Pass 图由这张可编辑母图按语义权重生成，而不是用坐标裁剪或外链叠图。母图元素通过 `data-semantic` 标记为 `register-tr`、`secant-alu`、`route-proposal` 等组；生成器复制完整 SVG，再按遍次调节每组透明度。因此在 Inkscape 中移动、改字或改样式后，各 Pass 会继承同一几何与内容，但仍需运行 `docs/tools/generate_frequency_datapath_passes.py` 刷新六张自包含 SVG 和 PNG。
+
 ## 如何沿这张图完成六遍阅读
 
 第一遍先建立接口边界。只看 **Register File**、**Control Unit**、**CMD REG**、**EVT REG** 和 **Commit Unit**：寄存器保存已提交事实，控制器发出命令，执行侧返回事件，提交单元负责把接受的结果写回。此时不进入测量、割线或异常细节。
@@ -48,11 +50,11 @@ Event
 
 第三遍只打开 **CMD REG → Issue Unit → Measurement Unit → EVT REG**。从已锁存且获准执行的命令出发，追踪不同 role 怎样选择 Ramsey 或局部 probe，并怎样把频率、不确定度、实际偏置、实际驱动、shots 和耗时封装成 Event。
 
-第四遍转向 `TR/ER → Secant ALU → Operand MUX` 反馈环。已接受的 Track 事件先提交到 Track/Estimate 寄存器，割线单元再从跨轮记忆计算下一轮 bias/drive proposal。这样可以同时看清“证据提交”和“下一步控制量计算”是两件事。
+第四遍转向 `TR/CR → Secant ALU → Operand MUX` 反馈环。Track 事件先由 `handle(event)` 完成状态处理并写入 journal，随后 `_post_process()` 独立更新 `TR`；割线单元再从跨轮记忆计算下一轮 bias/drive proposal。这样可以同时看清“协议状态写回”“TrackSnapshot 更新”和“下一步控制量计算”是三件事。
 
-第五遍把主环放回持续运行环境。重点看 `BR`、**Issue Unit** 和 **Commit Unit** 如何处理预算、中断、调度与 identity，再沿绿色虚线理解 **Journal Memory** 如何保存历史、成本和 checkpoint；底部 write-back bus 表示一次接受事件的原子提交边界。
+第五遍把主环放回持续运行环境。重点看 `BR`、**Issue Unit** 和 **Commit Unit** 如何处理预算、中断、调度与 identity，再沿绿色虚线理解 **Journal Memory** 与 **Checkpoint Memory** 如何分别保存增长型历史和可恢复快照；底部 write-back bus 表示 `handle(event)` 内的有序软件写回，不宣称硬件式原子提交。
 
-第六遍最后沿 **Guard Comparator → Control Unit / Exception Unit** 检查异常语义。事件无效、硬件失败、预算耗尽或用户取消怎样成为 fault class，何时 retry、Reacquire 或 SafeStop，以及 checkpoint 怎样恢复寄存器上下文。随后再用测试验证这些路径是否具有代码证据。
+第六遍最后沿 **Guard Comparator → Control Unit** 与 **Exception Unit → Control Unit** 检查异常语义。前者分类科学证据，后者上报硬件失败、预算耗尽、用户取消等生命周期事件；Control Unit 决定何时 retry、Reacquire 或 SafeStop，SafeHold 仍沿正常命令—执行—事件路径完成。随后再看 checkpoint 怎样恢复寄存器上下文，并用测试验证这些路径是否具有代码证据。
 
 第一遍先认识这几个词；第二遍让它们跑起来；第三、四遍分别打开 `Executor` 和 Track 控制器；第五遍再把整个循环放回 Runtime；第六遍最后检查正常路径之外的恢复语义和测试证据。
 
