@@ -1,5 +1,0 @@
-run_id,kind,strategy,n,lock_rate,solver_calls_mean,solver_calls_std
-finite_shot__short_pulse,finite_shot,short_pulse,12,1.0,3285.0,816.9105881863137
-finite_shot__ramsey_baseline,finite_shot,ramsey_baseline,12,1.0,6228.666666666667,230.94010767585033
-process__short_pulse,process,short_pulse,8,0.875,5850.5,1336.569489401879
-process__ramsey_baseline,process,ramsey_baseline,8,0.75,10521.5,3267.8032376506394

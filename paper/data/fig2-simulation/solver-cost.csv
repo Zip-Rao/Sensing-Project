@@ -1,8 +1,0 @@
-method,variant,mae_mhz,solver_calls,cost_scope
-Ramsey,"Single sweep, 2 ns",0.0305776884,100,per_estimate
-Ramsey,"Single sweep, 1 ns",0.026310397,200,per_estimate
-Ramsey,"Single sweep, 0.5 ns",0.0233359369,400,per_estimate
-Ramsey,"Double sweep, 0.5 ns",0.00524088882,800,per_estimate
-cubic short pulse,steady,0.0920726688,2,counted_generation_chain
-cubic short pulse,amortized_8,0.0920726688,8.5,counted_generation_chain
-cubic short pulse,cold_start,0.0920726688,54,counted_generation_chain

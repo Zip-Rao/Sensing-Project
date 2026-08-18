@@ -1,3 +1,0 @@
-{"version": 0, "from": "acquire", "to": "acquire", "reason": "SEED_RELIABLE", "note": "run started", "candidate_bias": null, "f_hat": null, "uncertainty": 0.0}
-{"version": 1, "from": "acquire", "to": "track", "reason": "SEED_RELIABLE", "note": "", "candidate_bias": 0.0, "f_hat": 23.751971192357306, "uncertainty": 0.0}
-{"version": 2, "from": "track", "to": "safe_stop", "reason": "INTERLOCK", "note": "", "candidate_bias": 0.0, "f_hat": 23.752381101439326, "uncertainty": 0.0}

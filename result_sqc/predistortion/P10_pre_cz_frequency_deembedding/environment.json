@@ -1,9 +1,0 @@
-{
-  "generated_utc": "2026-08-05T12:09:52.982937+00:00",
-  "python": "3.13.9 | packaged by Anaconda, Inc. | (main, Oct 21 2025, 19:09:58) [MSC v.1929 64 bit (AMD64)]",
-  "numpy": "2.3.1",
-  "platform": "Windows-11-10.0.26200-SP0",
-  "git_commit": "6f27dd350974a5ca6a4b503614737f6fffe5891a",
-  "git_dirty": true,
-  "script_sha256": "396d22a03c369731b8cde14fdd9ad34227a3541af485865c243c75ba35662e0a"
-}

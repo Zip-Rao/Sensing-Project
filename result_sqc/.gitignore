@@ -1,4 +1,0 @@
-__pycache__/
-*.pyc
-# generated data/figures (regenerate by running the scripts)
-*.npz
