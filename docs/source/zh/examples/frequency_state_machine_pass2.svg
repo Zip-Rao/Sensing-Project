@@ -1,6 +1,17 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1800 900" style="width:100%;height:auto">
-  <defs><clipPath id="active"><rect x="48" y="305" width="410" height="400" rx="12"/><rect x="630" y="98" width="520" height="155" rx="22"/><rect x="490" y="325" width="1260" height="190" rx="14"/><rect x="800" y="590" width="220" height="160" rx="12"/><rect x="430" y="150" width="230" height="245"/><rect x="1020" y="72" width="610" height="48"/><rect x="1575" y="72" width="55" height="290"/><rect x="220" y="790" width="570" height="55"/><rect x="225" y="680" width="55" height="165"/></clipPath></defs>
-  <rect width="1800" height="900" fill="#fff"/><image href="frequency_state_machine_datapath.svg" width="1800" height="900" opacity="0.17"/><image href="frequency_state_machine_datapath.svg" width="1800" height="900" clip-path="url(#active)"/>
-  <rect x="58" y="92" width="300" height="34" rx="17" fill="#2b6ca3"/><text x="208" y="115" text-anchor="middle" font-family="Arial,Microsoft YaHei,sans-serif" font-size="15" font-weight="700" fill="#fff">PASS 2 · NORMAL COMMIT LOOP</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1900 920" style="width:100%;height:auto">
+  <defs>
+    <clipPath id="active">
+      <rect x="50" y="298" width="366" height="498" rx="14"/>
+      <rect x="512" y="92" width="936" height="158" rx="24"/>
+      <rect x="446" y="311" width="1402" height="193" rx="16"/>
+      <rect x="762" y="588" width="246" height="183" rx="12"/>
+      <path d="M408 390H438V171H520 M550 270H1710 M1710 482V535H885V596 M885 763V805H233V788" fill="none" stroke="#000" stroke-width="38"/>
+    </clipPath>
+  </defs>
+  <rect width="1900" height="920" fill="#fff"/>
+  <image href="frequency_state_machine_datapath.svg" width="1900" height="920" opacity="0.14"/>
+  <image href="frequency_state_machine_datapath.svg" width="1900" height="920" clip-path="url(#active)"/>
+  <rect x="1590" y="82" width="250" height="22" rx="11" fill="#2b6ca3"/>
+  <text x="1715" y="97" text-anchor="middle" font-family="Arial,Microsoft YaHei,sans-serif" font-size="12" font-weight="700" fill="#fff">PASS 2 · NORMAL PROTOCOL LOOP</text>
 </svg>

@@ -1,6 +1,18 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1800 900" style="width:100%;height:auto">
-  <defs><clipPath id="active"><rect x="68" y="370" width="370" height="205" rx="12"/><rect x="465" y="590" width="245" height="160" rx="12"/><rect x="490" y="325" width="1260" height="190" rx="14"/><rect x="800" y="590" width="220" height="160" rx="12"/><path d="M430 520H470V780H590V520M590 600V520M1000 670H780V835H220V520" fill="none" stroke="#000" stroke-width="38"/></clipPath></defs>
-  <rect width="1800" height="900" fill="#fff"/><image href="frequency_state_machine_datapath.svg" width="1800" height="900" opacity="0.17"/><image href="frequency_state_machine_datapath.svg" width="1800" height="900" clip-path="url(#active)"/>
-  <rect x="58" y="92" width="280" height="34" rx="17" fill="#2b6ca3"/><text x="198" y="115" text-anchor="middle" font-family="Arial,Microsoft YaHei,sans-serif" font-size="15" font-weight="700" fill="#fff">PASS 4 · TRACK FEEDBACK</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1900 920" style="width:100%;height:auto">
+  <defs>
+    <clipPath id="active">
+      <rect x="68" y="475" width="328" height="230" rx="12"/>
+      <rect x="422" y="588" width="271" height="183" rx="14"/>
+      <rect x="446" y="325" width="207" height="165" rx="14"/>
+      <rect x="675" y="323" width="873" height="168" rx="14"/>
+      <rect x="1572" y="325" width="276" height="164" rx="14"/>
+      <path d="M408 680H430 M660 596V520H550V482 M1710 482V535H705V620H685 M430 534H408" fill="none" stroke="#000" stroke-width="38"/>
+    </clipPath>
+  </defs>
+  <rect width="1900" height="920" fill="#fff"/>
+  <image href="frequency_state_machine_datapath.svg" width="1900" height="920" opacity="0.14"/>
+  <image href="frequency_state_machine_datapath.svg" width="1900" height="920" clip-path="url(#active)"/>
+  <rect x="1610" y="82" width="230" height="22" rx="11" fill="#8a6d32"/>
+  <text x="1725" y="97" text-anchor="middle" font-family="Arial,Microsoft YaHei,sans-serif" font-size="12" font-weight="700" fill="#fff">PASS 4 · TRACK FEEDBACK</text>
 </svg>

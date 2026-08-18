@@ -37,14 +37,14 @@ Event
 :width: 100%
 :align: center
 
-频率标定状态机的 CPU 式数据通路。黑线传递命令或测量证据，蓝线传递控制字，红线表示异常路径，绿色虚线表示持久化与恢复。该图描述架构职责，不要求每个框对应一个 Python 类；六遍阅读只是在同一拓扑上依次激活不同路径。
+频率标定状态机的 CPU 式数据通路。黑线传递命令、测量证据和有序写回，蓝线传递控制与状态码，红线表示生命周期事件，绿色虚线表示持久化与恢复。该图描述架构职责，不要求每个框对应一个 Python 类；六遍阅读只是在同一拓扑上依次激活不同路径。
 ```
 
 ## 如何沿这张图完成六遍阅读
 
 第一遍先建立接口边界。只看 **Register File**、**Control Unit**、**CMD REG**、**EVT REG** 和 **Commit Unit**：寄存器保存已提交事实，控制器发出命令，执行侧返回事件，提交单元负责把接受的结果写回。此时不进入测量、割线或异常细节。
 
-第二遍沿正常提交环走一圈：**Register File → Control Unit → Operand MUX → CMD REG → Issue Unit → Measurement Unit → EVT REG → Guard Comparator → Control Unit → Commit Unit → write-back**。Acquire、Track、Verify 和 Lock 是 `SR` 中的状态值，而不是四套串联执行器。
+第二遍沿正常协议环走一圈：**Register File → Control Unit → Operand MUX → CMD REG → Issue Unit → Measurement Unit → EVT REG → Identity Unit → Guard Comparator → Commit Unit → write-back**。Guard 的分类结果由状态处理器按照 Control Unit 中的策略解释；Acquire、Track、Verify 和 Lock 是 `SR` 中的状态值，而不是四套串联执行器。
 
 第三遍只打开 **CMD REG → Issue Unit → Measurement Unit → EVT REG**。从已锁存且获准执行的命令出发，追踪不同 role 怎样选择 Ramsey 或局部 probe，并怎样把频率、不确定度、实际偏置、实际驱动、shots 和耗时封装成 Event。
 
@@ -79,7 +79,7 @@ Event
 第一遍的激活路径：先识别寄存器中的协议词汇，再认识 Control Unit、Command、Event 与 Commit 的责任边界；其余功能单元暂时作为灰色黑箱。
 ```
 
-在这张抽象图里，`CalibrationState` 和当前科学估计属于 **Register File**；`next_command()` / `handle(event)` 属于 **Control Unit** 的协议职责；Command 与 Event 分别跨过 `CMD REG` 和 `EVT REG` 边界；`ReasonCode` 最终进入 `LR · Last result`。这些是阅读类和字段时的定位坐标，而不是新的运行时类。
+在这张抽象图里，`CalibrationState` 和当前科学估计属于 **Register File**；`next_command()` / `handle(event)` 属于 **Control Unit** 的协议职责；Command 与 Event 分别跨过 `CMD REG` 和 `EVT REG` 边界；pending command、最近 Event、`ReasonCode` 与技术状态归入 `IR · In-flight`。这些是阅读类和字段时的定位坐标，而不是新的运行时类。
 
 第一遍我们暂时不追踪具体状态转换，也不看 QuTiP、割线算法或 Runtime，只读 frequency_state_machine.py 的“词汇表”。
 
@@ -1122,10 +1122,10 @@ command_id/version   防止迟到和重复事件
 :width: 100%
 :align: center
 
-第二遍的激活路径：从已提交上下文生成一条 Command，经测量得到 Event，再由 Guard、Control 和 Commit 决定下一状态并原子写回。
+第二遍的激活路径：从已提交上下文生成一条 Command，经测量得到 Event，再完成 identity 检查、Guard 分类和有序状态写回。
 ```
 
-这条环路就是软件中的一轮协议推进。`SR` 保存 Acquire、Track、Verify 或 Lock；Control Unit 根据当前 `SR` 选择命令；Guard Comparator 把证据变成条件码；Control Unit 决定 `next state + reason`；Commit Unit 才拥有写回 `SR/ER/LR` 的权限。
+这条环路就是软件中的一轮协议推进。`SR` 保存 Acquire、Track、Verify 或 Lock；Control Unit 根据当前 `SR` 选择命令；Identity Unit 拒绝陈旧、重复或不匹配的 Event；Guard Comparator 把证据变成条件码；状态处理器依据控制策略决定 `next state + reason`，Commit Unit 抽象 `handle(event)` 内对 `SR/ER/BR/IR` 的有序更新。这里的 Commit 是软件顺序边界，不表示硬件式原子提交。
 
 第二遍我们追踪一次完整的正常运行：
 
@@ -3887,7 +3887,7 @@ Lock monitor：
 :width: 100%
 :align: center
 
-第四遍的激活路径：接受的 Track 证据写入 `TR/ER`，Secant ALU 读取跨轮记忆生成 proposal，再由 Operand MUX 组成下一条 Track 命令。
+第四遍的激活路径：通过状态处理与 journal 记录的 Track 证据由 `_post_process()` 独立更新 `TR`；Secant ALU 读取跨轮记忆生成 proposal，再由 Operand MUX 组成下一条 Track 命令。
 ```
 
 这里的 `TR · Track` 对应 `TrackerSnapshot` 的已接受历史，`ER · Estimate` 提供当前频率与控制点，**Secant ALU** 对应 `DampedSecantTracker.propose()` 的纯计算，Operand MUX 对应 Runtime 把 proposal、drive tracking 和命令字段组合起来的过程。ALU 输出只是 proposal，仍须经过测量、守卫与提交。
@@ -6968,10 +6968,10 @@ Cancellation → Runtime event loop ← Budget
 :width: 100%
 :align: center
 
-第六遍的激活路径：Guard Comparator 产生条件码或故障类别，Control Unit 选择协议回退，Exception Unit 执行技术恢复或安全动作，Journal/checkpoint 保存可审计证据。
+第六遍的激活路径：Guard Comparator 产生条件码或故障类别，Control Unit 选择协议回退；取消、互锁、预算到期和技术失败由 Exception Unit 作为生命周期事件上报，SafeHold 仍沿正常 Issue/Measurement/Event 路径执行，Journal/checkpoint 保存可审计证据。
 ```
 
-抽象图刻意把三件事分开：Guard Comparator 只分类证据，Control Unit 决定 retry、Reacquire 或 SafeStop，Exception Unit 才承担 SafeHold 等外部动作。陈旧或重复 Event 由 `CMD/EVT REG` 中的 identity 与 `LR` 中的最近结果共同识别；恢复后仍必须回到 Control Unit，不能绕过提交边界直接修改状态。
+抽象图刻意把三件事分开：Guard Comparator 只分类科学证据，Control Unit 决定 retry、Reacquire 或 SafeStop，Exception Unit 只汇集并上报生命周期事件；真正的 SafeHold 命令仍由 Control Unit 发出并经 Measurement Unit 对 Executor/Backend 的抽象路径执行。陈旧或重复 Event 由 `CMD/EVT REG` 携带的 identity 与 `IR` 中的 pending command 共同识别；恢复后仍必须回到 Control Unit，不能绕过状态处理边界直接修改状态。
 
 第六遍不再沿正常的：
 

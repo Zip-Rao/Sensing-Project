@@ -249,8 +249,8 @@ and the residual
 $\widehat r_{\mathrm{seed}}
 =\widehat\omega_{01,\mathrm{seed}}-\omega_{\mathrm{tar}}$.
 
-To obtain the second bias--frequency point required for the secant estimate,
-the controller proposes the bounded one-sided step
+To obtain the second bias--frequency point, the controller proposes the
+one-sided step
 %
 \begin{equation}
 \Phi_1^{\mathrm{prop}}
@@ -267,30 +267,46 @@ where
 $\chi_\Phi
 =\operatorname{sgn}(\partial\omega_{01}/\partial\Phi)
 \in\{-1,+1\}$
-is the known local monotonic direction. The applied value $\Phi_1$ is
-restricted to $[\Phi_{\min},\Phi_{\max}]$.
-Let $\Delta_{\mathrm{blind}}^{\max}$ be a validated upper bound on the
-frequency displacement produced by the applied blind step. The initialization
-is locally admissible only if
-%
-\begin{equation}
-z_{1-\beta}\sigma_{\Delta,\mathrm{seed}}
-+
-\Delta_{\mathrm{blind}}^{\max}
-\leq
-\Delta_{\mathrm{val}},
-\label{eq:track-entry-condition}
-\end{equation}
-%
-where $\sigma_{\Delta,\mathrm{seed}}$ includes the uncertainty of the acquired
-frequency and the implemented seed reference. This condition reserves the
-detuning margin required for the first short-pulse measurement at $\Phi_1$.
+is the known local monotonic direction.
+
+The applied value $\Phi_1$ is restricted to
+$[\Phi_{\min},\Phi_{\max}]$. The blind-step magnitude is selected so that
+the uncertainty of the acquired frequency and the validated worst-case
+frequency displacement remain within the available detuning margin. The
+corresponding admission rule is specified in
+Appendix~\ref{app:methods}.
+
 Before a secant sensitivity is available, the first short-pulse measurement
 at $\Phi_1$ uses
 $\omega_{d,1}=\widehat\omega_{01,\mathrm{seed}}$
 and returns $\widehat\omega_{01,1}$. Together with the scanned-Ramsey seed,
 this measurement provides the initial secant sensitivity; its uncertainty is
 propagated from both frequency estimates.
+
+% The applied value $\Phi_1$ is
+% restricted to $[\Phi_{\min},\Phi_{\max}]$.
+% Let $\Delta_{\mathrm{blind}}^{\max}$ be a validated upper bound on the
+% frequency displacement produced by the applied blind step. The initialization
+% is locally admissible only if
+% %
+% \begin{equation}
+% z_{1-\beta}\sigma_{\Delta,\mathrm{seed}}
+% +
+% \Delta_{\mathrm{blind}}^{\max}
+% \leq
+% \Delta_{\mathrm{val}},
+% \label{eq:track-entry-condition}
+% \end{equation}
+% %
+% where $\sigma_{\Delta,\mathrm{seed}}$ includes the uncertainty of the acquired
+% frequency and the implemented seed reference. This condition reserves the
+% detuning margin required for the first short-pulse measurement at $\Phi_1$.
+% Before a secant sensitivity is available, the first short-pulse measurement
+% at $\Phi_1$ uses
+% $\omega_{d,1}=\widehat\omega_{01,\mathrm{seed}}$
+% and returns $\widehat\omega_{01,1}$. Together with the scanned-Ramsey seed,
+% this measurement provides the initial secant sensitivity; its uncertainty is
+% propagated from both frequency estimates.
 
 Subsequent sensitivities are calculated from the two most recent
 \textsc{Track} estimates,
@@ -530,33 +546,17 @@ the next drive reference,
 \label{eq:drive-tracking}
 \end{equation}
 %
-The right-hand side predicts the transition frequency at $\Phi_{n+1}$ using
-only measurements available through iteration $n$; it does not evaluate
-Eq.~\eqref{eq:transmon-dispersion}. Consequently, the next measurement
-detuning is the one-step prediction error rather than the accumulated
-frequency displacement.
 
-Let $\sigma_{\mathrm{pred},n+1}$ denote the propagated uncertainty of this
-frequency prediction, including the uncertainties of
-$\widehat\omega_{01,n}$, $\widehat S_{\Phi,n}$, and the applied bias step.
-Because Eq.~\eqref{eq:drive-tracking} centers the predicted detuning at zero,
-the next short-pulse measurement is admitted only if
-%
-\begin{equation}
-z_{1-\beta}\sigma_{\mathrm{pred},n+1}
-+
-\Delta_{\mathrm{guard}}
-\leq
-\Delta_{\mathrm{val}},
-\label{eq:predicted-range-condition}
-\end{equation}
-%
-where $\Delta_{\mathrm{guard}}\geq0$ reserves a fixed margin for residual
-prediction and actuation errors not included in the propagated uncertainty.
-The initial blind step is governed instead by
-Eq.~\eqref{eq:track-entry-condition}.
+The right-hand side predicts the transition frequency at $\Phi_{n+1}$ from
+measurements available through iteration $n$ and does not evaluate
+Eq.~\eqref{eq:transmon-dispersion}. The next measurement detuning is therefore
+the one-step prediction error rather than the accumulated frequency
+displacement. A proposed reference is used only when its prediction
+uncertainty is compatible with the remaining validated detuning margin. The
+uncertainty propagation and admission margin are specified in
+Appendix~\ref{app:methods}.
 
-After an admitted measurement, the inferred detuning must satisfy
+After the short-pulse measurement, the inferred detuning must satisfy
 %
 \begin{equation}
 |\widehat\Delta_{n+1}|
@@ -567,11 +567,53 @@ z_{1-\beta}\sigma_{\Delta,n+1}
 \label{eq:track-range-condition}
 \end{equation}
 %
-The premeasurement condition protects against an unreliable drive prediction,
-whereas the postmeasurement condition checks consistency with the validated
-short-pulse interval. Failure of either condition, inverse convergence or
-branch continuity, or the sensitivity check reports the local-invalid outcome
-defined in Sec.~II.C.
+This condition connects the measured detuning and its uncertainty to the
+validated interval established in Sec.~III.B. Failure of this range check,
+inverse convergence or branch continuity, or the sensitivity check reports
+the local-invalid outcome defined in Sec.~II.C.
+
+% The right-hand side predicts the transition frequency at $\Phi_{n+1}$ using
+% only measurements available through iteration $n$; it does not evaluate
+% Eq.~\eqref{eq:transmon-dispersion}. Consequently, the next measurement
+% detuning is the one-step prediction error rather than the accumulated
+% frequency displacement.
+
+% Let $\sigma_{\mathrm{pred},n+1}$ denote the propagated uncertainty of this
+% frequency prediction, including the uncertainties of
+% $\widehat\omega_{01,n}$, $\widehat S_{\Phi,n}$, and the applied bias step.
+% Because Eq.~\eqref{eq:drive-tracking} centers the predicted detuning at zero,
+% the next short-pulse measurement is admitted only if
+% %
+% \begin{equation}
+% z_{1-\beta}\sigma_{\mathrm{pred},n+1}
+% +
+% \Delta_{\mathrm{guard}}
+% \leq
+% \Delta_{\mathrm{val}},
+% \label{eq:predicted-range-condition}
+% \end{equation}
+% %
+% where $\Delta_{\mathrm{guard}}\geq0$ reserves a fixed margin for residual
+% prediction and actuation errors not included in the propagated uncertainty.
+% The initial blind step is governed instead by
+% Eq.~\eqref{eq:track-entry-condition}.
+
+% After an admitted measurement, the inferred detuning must satisfy
+% %
+% \begin{equation}
+% |\widehat\Delta_{n+1}|
+% +
+% z_{1-\beta}\sigma_{\Delta,n+1}
+% \leq
+% \Delta_{\mathrm{val}}.
+% \label{eq:track-range-condition}
+% \end{equation}
+% %
+% The premeasurement condition protects against an unreliable drive prediction,
+% whereas the postmeasurement condition checks consistency with the validated
+% short-pulse interval. Failure of either condition, inverse convergence or
+% branch continuity, or the sensitivity check reports the local-invalid outcome
+% defined in Sec.~II.C.
 
 When these checks are satisfied, the frequency estimate is passed to the next
 flux-bias update; satisfaction of

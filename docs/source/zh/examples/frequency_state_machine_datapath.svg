@@ -1,60 +1,140 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<svg xmlns="http://www.w3.org/2000/svg" xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape" viewBox="0 0 1800 900" style="width:100%;height:auto">
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape" viewBox="0 0 1900 920" style="width:100%;height:auto">
   <defs>
-    <marker id="arrow-data" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#263238"/></marker>
-    <marker id="arrow-ctrl" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#2b6ca3"/></marker>
-    <marker id="arrow-fault" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#b0443c"/></marker>
-    <marker id="arrow-store" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#40846f"/></marker>
+    <marker id="ad" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#263238"/></marker>
+    <marker id="ac" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#2b6ca3"/></marker>
+    <marker id="ae" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#b0443c"/></marker>
+    <marker id="ap" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#40846f"/></marker>
     <style><![CDATA[
       text{font-family:Arial,"Microsoft YaHei","Noto Sans CJK SC",sans-serif;fill:#263238}
       .title{font-size:27px;font-weight:700}.subtitle{font-size:14px;fill:#5d6872}.lane{font-size:13px;font-weight:700;letter-spacing:.8px;fill:#65727d}
       .box{fill:#fff;stroke:#34434f;stroke-width:2.2}.ctrlbox{fill:#edf5fb;stroke:#2b6ca3;stroke-width:2.3}.alubox{fill:#fbf7ee;stroke:#8a6d32;stroke-width:2.2}.storebox{fill:#eff8f4;stroke:#40846f;stroke-width:2.2}.faultbox{fill:#fff3f1;stroke:#b0443c;stroke-width:2.2}
-      .regcell{fill:#f8fafb;stroke:#9aa6af;stroke-width:1.3}.regcell-blue{fill:#edf5fb;stroke:#2b6ca3;stroke-width:1.4}.regcell-red{fill:#fff3f1;stroke:#b0443c;stroke-width:1.4}
-      .head{font-size:19px;font-weight:700;text-anchor:middle}.sub{font-size:13px;fill:#53606b;text-anchor:middle}.celltitle{font-size:14px;font-weight:700}.cellsub{font-size:12px;fill:#5b6771}.signal{font-size:12px;font-weight:600;paint-order:stroke;stroke:#fff;stroke-width:5px;stroke-linejoin:round}.tiny{font-size:11px;fill:#596671}
-      .data{fill:none;stroke:#263238;stroke-width:2.8;marker-end:url(#arrow-data)}.bus{fill:none;stroke:#263238;stroke-width:4;marker-end:url(#arrow-data)}
-      .ctrl{fill:none;stroke:#2b6ca3;stroke-width:2.4;stroke-dasharray:8 5;marker-end:url(#arrow-ctrl)}.fault{fill:none;stroke:#b0443c;stroke-width:2.6;marker-end:url(#arrow-fault)}.store{fill:none;stroke:#40846f;stroke-width:2.4;stroke-dasharray:8 6;marker-end:url(#arrow-store)}
-      .dot{fill:#263238}.pipe{fill:#34434f;stroke:#263238;stroke-width:1.5}.pipe-label{font-size:12px;font-weight:700;fill:#fff;text-anchor:middle}
+      .cell{fill:#f8fafb;stroke:#9aa6af;stroke-width:1.3}.cellblue{fill:#edf5fb;stroke:#2b6ca3;stroke-width:1.4}.cellgreen{fill:#eff8f4;stroke:#40846f;stroke-width:1.4}.cellred{fill:#fff3f1;stroke:#b0443c;stroke-width:1.4}
+      .head{font-size:18px;font-weight:700;text-anchor:middle}.sub{font-size:12.5px;fill:#53606b;text-anchor:middle}.celltitle{font-size:14px;font-weight:700}.cellsub{font-size:12px;fill:#5b6771}.signal{font-size:11.5px;font-weight:600;paint-order:stroke;stroke:#fff;stroke-width:5px;stroke-linejoin:round}.tiny{font-size:11px;fill:#596671}
+      .data{fill:none;stroke:#263238;stroke-width:2.8;marker-end:url(#ad)}.bus{fill:none;stroke:#263238;stroke-width:4;marker-end:url(#ad)}
+      .ctrl{fill:none;stroke:#2b6ca3;stroke-width:2.4;stroke-dasharray:8 5;marker-end:url(#ac)}.ctrlbus{fill:none;stroke:#2b6ca3;stroke-width:2.4;stroke-dasharray:8 5}.fault{fill:none;stroke:#b0443c;stroke-width:2.6;marker-end:url(#ae)}.store{fill:none;stroke:#40846f;stroke-width:2.4;stroke-dasharray:8 6;marker-end:url(#ap)}
+      .pipe{fill:#34434f;stroke:#263238;stroke-width:1.5}.pipe-label{font-size:11px;font-weight:700;fill:#fff;text-anchor:middle}.dot{fill:#263238}
     ]]></style>
   </defs>
+
   <g inkscape:groupmode="layer" inkscape:label="Title">
-    <text x="58" y="48" class="title">CPU-style datapath for frequency calibration</text><text x="58" y="75" class="subtitle">寄存器保存已提交事实，功能单元计算命令与条件码，控制器决定发射、转移和写回。</text>
-    <line x1="1320" y1="43" x2="1368" y2="43" class="data"/><text x="1380" y="48" class="subtitle">data</text><line x1="1470" y1="43" x2="1518" y2="43" class="ctrl"/><text x="1530" y="48" class="subtitle">control</text>
-    <line x1="1320" y1="70" x2="1368" y2="70" class="fault"/><text x="1380" y="75" class="subtitle">exception</text><line x1="1470" y1="70" x2="1518" y2="70" class="store"/><text x="1530" y="75" class="subtitle">persistence</text>
+    <text x="58" y="46" class="title">Runtime datapath for frequency calibration</text>
+    <text x="58" y="73" class="subtitle">CPU-style architectural view aligned with the current command–event runtime.</text>
+    <line x1="1390" y1="40" x2="1438" y2="40" class="data"/><text x="1450" y="45" class="subtitle">data</text>
+    <line x1="1540" y1="40" x2="1588" y2="40" class="ctrl"/><text x="1600" y="45" class="subtitle">control / status</text>
+    <line x1="1390" y1="68" x2="1438" y2="68" class="fault"/><text x="1450" y="73" class="subtitle">lifecycle</text>
+    <line x1="1540" y1="68" x2="1588" y2="68" class="store"/><text x="1600" y="73" class="subtitle">persistence</text>
   </g>
+
   <g inkscape:groupmode="layer" inkscape:label="Control plane">
-    <text x="58" y="129" class="lane">CONTROL PLANE</text><rect x="640" y="108" width="500" height="135" rx="20" class="ctrlbox"/><text x="890" y="145" class="head">Control Unit</text><text x="890" y="171" class="sub">state decode · transition table · command issue</text><text x="890" y="197" class="sub">write-enable · retry / Reacquire / SafeStop</text><rect x="710" y="211" width="360" height="20" rx="10" fill="#fff" stroke="#6f9fc4"/><text x="890" y="225" class="tiny" text-anchor="middle">control word: opcode · mux select · register enables</text>
+    <text x="58" y="120" class="lane">CONTROL PLANE</text>
+    <rect x="520" y="100" width="920" height="142" rx="20" class="ctrlbox"/>
+    <text x="980" y="136" class="head">Control Unit</text>
+    <text x="980" y="165" class="sub">state decode · next_command() · state handlers · transition policy</text>
+    <text x="980" y="191" class="sub">Acquire / Track / Verify / Lock / Reacquire / SafeStop</text>
+    <rect x="755" y="207" width="450" height="22" rx="11" fill="#fff" stroke="#6f9fc4"/>
+    <text x="980" y="222" class="tiny" text-anchor="middle">opcode · issue policy · guard policy · next state + reason</text>
+
+    <rect x="1510" y="108" width="330" height="124" rx="12" class="faultbox"/>
+    <text x="1675" y="142" class="head">Exception Unit</text>
+    <text x="1675" y="171" class="sub">cancel · interlock · timer</text>
+    <text x="1675" y="197" class="sub">budget expiry · technical failure</text>
+    <text x="1675" y="219" class="tiny" text-anchor="middle">reports lifecycle events to Control Unit</text>
   </g>
+
   <g inkscape:groupmode="layer" inkscape:label="Register file">
-    <text x="58" y="294" class="lane">COMMITTED CONTEXT</text><rect x="58" y="315" width="390" height="380" rx="10" class="box"/><rect x="58" y="315" width="390" height="46" rx="10" fill="#e9eef2" stroke="#34434f" stroke-width="2.2"/><text x="253" y="345" class="head">Register File</text>
-    <rect x="78" y="381" width="165" height="83" rx="7" class="regcell-blue"/><text x="94" y="403" class="celltitle">SR · State</text><text x="94" y="424" class="cellsub">Acquire / Track / Verify</text><text x="94" y="442" class="cellsub">Lock / Reacquire</text><text x="94" y="459" class="cellsub">SafeStop</text>
-    <rect x="263" y="381" width="165" height="83" rx="7" class="regcell"/><text x="279" y="406" class="celltitle">ER · Estimate</text><text x="279" y="430" class="cellsub">frequency · uncertainty</text><text x="279" y="450" class="cellsub">bias · drive · residual</text>
-    <rect x="78" y="480" width="165" height="83" rx="7" class="regcell"/><text x="94" y="505" class="celltitle">TR · Track</text><text x="94" y="529" class="cellsub">accepted samples · slope</text><text x="94" y="549" class="cellsub">best point · controller state</text>
-    <rect x="263" y="480" width="165" height="83" rx="7" class="regcell"/><text x="279" y="505" class="celltitle">BR · Budget</text><text x="279" y="529" class="cellsub">loops · shots · elapsed</text><text x="279" y="549" class="cellsub">retry · monitor timers</text>
-    <rect x="78" y="579" width="165" height="91" rx="7" class="regcell"/><text x="94" y="604" class="celltitle">CR · Config ROM</text><text x="94" y="628" class="cellsub">thresholds · limits</text><text x="94" y="648" class="cellsub">policies · intervals</text>
-    <rect x="263" y="579" width="165" height="91" rx="7" class="regcell-red"/><text x="279" y="604" class="celltitle">LR · Last result</text><text x="279" y="628" class="cellsub">reason · status flags</text><text x="279" y="648" class="cellsub">last command / event IDs</text>
+    <text x="58" y="286" class="lane">COMMITTED CONTEXT</text>
+    <rect x="58" y="306" width="350" height="482" rx="10" class="box"/>
+    <rect x="58" y="306" width="350" height="46" rx="10" fill="#e9eef2" stroke="#34434f" stroke-width="2.2"/>
+    <text x="233" y="336" class="head">Register File</text>
+
+    <rect x="78" y="374" width="145" height="91" rx="7" class="cellblue"/><text x="94" y="397" class="celltitle">SR · Protocol</text><text x="94" y="420" class="cellsub">state · run status</text><text x="94" y="440" class="cellsub">state version</text><text x="94" y="460" class="cellsub">verify / lock counts</text>
+    <rect x="243" y="374" width="145" height="91" rx="7" class="cell"/><text x="259" y="397" class="celltitle">ER · Estimate</text><text x="259" y="420" class="cellsub">frequency · uncertainty</text><text x="259" y="440" class="cellsub">candidate bias</text><text x="259" y="460" class="cellsub">hold evidence</text>
+    <rect x="78" y="483" width="145" height="102" rx="7" class="cell"/><text x="94" y="506" class="celltitle">TR · Track</text><text x="94" y="529" class="cellsub">current / previous</text><text x="94" y="549" class="cellsub">slope · best point</text><text x="94" y="569" class="cellsub">streak · iteration</text>
+    <rect x="243" y="483" width="145" height="102" rx="7" class="cell"/><text x="259" y="506" class="celltitle">BR · Runtime</text><text x="259" y="529" class="cellsub">commands · shots</text><text x="259" y="549" class="cellsub">solver / retry counts</text><text x="259" y="569" class="cellsub">monitor / audit time</text>
+    <rect x="78" y="603" width="145" height="94" rx="7" class="cellgreen"/><text x="94" y="626" class="celltitle">CR · Config</text><text x="94" y="649" class="cellsub">thresholds · limits</text><text x="94" y="669" class="cellsub">policies · intervals</text><text x="94" y="689" class="cellsub">target frequency</text>
+    <rect x="243" y="603" width="145" height="94" rx="7" class="cellred"/><text x="259" y="626" class="celltitle">IR · In-flight</text><text x="259" y="649" class="cellsub">pending command + ID</text><text x="259" y="669" class="cellsub">last event · reason</text><text x="259" y="689" class="cellsub">technical status</text>
+    <rect x="78" y="723" width="310" height="44" rx="7" class="cell"/><text x="94" y="743" class="celltitle">Snapshot boundary</text><text x="94" y="762" class="cellsub">serialisable context for resume</text>
   </g>
-  <g inkscape:groupmode="layer" inkscape:label="Execution datapath">
-    <text x="490" y="294" class="lane">COMMAND–EVENT DATAPATH</text><path d="M500 344H645L670 369V471L645 496H500L525 420Z" class="alubox"/><text x="585" y="385" class="head">Operand MUX</text><text x="585" y="415" class="sub">role · bias · drive</text><text x="585" y="442" class="sub">probe · shots</text><text x="585" y="468" class="sub">normal / Track proposal</text>
-    <rect x="719" y="338" width="44" height="164" rx="4" class="pipe"/><text x="741" y="399" class="pipe-label">CMD</text><text x="741" y="419" class="pipe-label">REG</text><text x="741" y="449" class="pipe-label">ID</text>
-    <rect x="812" y="344" width="195" height="152" rx="10" class="ctrlbox"/><text x="909" y="382" class="head">Issue Unit</text><text x="909" y="412" class="sub">cancel · budget · timer</text><text x="909" y="439" class="sub">identity / stale check</text><text x="909" y="469" class="sub">admit or reject</text>
-    <rect x="1060" y="330" width="250" height="180" rx="10" class="box"/><text x="1185" y="370" class="head">Measurement Unit</text><text x="1185" y="401" class="sub">scanned Ramsey</text><text x="1185" y="428" class="sub">local transient probe</text><text x="1185" y="455" class="sub">independent Ramsey / monitor</text><text x="1185" y="486" class="sub">simulator or hardware</text>
-    <rect x="1360" y="338" width="44" height="164" rx="4" class="pipe"/><text x="1382" y="399" class="pipe-label">EVT</text><text x="1382" y="419" class="pipe-label">REG</text><text x="1382" y="449" class="pipe-label">ID</text>
-    <rect x="1454" y="344" width="285" height="152" rx="10" class="alubox"/><text x="1596" y="382" class="head">Guard Comparator</text><text x="1596" y="412" class="sub">validity · confidence · identity</text><text x="1596" y="439" class="sub">target residual · probe detuning</text><text x="1596" y="469" class="sub">condition codes / fault class</text>
-    <path d="M448 420H508" class="data"/><text x="455" y="407" class="signal">operands</text><path d="M670 420H719" class="data"/><path d="M763 420H812" class="data"/><text x="767" y="407" class="signal">command</text><path d="M1007 420H1060" class="data"/><path d="M1310 420H1360" class="data"/><text x="1317" y="407" class="signal">event</text><path d="M1404 420H1454" class="data"/>
+
+  <g inkscape:groupmode="layer" inkscape:label="Main datapath">
+    <text x="455" y="286" class="lane">COMMAND–EVENT DATAPATH</text>
+    <path d="M455 333H620L645 358V457L620 482H455L480 407Z" class="alubox"/>
+    <text x="550" y="368" class="head">Operand MUX</text><text x="550" y="396" class="sub">command builder</text><text x="550" y="430" class="sub">role · bias · drive · probe</text><text x="550" y="455" class="sub">normal / Track proposal</text>
+
+    <rect x="683" y="331" width="46" height="152" rx="4" class="pipe"/><text x="706" y="386" class="pipe-label">CMD</text><text x="706" y="404" class="pipe-label">REG</text><text x="706" y="436" class="pipe-label">ID</text>
+
+    <rect x="770" y="333" width="178" height="148" rx="10" class="ctrlbox"/>
+    <text x="859" y="368" class="head">Issue Unit</text><text x="859" y="398" class="sub">cancel / timer gate</text><text x="859" y="424" class="sub">proposal preflight</text><text x="859" y="450" class="sub">budget reservation</text><text x="859" y="472" class="tiny" text-anchor="middle">admit, reject, or issue</text>
+
+    <rect x="988" y="319" width="240" height="176" rx="10" class="box"/>
+    <text x="1108" y="354" class="head">Measurement Unit</text><text x="1108" y="383" class="sub">simulator or hardware backend</text><text x="1108" y="411" class="sub">Acquire · Track · Verify</text><text x="1108" y="437" class="sub">Monitor · SafeHold</text><text x="1108" y="467" class="tiny" text-anchor="middle">one command → one Event</text>
+
+    <rect x="1268" y="331" width="46" height="152" rx="4" class="pipe"/><text x="1291" y="386" class="pipe-label">EVT</text><text x="1291" y="404" class="pipe-label">REG</text><text x="1291" y="436" class="pipe-label">ID·VER</text>
+
+    <rect x="1355" y="333" width="185" height="148" rx="10" class="ctrlbox"/>
+    <text x="1447" y="368" class="head">Identity Unit</text><text x="1447" y="398" class="sub">command ID match</text><text x="1447" y="424" class="sub">state-version check</text><text x="1447" y="450" class="sub">stale / duplicate filter</text><text x="1447" y="472" class="tiny" text-anchor="middle">accepted Event boundary</text>
+
+    <rect x="1580" y="333" width="260" height="148" rx="10" class="alubox"/>
+    <text x="1710" y="368" class="head">Guard Comparator</text><text x="1710" y="398" class="sub">Event + CMD + CR policy</text><text x="1710" y="424" class="sub">validity · residual · detuning</text><text x="1710" y="450" class="sub">actuation · sensitivity</text><text x="1710" y="472" class="tiny" text-anchor="middle">condition code / failure class</text>
+
+    <path d="M408 407H470" class="data"/>
+    <path d="M645 407H683" class="data"/>
+    <path d="M729 407H770" class="data"/><text x="750" y="393" class="signal" text-anchor="middle">command</text>
+    <path d="M948 407H988" class="data"/>
+    <path d="M1228 407H1268" class="data"/><text x="1248" y="393" class="signal" text-anchor="middle">event</text>
+    <path d="M1314 407H1355" class="data"/>
+    <path d="M1540 407H1580" class="data"/><text x="1560" y="393" class="signal" text-anchor="middle">ID-valid</text>
   </g>
-  <g inkscape:groupmode="layer" inkscape:label="Functional units">
-    <text x="490" y="570" class="lane">FUNCTIONAL UNITS AND COMMIT</text><path d="M500 600H675L700 625V713L675 738H500L475 713V625Z" class="alubox"/><text x="588" y="638" class="head">Secant ALU</text><text x="588" y="668" class="sub">TR + ER → bias proposal</text><text x="588" y="695" class="sub">slope · damping · limit</text><text x="588" y="720" class="sub">drive tracking</text>
-    <rect x="812" y="600" width="195" height="138" rx="10" class="ctrlbox"/><text x="909" y="638" class="head">Commit Unit</text><text x="909" y="668" class="sub">accept / reject</text><text x="909" y="695" class="sub">next state + reason</text><text x="909" y="720" class="sub">atomic write enables</text>
-    <rect x="1060" y="600" width="250" height="138" rx="10" class="storebox"/><text x="1185" y="638" class="head">Journal Memory</text><text x="1185" y="668" class="sub">commands · events · transitions</text><text x="1185" y="695" class="sub">cost ledger · provenance</text><text x="1185" y="720" class="sub">checkpoint / resume image</text>
-    <rect x="1454" y="600" width="285" height="138" rx="10" class="faultbox"/><text x="1596" y="638" class="head">Exception Unit</text><text x="1596" y="668" class="sub">retry · Reacquire · SafeStop</text><text x="1596" y="695" class="sub">SafeHold actuation</text><text x="1596" y="720" class="sub">re-enter Control Unit</text>
-    <path d="M448 522H465V770H588V738" class="data"/><text x="487" y="760" class="signal">TR / ER</text><path d="M588 600V538H585V496" class="data"/><text x="600" y="552" class="signal">proposal</text><path d="M1007 669H1060" class="store"/><text x="1014" y="657" class="signal" fill="#40846f">append</text><path d="M1007 715V780H1596V738" class="fault"/><text x="1302" y="770" class="signal" fill="#b0443c">fault action</text>
+
+  <g inkscape:groupmode="layer" inkscape:label="Update units">
+    <text x="455" y="562" class="lane">UPDATE AND PERSISTENCE</text>
+
+    <path d="M455 596H660L685 621V738L660 763H455L430 738V621Z" class="alubox"/>
+    <text x="558" y="630" class="head">Secant ALU</text><line x1="475" y1="646" x2="641" y2="646" stroke="#c8b88f" stroke-width="1.2"/>
+    <text x="558" y="673" class="sub">propose: TR + CR → bias / drive</text><text x="558" y="701" class="sub">accept after journal: TR + IR + Event</text><text x="558" y="727" class="sub">→ updated TrackSnapshot</text><text x="558" y="751" class="tiny" text-anchor="middle">DampedSecantTracker</text>
+
+    <rect x="770" y="596" width="230" height="167" rx="10" class="ctrlbox"/>
+    <text x="885" y="630" class="head">Commit Unit</text><text x="885" y="660" class="sub">handle(event)</text><text x="885" y="687" class="sub">budget + estimate update</text><text x="885" y="714" class="sub">state transition + reason</text><text x="885" y="741" class="sub">clear pending command</text><text x="885" y="756" class="tiny" text-anchor="middle">ordered software update</text>
+
+    <rect x="1080" y="596" width="285" height="167" rx="10" class="storebox"/>
+    <text x="1222" y="630" class="head">Journal Memory</text><text x="1222" y="660" class="sub">command / event journal</text><text x="1222" y="687" class="sub">cost ledger · transition log</text><text x="1222" y="714" class="sub">state before / after</text><text x="1222" y="741" class="sub">_record_journal()</text><text x="1222" y="756" class="tiny" text-anchor="middle">runs after handle(event)</text>
+
+    <rect x="1455" y="596" width="335" height="167" rx="10" class="storebox"/>
+    <text x="1622" y="630" class="head">Checkpoint Memory</text><text x="1622" y="660" class="sub">machine snapshot · configuration</text><text x="1622" y="687" class="sub">journal · cost ledger · result</text><text x="1622" y="714" class="sub">save_run() / load_run()</text><text x="1622" y="741" class="sub">periodic or interrupt-triggered</text><text x="1622" y="756" class="tiny" text-anchor="middle">snapshot-based resume</text>
   </g>
-  <g inkscape:groupmode="layer" inkscape:label="Control signals">
-    <path d="M448 381H470V175H640" class="data"/><text x="482" y="164" class="signal">state / context</text><path d="M1596 344V92H1045V108" class="data"/><text x="1195" y="83" class="signal">condition codes</text>
-    <path d="M753 243V319H741V338" class="ctrl"/><text x="758" y="294" class="signal" fill="#2b6ca3">latch</text><path d="M882 243V315H909V344" class="ctrl"/><text x="891" y="293" class="signal" fill="#2b6ca3">issue</text><path d="M1025 243V294H1596V344" class="ctrl"/><text x="1280" y="284" class="signal" fill="#2b6ca3">guard select</text><path d="M694 243V270H585V344" class="ctrl"/><text x="598" y="260" class="signal" fill="#2b6ca3">mux select</text><path d="M815 243V575H909V600" class="ctrl"/><text x="824" y="565" class="signal" fill="#2b6ca3">commit flags</text><path d="M1596 600V558H1755V175H1140" class="fault"/><text x="1608" y="549" class="signal" fill="#b0443c">exception</text>
+
+  <g inkscape:groupmode="layer" inkscape:label="Clean signal routing">
+    <!-- register/control relationships -->
+    <path d="M408 390H438V171H520" class="data"/><text x="450" y="159" class="signal">state / runtime context</text>
+    <path d="M1510 170H1440" class="fault"/><text x="1475" y="158" class="signal" fill="#b0443c" text-anchor="middle">lifecycle</text>
+
+    <!-- one simple control fan-out -->
+    <path d="M980 242V270H550" class="ctrlbus"/>
+    <path d="M980 270H1710" class="ctrlbus"/>
+    <text x="1110" y="262" class="signal" fill="#2b6ca3" text-anchor="middle">decoded control + policy</text>
+    <path d="M550 270V333" class="ctrl"/>
+    <path d="M859 270V333" class="ctrl"/>
+    <path d="M1447 270V333" class="ctrl"/>
+    <path d="M1710 270V333" class="ctrl"/>
+    <path d="M1800 333V252H1420V242" class="ctrl"/><text x="1610" y="244" class="signal" fill="#2b6ca3" text-anchor="middle">condition codes</text>
+
+    <!-- Track proposal and accepted-event fan-out -->
+    <path d="M408 680H430" class="data"/>
+    <path d="M660 596V520H550V482" class="data"/><text x="610" y="511" class="signal" text-anchor="middle">proposal</text>
+    <path d="M1710 482V535H885V596" class="data"/><text x="1295" y="526" class="signal" text-anchor="middle">CLASSIFIED EVENT BUS · payload + diagnostics + condition code</text>
+    <path d="M885 535H705V620H685" class="data"/>
+    <path d="M430 534H408" class="data"/><text x="419" y="522" class="signal" text-anchor="middle">TR</text>
+
+    <!-- ordered write-back and persistence -->
+    <path d="M885 763V805H233V788" class="bus"/><text x="560" y="795" class="signal" text-anchor="middle">WRITE-BACK BUS · SR / ER / BR / IR</text>
+    <path d="M1000 680H1080" class="store"/><text x="1040" y="668" class="signal" fill="#40846f" text-anchor="middle">record</text>
+    <path d="M1365 680H1455" class="store"/><text x="1410" y="668" class="signal" fill="#40846f" text-anchor="middle">persist</text>
+    <path d="M1622 763V856H151V788" class="store"/><text x="850" y="847" class="signal" fill="#40846f" text-anchor="middle">restore · context + pending command</text>
   </g>
-  <g inkscape:groupmode="layer" inkscape:label="Writeback">
-    <path d="M812 669H770V817H253V695" class="bus"/><text x="448" y="807" class="signal">WRITE-BACK BUS · state · estimates · counters · reason</text><path d="M1185 738V832H160V695" class="store"/><text x="640" y="846" class="signal" fill="#40846f">checkpoint restore</text><circle cx="770" cy="669" r="5" class="dot"/><circle cx="253" cy="817" r="5" class="dot"/>
+
+  <g inkscape:groupmode="layer" inkscape:label="Footer">
+    <line x1="58" y1="882" x2="1840" y2="882" stroke="#c8d0d6" stroke-width="1.2"/>
+    <text x="58" y="907" class="subtitle">Abstraction boundary: one main data chain, one control fan-out, ordered state write-back, and a separate post-journal Track-snapshot update.</text>
   </g>
-  <g inkscape:groupmode="layer" inkscape:label="Footer"><line x1="58" y1="868" x2="1740" y2="868" stroke="#c8d0d6" stroke-width="1.2"/><text x="58" y="892" class="subtitle">类比边界：Register File 保存当前事实；Journal Memory 保存增长型历史；Command/Event 寄存器定义执行边界；功能单元不直接提交状态。</text></g>
 </svg>
